@@ -53,7 +53,7 @@ Record these in `REVIEW.md` so a reviewer knows they were considered:
   sensor head doesn't need series-R/ferrite/ESD; note it's optional.
 - **Component intentionally over the board edge** — e.g. the module's USB-C end
   overhangs to reach the enclosure wall slot; that's by design, say so.
-- **BOM 0% MPN coverage** — a prototype BOM carries 立创/JLC placeholder part
+- **BOM 0% MPN coverage** — a prototype BOM carries LCSC/JLC placeholder part
   numbers filled at order time; the review is a *consistency* check, not a
   datasheet-verified one.
 - **Carrier missing decoupling on the module's own rail** — the module carries its

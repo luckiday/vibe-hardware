@@ -9,7 +9,7 @@
 #
 # WHY THIS SCRIPT EXISTS — the gotchas it bakes in (each one bit us once):
 #   * Upload the resulting .zip at jlcpcb.com (Gerber upload). DO NOT import the KiCad
-#     project into 立创EDA / EasyEDA — its KiCad importer drops footprints ("缺少封装"),
+#     project into EasyEDA (LCEDA) — its KiCad importer drops footprints ("missing footprint"),
 #     mangles refdes ($2I2...), and desyncs the netlist. Gerbers carry geometry, so
 #     the upload path is clean. (See references/fab-and-3d.md.)
 #   * drill uses ABSOLUTE origin so it lines up with the gerbers.
@@ -75,4 +75,4 @@ rm -f "$OUT/_pos.csv"
 ( cd "$G" && zip -q -j "../$PROJ-gerber-jlcpcb.zip" ./* )
 echo
 echo "wrote $OUT/$PROJ-gerber-jlcpcb.zip  +  $PROJ-CPL-jlcpcb.csv  +  $PROJ-BOM-jlcpcb.csv"
-echo "→ jlcpcb.com → Gerber upload (the .zip).  Do NOT import the KiCad project into 立创EDA."
+echo "→ jlcpcb.com → Gerber upload (the .zip).  Do NOT import the KiCad project into EasyEDA."

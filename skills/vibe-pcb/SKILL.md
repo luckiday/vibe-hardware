@@ -11,7 +11,7 @@ description: >-
   0 ERROR-severity + 0 unconnected (silk WARNINGS are cosmetic, don't conflate);
   the bundled KiCad-10 python (NOT system python) is the one that has `pcbnew`; fab is
   `scripts/fab_export.sh` → JLCPCB Gerber upload, NEVER importing the KiCad project
-  into 立创EDA (its importer drops footprints + desyncs the netlist); and a
+  into EasyEDA (its importer drops footprints + desyncs the netlist); and a
   flush-soldered module needs the belly keep-out — no front copper/vias under it,
   verified by `scripts/belly_check.py` (DRC can't see it). Review the routed board
   INTERACTIVELY in the browser with no KiCad GUI via `scripts/pcb_view.sh` — one page,
@@ -91,7 +91,7 @@ spec (prose)  ──►  generate  ──►  validate  ──►  review  ─�
 6. **Fab** — `scripts/fab_export.sh <proj> <hand-soldered-refs…>` packages gerbers +
    drill + CPL + BOM for **JLCPCB**, **or** use the LCEDA three-piece set (brief +
    outline DXF + BOM). Upload the gerber `.zip` at jlcpcb.com — **never import the
-   KiCad project into 立创EDA** (its importer drops footprints + desyncs the netlist;
+   KiCad project into EasyEDA** (its importer drops footprints + desyncs the netlist;
    the war story + CPL/BOM gotchas are in `references/fab-and-3d.md`). Then walk the
    **physical-verify-before-ordering** checklist.
 
@@ -129,7 +129,7 @@ Copy the reference layout (don't start from a blank KiCad project):
 hardware/<line>/pcb-<name>/
   <name>_brief.md            # the spec (start here — references/spec-template.md)
   <name>_outline.dxf + _gen.py   # board outline (for LCEDA hand-off)
-  <name>_bom.csv             # BOM (立创/JLC part numbers)
+  <name>_bom.csv             # BOM (LCSC/JLC part numbers)
   kicad/
     gen_sch.py  gen_pcb.py   # the two generators (edit these)
     Makefile                 # `make check` / `make review`
@@ -149,8 +149,8 @@ hardware/<line>/pcb-<name>/
   back-pads will short to carrier copper. Route under-belly nets on the *back*
   layer; keep front copper + vias in the margins. (This is the #1 carrier gotcha.)
   DRC won't catch it — verify with `scripts/belly_check.py` / `BELLY_BOX=...`.
-- **Fab via Gerber upload, not a 立创EDA import** — `scripts/fab_export.sh` → upload
-  the `.zip` to JLCPCB. Importing the KiCad project into 立创EDA mangles footprints +
+- **Fab via Gerber upload, not a EasyEDA import** — `scripts/fab_export.sh` → upload
+  the `.zip` to JLCPCB. Importing the KiCad project into EasyEDA mangles footprints +
   the netlist; it's the importer, not your board.
 - **Sync schematic and PCB values** — `cross_analysis` fails on mismatches.
 - **Photo/caliper-verify the real module before ordering** — pull-ups already

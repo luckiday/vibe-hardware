@@ -24,19 +24,19 @@ disagreements in 3D before either is ordered/printed.
    feeds back the pocket / standoff / slot geometry. Keep a single set of numbers
    across both — when the stack height changes, both move.
 
-## ⚠️ Do NOT round-trip KiCad → 立创EDA / EasyEDA
+## ⚠️ Do NOT round-trip KiCad → EasyEDA (LCEDA)
 
 The tempting wrong path (it cost a full debugging session): importing the KiCad
-project *into* 立创EDA to "finish"/order it. Its KiCad importer is broken —
+project *into* EasyEDA to "finish"/order it. Its KiCad importer is broken —
 
-- **`元件 …缺少"封装"属性` (fatal)** — KiCad footprint refs (`Resistor_SMD:R_0603…`,
-  a project-private land) don't resolve in 立创's libraries → empty footprint.
-- **refdes mangled** to `$2I2…` and **schematic↔PCB netlist desync** (`网表不一致`)
+- **`component … missing "footprint" property` (fatal)** — KiCad footprint refs (`Resistor_SMD:R_0603…`,
+  a project-private land) don't resolve in EasyEDA's libraries → empty footprint.
+- **refdes mangled** to `$2I2…` and **schematic↔PCB netlist desync** (`netlist mismatch`)
   when sch + pcb are imported separately.
 
 None of this is a defect in *your* board — KiCad ERC/DRC are clean. It's the importer.
-**For JLC fab you don't need 立创EDA at all: upload Gerbers.** If someone insists on
-editing in 立创EDA, import the **PCB only** (`.kicad_pcb` carries footprint geometry +
+**For JLC fab you don't need EasyEDA at all: upload Gerbers.** If someone insists on
+editing in EasyEDA, import the **PCB only** (`.kicad_pcb` carries footprint geometry +
 nets inline; no library lookup) — never the separate schematic.
 
 ## Fab hand-off — two paths (this repo uses both)
@@ -66,21 +66,21 @@ bakes in the gotchas that bit us hand-rolling it:
 Then: jlcpcb.com → **Gerber upload** (the `.zip`). For bare boards that's the whole
 order; for SMT also upload the CPL + BOM. (See `pcb-xiao-tile/kicad/fab/` for output.)
 
-### B. LCEDA / 立创 three-piece (the hand-off "of record" here)
-For a hand-drawn-in-EDA or fully-SMT-by-立创 order, the canonical hand-off is three
+### B. LCEDA / LCSC three-piece (the hand-off "of record" here)
+For a hand-drawn-in-EDA or fully-SMT-by-JLCPCB order, the canonical hand-off is three
 files, generated one level up from `kicad/`:
 
 - `<proj>_brief.md` — the spec (the human reads this to draw/verify)
 - `<proj>_outline.dxf` — the board outline (from `<proj>_outline_gen.py`, via
   `ezdxf`; the `pcb/.venv` has ezdxf + matplotlib)
-- `<proj>_bom.csv` — BOM with 立创 part numbers
+- `<proj>_bom.csv` — BOM with LCSC part numbers
 
 The KiCad project still exists in parallel **purely to ERC/DRC/EMC-verify** the
 electrical design — even when the order ships via LCEDA, KiCad is the proof the
 netlist is sound.
 
 > Pick the path per board: JLCPCB gerbers when KiCad is the master; the LCEDA
-> three-piece when a person finishes layout in 立创 EDA. Both are legitimate; state
+> three-piece when a person finishes layout in EasyEDA. Both are legitimate; state
 > which is "of record" in `kicad/README.md`.
 
 ## Before you click "order" — physical verification

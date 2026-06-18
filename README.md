@@ -54,7 +54,7 @@ Start at [**docs/getting-started.md**](docs/getting-started.md).
 
 Worked, end-to-end builds live in [`examples/`](examples/). Flagship:
 
-- [**pager-buddy**](examples/pager-buddy/) — a tiny ESP32 desk "BP机" that lights up
+- [**pager-buddy**](examples/pager-buddy/) — a tiny ESP32 desk "pager" that lights up
   and buzzes on **Claude Code session status / notifications** (task done, waiting on
   input, build failed). Exercises all three skills: firmware (status client + display),
   a carrier PCB, and a 3D-printed shell. *(brief — being filled in)*

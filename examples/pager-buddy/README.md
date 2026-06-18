@@ -1,4 +1,4 @@
-# pager-buddy — a Claude Code "BP机"
+# pager-buddy — a Claude Code "pager"
 
 > **Status: brief / stub.** The concept and the per-skill breakdown are here; the
 > sources (`firmware/`, `pcb/`, `cad/`) are to be filled in. This is the flagship
@@ -7,7 +7,7 @@
 A tiny desk device that gives your coding agent a **physical presence**: it lights up,
 shows a glyph, and buzzes when a **Claude Code session changes state** — task done,
 **waiting on your input**, build/test failed, or a long job finished — so you can look
-away from the terminal and still get paged, like an old **BP机 (pager)**.
+away from the terminal and still get paged, like an old **pager**.
 
 ## How it talks to Claude Code
 

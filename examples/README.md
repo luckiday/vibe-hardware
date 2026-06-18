@@ -6,7 +6,7 @@ skill produced.
 
 | Example | Skills used | What it is |
 |---|---|---|
-| [**pager-buddy**](pager-buddy/) | firmware · pcb · cad | an ESP32 desk "BP机" that signals **Claude Code session status / notifications** *(brief — being filled in)* |
+| [**pager-buddy**](pager-buddy/) | firmware · pcb · cad | an ESP32 desk "pager" that signals **Claude Code session status / notifications** *(brief — being filled in)* |
 
 ## Add your own
 
