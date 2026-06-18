@@ -1,0 +1,9 @@
+# Python deps for the CAD/PCB skills.
+# Set up a venv:  python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+build123d>=0.9      # vibe-cad: parametric solids -> STEP / STL / GLB
+ezdxf>=1.1          # vibe-pcb: board-outline DXF (EasyEDA / LCSC hand-off)
+matplotlib>=3.8     # section views / quick previews
+
+# NOTE: gen_pcb.py, ERC and DRC use KiCad's OWN bundled python (it ships `pcbnew`,
+# which is NOT pip-installable). Install KiCad 10 separately; the scripts find its
+# `kicad-cli` + bundled python (override with KICAD_CLI / KICAD_PY).

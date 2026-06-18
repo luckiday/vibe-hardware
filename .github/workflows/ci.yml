@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skill structure (each skill has SKILL.md + a name:)
+        run: |
+          fail=0
+          for d in skills/*/; do
+            [ -f "$d/SKILL.md" ] || { echo "::error::missing SKILL.md in $d"; fail=1; continue; }
+            grep -q '^name:' "$d/SKILL.md" || { echo "::error::no 'name:' frontmatter in $d/SKILL.md"; fail=1; }
+          done
+          [ "$fail" = 0 ] && echo "OK: every skill has SKILL.md + name:"
+          exit $fail
+
+      - name: Python scripts compile
+        run: |
+          files=$(find skills -name '*.py')
+          [ -z "$files" ] || python3 -m py_compile $files
+          echo "OK: python scripts compile"
+
+      - name: English-only (no CJK in docs/scripts)
+        run: |
+          if grep -rIlP '[\x{4e00}-\x{9fff}]' --include='*.md' --include='*.sh' --include='*.py' --exclude-dir=.git . ; then
+            echo "::error::non-English (CJK) text found in the files listed above"; exit 1
+          fi
+          echo "OK: English-only"
+
+      - name: Shellcheck (advisory)
+        continue-on-error: true
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          find skills -name '*.sh' -print0 | xargs -0 -r shellcheck -S warning

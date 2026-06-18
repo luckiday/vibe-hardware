@@ -1,17 +1,37 @@
-# vibe-hardware
+<h1 align="center">⚡ vibe-hardware</h1>
 
-**Vibe-code real hardware.** A library of [agent skills](https://docs.claude.com/en/docs/claude-code/skills)
-that take you — even as a hardware beginner — from a plain-language idea to working
-**firmware + PCB + enclosure** and a **fabrication order**, driven by an AI coding
-agent (Claude Code) instead of years of EDA/CAD muscle memory.
+<p align="center">
+  <b>Vibe-code real hardware.</b> From a plain-language idea to working
+  <b>firmware&nbsp;+&nbsp;PCB&nbsp;+&nbsp;enclosure</b> and a <b>fab order</b> — as a
+  beginner — by driving an AI coding agent, not years of EDA/CAD muscle memory.
+</p>
 
-Each skill encodes the *method* and the *hard-won gotchas* for one half of a small
-embedded product, plus ready-to-run scripts and an **interactive in-browser review**
-so you never have to open the heavyweight GUI just to look.
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="skills: 3" src="https://img.shields.io/badge/skills-3-8a2be2">
+  <img alt="PCB: KiCad 10" src="https://img.shields.io/badge/PCB-KiCad%2010-2ea44f">
+  <img alt="CAD: build123d" src="https://img.shields.io/badge/CAD-build123d-orange">
+  <img alt="firmware: ESP32" src="https://img.shields.io/badge/firmware-ESP32-lightgrey">
+  <img alt="review: in browser" src="https://img.shields.io/badge/review-in_browser-ff69b4">
+</p>
+
+<p align="center">
+  <a href="docs/getting-started.md">Getting&nbsp;started</a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
+  <a href="docs/roadmap.md">Roadmap</a> ·
+  <a href="examples/">Examples</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+---
+
+Each skill encodes the *method* and the *hard-won gotchas* for one slice of a small
+embedded product — plus ready-to-run scripts and an **interactive in-browser review**,
+so you never open a heavyweight GUI just to look.
 
 > Sister project to [`earthtojake/text-to-cad`](https://github.com/earthtojake/text-to-cad)
-> (whose `cad` / `cad-viewer` / `step-parts` skills these build on). This repo adds the
-> **firmware → PCB → fab** half and a unified, beginner-first workflow.
+> (whose `cad` / `cad-viewer` / `step-parts` skills these build on). vibe-hardware adds
+> the **firmware → PCB → fab** half and a unified, beginner-first workflow.
 
 ## Skills
 
