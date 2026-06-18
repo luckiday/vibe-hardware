@@ -3,7 +3,7 @@
 # three launch gotchas (see references/cad-viewer.md): fixed port + lingering server,
 # the agent:start->start launcher rename, and locating the vendored skill.
 #
-#   tools/skills/text-to-cad/scripts/cad_viewer.sh <abs-models-dir> [port]
+#   tools/skills/vibe-cad/scripts/cad_viewer.sh <abs-models-dir> [port]
 #
 # Runs in the FOREGROUND (the server must stay up) — launch it in the background:
 #   ... cad_viewer.sh /abs/models &     (or via the agent's run_in_background)

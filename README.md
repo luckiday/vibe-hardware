@@ -17,9 +17,9 @@ so you never have to open the heavyweight GUI just to look.
 
 | Skill | From a spec, get… | Highlights |
 |---|---|---|
-| [**text-to-firmware**](skills/text-to-firmware/) | a reproducible firmware build that flashes + runs | pinned-toolchain (Docker) builds, config-as-code, OTA, the "test on real hardware before release" rule *(framework — fill in your platform)* |
-| [**text-to-pcb**](skills/text-to-pcb/) | an ERC/DRC-clean KiCad board + a JLCPCB/LCEDA order | generate KiCad **by script** (never the GUI files), severity-aware DRC gate, module-belly keep-out, **interactive web viewer** (2D layers + 3D, one page) |
-| [**text-to-cad**](skills/text-to-cad/) | a parametric build123d enclosure + STEP/STL | one parametric file, **CAD Viewer** review, board↔shell interference check (0 mm³), printability lessons |
+| [**vibe-firmware**](skills/vibe-firmware/) | a reproducible firmware build that flashes + runs | pinned-toolchain (Docker) builds, config-as-code, OTA, the "test on real hardware before release" rule *(framework — fill in your platform)* |
+| [**vibe-pcb**](skills/vibe-pcb/) | an ERC/DRC-clean KiCad board + a JLCPCB/LCEDA order | generate KiCad **by script** (never the GUI files), severity-aware DRC gate, module-belly keep-out, **interactive web viewer** (2D layers + 3D, one page) |
+| [**vibe-cad**](skills/vibe-cad/) | a parametric build123d enclosure + STEP/STL | one parametric file, **CAD Viewer** review, board↔shell interference check (0 mm³), printability lessons |
 
 The three share **one set of fit numbers** (board outline, stack height, mount holes,
 connector exits): change a number once and firmware pins, board, and shell stay in sync.
@@ -41,10 +41,10 @@ work standalone — the `scripts/` are plain `bash`/`python`.
 
 ```
 idea ─► spec (prose) ─►  firmware   +   PCB        +   enclosure   ─► fabricate
-        one brief        text-to-     text-to-pcb      text-to-cad      order board,
-        per part         firmware     (KiCad, DRC)     (build123d)      print/mould shell
-                                          │                 │
-                                          └─ shared fit numbers ─┘
+        one brief        vibe-        vibe-pcb         vibe-cad        order board,
+        per part         firmware     (KiCad, DRC)     (build123d)     print/mould shell
+                                        │                      │
+                                        └─ shared fit numbers ─┘
                               interactive browser review at every step (no GUI)
 ```
 

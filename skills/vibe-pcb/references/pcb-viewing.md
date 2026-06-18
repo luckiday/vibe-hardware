@@ -13,7 +13,7 @@ projects:
 
 ```bash
 # run in the project kicad/ dir; launch in the background, then open the URL
-skills/text-to-pcb/scripts/pcb_view.sh <proj> &
+skills/vibe-pcb/scripts/pcb_view.sh <proj> &
 #   -> http://127.0.0.1:8088/view/pcb.html       (switch: 2D layers · 3D board · Split)
 ```
 

@@ -2,7 +2,7 @@
 # Regenerate a script-built KiCad project, then run the gates: ERC + DRC + render.
 # Run from the project's kicad/ dir (the one with gen_sch.py / gen_pcb.py).
 #
-#   tools/skills/text-to-pcb/scripts/pcb_check.sh <proj-basename>
+#   tools/skills/vibe-pcb/scripts/pcb_check.sh <proj-basename>
 #
 # <proj-basename> is the .kicad_pcb name without extension (e.g. xiao-carrier).
 # Needs KiCad 10's bundled tools — kicad-cli + the BUNDLED python (it has pcbnew).

@@ -19,7 +19,7 @@ it overwrites in place. The pins live in `skills-lock.json` (see the repo's
 ## Launch (use the script)
 
 ```bash
-skills/text-to-cad/scripts/cad_viewer.sh <abs-models-dir> [port]
+skills/vibe-cad/scripts/cad_viewer.sh <abs-models-dir> [port]
 ```
 
 It locates the installed skill, frees the port, picks the right npm script, and

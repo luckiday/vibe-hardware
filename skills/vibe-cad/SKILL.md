@@ -1,5 +1,5 @@
 ---
-name: text-to-cad
+name: vibe-cad
 description: >-
   Take a mechanical part / enclosure from a natural-language spec to a parametric
   build123d model, reviewed interactively in the latest CAD Viewer and exported as
@@ -14,13 +14,13 @@ description: >-
   vendored by `npx skills install earthtojake/text-to-cad` and is launched/updated
   via `scripts/cad_viewer.sh` (which works around the fixed-port + renamed-launcher
   gotchas). Worked reference: a device shell under `examples/`.
-  Upstream: https://github.com/earthtojake/text-to-cad. Sibling of `text-to-pcb`.
+  Upstream: https://github.com/earthtojake/text-to-cad. Sibling of `vibe-pcb`.
 ---
 
 # Text → CAD (beginner + Claude Code → printable part)
 
 Parametric mechanical CAD for the parts in this repo — mostly **enclosures** that
-wrap a `text-to-pcb` board + its modules. You write the intent and the fit numbers;
+wrap a `vibe-pcb` board + its modules. You write the intent and the fit numbers;
 Claude Code emits a single **build123d** python file, reviews it in the **CAD
 Viewer**, interference-checks it against the real boards, and exports STEP/STL.
 
@@ -62,7 +62,7 @@ spec + fit numbers ─► model ─► review ─► fit-check ─► export
                        block     section.py                 (+ GLB sidecar)
 ```
 
-1. **Spec** — take the fit numbers from the board's brief (`text-to-pcb`
+1. **Spec** — take the fit numbers from the board's brief (`vibe-pcb`
    §enclosure-interlock): board outline, mount-hole spacing, stack height, USB
    exit, aperture/FOV clearances, antenna placement. One set of numbers shared
    across board + shell.
@@ -88,7 +88,7 @@ $PY section.py              # dimensioned X–Z cross-section PNG
 $PY check_fit.py            # board↔shell interference (expect 0 mm³)
 
 # review in the latest CAD Viewer (handles install/update + the launch gotchas):
-skills/text-to-cad/scripts/cad_viewer.sh <abs-models-dir>   # prints the URL
+skills/vibe-cad/scripts/cad_viewer.sh <abs-models-dir>   # prints the URL
 ```
 
 > **cwd resets between shell calls.** Each tool invocation may start in the repo
@@ -134,7 +134,7 @@ Off-the-shelf parts (servos, standoffs, the module itself) come from the
 ## When to reach for this vs others
 
 - Enclosure / bracket / mechanical fit → **here**.
-- The **board** inside it → `text-to-pcb` (the two share one set of fit numbers).
+- The **board** inside it → `vibe-pcb` (the two share one set of fit numbers).
 - Just *viewing* an existing `.step`/`.stl`/`.gcode` → the `cad-viewer` skill
   directly (this skill wraps it for the design loop).
 - Slicing a mesh to G-code / printing → `gcode` / `bambu-labs`.
@@ -145,4 +145,4 @@ This skill exists to **compound** hard-won CAD experience so the next part is
 easier. When a new enclosure/part surfaces a new gotcha (a viewer quirk, a
 build123d idiom, a DfM lesson), a fix, or a better practice, **fold it back in**
 (SKILL.md / `references/` / `scripts/`) and commit it with the work — don't let a
-lesson live only in a chat. Same for `text-to-pcb`.
+lesson live only in a chat. Same for `vibe-pcb`.

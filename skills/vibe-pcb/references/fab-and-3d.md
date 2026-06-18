@@ -4,7 +4,7 @@ The last two steps: prove the board fits its enclosure in 3D, then package the
 order. Sourced from `pcb-xiao-tile/` (both a JLCPCB gerber set and an LCEDA
 three-piece set exist there).
 
-## 3D fit-check (and the bridge to `text-to-cad`)
+## 3D fit-check (and the bridge to `vibe-cad`)
 
 The PCB and the enclosure are designed against the **same numbers** (stack height,
 mount-hole spacing, USB exit, connector/aperture clearances — the brief §7). Catch
@@ -18,9 +18,9 @@ disagreements in 3D before either is ordered/printed.
    `gen_pcb.py`, then render (`kicad-cli pcb render`, e.g. top / front / iso /
    section / stack views). The front/section views are where you confirm clearances
    (sensor can vs window gap, standoff height vs hang depth).
-3. **The enclosure is the `text-to-cad` route.** The shell that holds this board is
+3. **The enclosure is the `vibe-cad` route.** The shell that holds this board is
    a separate build123d project (see `hardware/.../structure-xiao-carrier/` and the
-   `text-to-cad` / `cad-viewer` skills). Feed it the brief's interlock numbers; it
+   `vibe-cad` / `cad-viewer` skills). Feed it the brief's interlock numbers; it
    feeds back the pocket / standoff / slot geometry. Keep a single set of numbers
    across both — when the stack height changes, both move.
 
@@ -46,7 +46,7 @@ One script packages everything from the validated `.kicad_pcb`:
 
 ```bash
 # run in the project kicad/ dir; extra args = refs you hand-solder (kept off the SMT CPL)
-skills/text-to-pcb/scripts/fab_export.sh <proj> A1 J1
+skills/vibe-pcb/scripts/fab_export.sh <proj> A1 J1
 ```
 
 It writes `fab/<proj>-gerber-jlcpcb.zip` + `-CPL-jlcpcb.csv` + `-BOM-jlcpcb.csv` and

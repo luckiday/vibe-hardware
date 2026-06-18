@@ -34,13 +34,13 @@ one when filling this in.)*
 
 | Skill | This example's slice |
 |---|---|
-| [**text-to-firmware**](../../skills/text-to-firmware/) | Wi-Fi status client (HTTP poll / WS / MQTT fed by the hook bridge) → render state on the display, buzz/flash on transitions, button to ack. Config-as-code: display + buzzer + button pins, endpoint URL; Wi-Fi creds as a secret. |
-| [**text-to-pcb**](../../skills/text-to-pcb/) | Carrier for the MCU + display connector + buzzer + button. **Net map:** display (I²C/SPI), buzzer GPIO, button GPIO. Belly keep-out under the flush MCU; USB-C out one edge. |
-| [**text-to-cad**](../../skills/text-to-cad/) | A small desk shell exposing the **display window**, USB-C, and the button; holds the PCB on standoffs. Same board outline / display cutout / mount holes as the PCB. |
+| [**vibe-firmware**](../../skills/vibe-firmware/) | Wi-Fi status client (HTTP poll / WS / MQTT fed by the hook bridge) → render state on the display, buzz/flash on transitions, button to ack. Config-as-code: display + buzzer + button pins, endpoint URL; Wi-Fi creds as a secret. |
+| [**vibe-pcb**](../../skills/vibe-pcb/) | Carrier for the MCU + display connector + buzzer + button. **Net map:** display (I²C/SPI), buzzer GPIO, button GPIO. Belly keep-out under the flush MCU; USB-C out one edge. |
+| [**vibe-cad**](../../skills/vibe-cad/) | A small desk shell exposing the **display window**, USB-C, and the button; holds the PCB on standoffs. Same board outline / display cutout / mount holes as the PCB. |
 
 ## To build it out
 
-1. Write the spec/net map (start from [`text-to-pcb` spec template](../../skills/text-to-pcb/references/spec-template.md)).
+1. Write the spec/net map (start from [`vibe-pcb` spec template](../../skills/vibe-pcb/references/spec-template.md)).
 2. `pcb/` — generate the carrier, DRC-clean, review with `pcb_view.sh`.
 3. `cad/` — model the shell to the shared fit numbers, check the board fits (0 mm³).
 4. `firmware/` — the status client + the Claude Code hook bridge.

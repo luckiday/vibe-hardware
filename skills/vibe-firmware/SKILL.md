@@ -1,5 +1,5 @@
 ---
-name: text-to-firmware
+name: vibe-firmware
 description: >-
   Take embedded firmware for a small device (ESP32 / RP2040 / STM32 / nRF …) from a
   plain-language spec to a reproducible build that flashes and runs, driven by an AI
@@ -20,7 +20,7 @@ description: >-
 > PlatformIO / Zephyr. See `examples/pager-buddy/` for a worked target.
 
 The firmware half of a small product. You describe what the device should do and which
-pins go where (from the **same net map** the [`text-to-pcb`](../text-to-pcb/) board
+pins go where (from the **same net map** the [`vibe-pcb`](../vibe-pcb/) board
 uses); the agent writes the drivers + app, builds them reproducibly, and you flash and
 watch the serial log.
 
@@ -79,7 +79,7 @@ spec + pin map ─► code ─► build (pinned) ─► flash + monitor ─► (
 - [ ] Pick the platform + pin the toolchain (image tag / `platformio.ini` / SDK rev).
 - [ ] `references/` — your driver patterns, the config-as-code layout, the OTA + safety
       model, the build/flash/monitor commands.
-- [ ] A `scripts/` build wrapper (mirrors `text-to-pcb`'s `pcb_check.sh` idea: one
+- [ ] A `scripts/` build wrapper (mirrors `vibe-pcb`'s `pcb_check.sh` idea: one
       command → reproducible build + size report).
 
 ## Keeping this current (living doc)

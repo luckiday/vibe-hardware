@@ -13,9 +13,9 @@ skill produced.
 ```
 examples/<name>/
   README.md      # the brief: what it does, the shared fit numbers, per-skill output
-  firmware/      # text-to-firmware sources
-  pcb/           # text-to-pcb project (gen_sch.py / gen_pcb.py …)
-  cad/           # text-to-cad model (one parametric .py + build_all.py)
+  firmware/      # vibe-firmware sources
+  pcb/           # vibe-pcb project (gen_sch.py / gen_pcb.py …)
+  cad/           # vibe-cad model (one parametric .py + build_all.py)
 ```
 
 Keep examples **generic and publishable** — illustrate the method, don't ship a

@@ -1,6 +1,6 @@
 # PCB spec / brief — fill-in template
 
-This is the **text** in "text-to-pcb": the human-controlled source of truth. Claude
+This is the **text** in "vibe-pcb": the human-controlled source of truth. Claude
 Code turns it into the generators. Keep it in `<proj>_brief.md`. Modeled on the
 worked `examples/your-board/xiao-carrier_brief.md` — read that
 for a fully-filled example.
@@ -54,7 +54,7 @@ Cite the firmware pin config (file + lines) it must match.
   (no crossing), keying (▲ pin-1 + silk line order = anti-mis-assembly).
 - Why this connector vs alternatives (height, rigidity, alignment).
 
-## 7. Enclosure interlock (feeds the `text-to-cad` enclosure)
+## 7. Enclosure interlock (feeds the `vibe-cad` enclosure)
 - How the board mounts (mount holes + standoffs), how tall the stack sits, where
   USB exits, FOV/aperture clearances, antenna placement. These numbers become the
   enclosure params on the CAD side — keep them consistent.

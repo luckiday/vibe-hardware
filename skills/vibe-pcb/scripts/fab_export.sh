@@ -2,7 +2,7 @@
 # Package a *validated* KiCad PCB into a JLCPCB fab order: gerber+drill zip, a JLCPCB
 # CPL (pick-and-place), and a starter BOM. Run from the project kicad/ dir.
 #
-#   tools/skills/text-to-pcb/scripts/fab_export.sh <proj-basename> [hand-soldered-ref ...]
+#   tools/skills/vibe-pcb/scripts/fab_export.sh <proj-basename> [hand-soldered-ref ...]
 #
 # Extra args = refs you will hand-solder (the module, a THT header) — kept OUT of the
 # SMT CPL/BOM. Env: KICAD_CLI=... (non-mac); INCLUDE_DNP=1 to also place DNP parts.
