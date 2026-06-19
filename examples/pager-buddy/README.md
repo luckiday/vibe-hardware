@@ -1,8 +1,10 @@
 # pager-buddy — a Claude Code "pager"
 
-> **Status: brief / stub.** The concept and the per-skill breakdown are here; the
-> sources (`firmware/`, `pcb/`, `cad/`) are to be filled in. This is the flagship
-> example that exercises all three [skills](../../skills/).
+> **Status: scaffolded / stub.** The structure is initialized — a
+> [`product.yaml`](product.yaml) manifest + the three domain dirs (`firmware/`, `pcb/`,
+> `cad/`) with their interface-contract stubs. The *sources* inside each are still to be
+> filled in. This is the flagship example that exercises all four
+> [skills](../../skills/) (vibe-plm ties the three domains together).
 
 A tiny desk device that gives your coding agent a **physical presence**: it lights up,
 shows a glyph, and buzzes when a **Claude Code session changes state** — task done,
@@ -30,6 +32,25 @@ one when filling this in.)*
 - **In:** one button (ack / silence).
 - **Power:** USB-C (optionally a LiPo).
 
+## Structure (the vibe-plm manifest ties it together)
+
+```
+pager-buddy/
+  product.yaml          # the manifest: identity + revision + interface contracts (vibe-plm)
+  firmware/             # vibe-firmware  — consumes pcb/pinmap.yaml
+  pcb/                  # vibe-pcb       — produces pinmap.yaml + board.step
+    pinmap.yaml         #   contract: pcb -> firmware (the net map)
+  cad/                  # vibe-cad       — produces constraints.yaml
+    constraints.yaml    #   contract: cad <-> pcb (the shared fit numbers)
+```
+
+The three domains agree **only through those contract files** — change a shared number
+once and both sides move; bump `revision` in `product.yaml` and re-run the gate:
+
+```bash
+python3 ../../skills/vibe-plm/scripts/plm_check.py product.yaml
+```
+
 ## Per-skill breakdown
 
 | Skill | This example's slice |
@@ -40,8 +61,13 @@ one when filling this in.)*
 
 ## To build it out
 
+0. Fill in the contracts: the net map ([`pcb/pinmap.yaml`](pcb/pinmap.yaml)) and the
+   shared fit numbers ([`cad/constraints.yaml`](cad/constraints.yaml)); keep
+   [`product.yaml`](product.yaml) current and run `plm_check.py` (above).
 1. Write the spec/net map (start from [`vibe-pcb` spec template](../../skills/vibe-pcb/references/spec-template.md)).
-2. `pcb/` — generate the carrier, DRC-clean, review with `pcb_view.sh`.
+2. `pcb/` — generate the carrier, DRC-clean, review with `pcb_view.sh`; export `board.step`.
 3. `cad/` — model the shell to the shared fit numbers, check the board fits (0 mm³).
 4. `firmware/` — the status client + the Claude Code hook bridge.
-5. Fabricate (JLCPCB gerbers + print the shell), flash, page yourself. 🎉
+5. Walk the [release gate](../../skills/vibe-plm/references/release-checklist.md) — all
+   three domains green at one revision — then fabricate (JLCPCB gerbers + print the
+   shell), flash, page yourself. 🎉

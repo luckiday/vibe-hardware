@@ -12,14 +12,17 @@ are stubs.
       JLCPCB packaging, one-page 2D+3D web viewer.
 - [x] `vibe-cad` — parametric build123d, CAD-Viewer review, interference check.
 - [x] `vibe-firmware` — framework stub (pinned builds, config-as-code, OTA + test-first).
+- [x] `vibe-plm` — the integration layer: a `product.yaml` manifest + the three interface
+      contracts (pinmap / board.step / constraints) + a self-contained `plm_check.py` gate
+      + the cross-domain release checklist.
 - [x] Repo scaffold — README, AGENTS/CLAUDE, docs, CI, templates, license.
 
 ## Phase 1 — One end-to-end example
 
 Prove the whole loop on a real, public build.
 
-- [ ] `examples/pager-buddy` filled in: `pcb/`, `cad/`, `firmware/` + the Claude Code
-      hook→bridge→device glue.
+- [ ] `examples/pager-buddy` filled in: structure + `product.yaml` manifest scaffolded ✔
+      — now the `pcb/`, `cad/`, `firmware/` sources + the Claude Code hook→bridge→device glue.
 - [ ] `vibe-firmware` made concrete for **ESP-IDF** (or Arduino) — the status client,
       config-as-code layout, a one-command pinned build wrapper (`scripts/`).
 - [ ] Demo GIFs in `assets/` (the 2D/3D viewer; the device paging) wired into the README.

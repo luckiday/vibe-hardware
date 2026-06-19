@@ -7,13 +7,18 @@ method and gotchas for any task live in the relevant skill's `SKILL.md` +
 ## Repo map
 
 ```
-skills/          the agent skills (one per dir): vibe-firmware · vibe-pcb · vibe-cad
+skills/          the agent skills (one per dir):
+  vibe-plm              the integration layer: product manifest + interface contracts
+  vibe-firmware · vibe-pcb · vibe-cad   the three domains (each a self-contained loop)
   <skill>/SKILL.md      frontmatter (name + "use when…") + the method
   <skill>/references/   deep lessons / gotchas, loaded on demand
-  <skill>/scripts/      portable bash/python tools (pcb_check, pcb_view, cad_viewer, …)
-examples/        worked end-to-end builds (pager-buddy, …); sources to fill in
+  <skill>/scripts/      portable bash/python tools (plm_check, pcb_check, pcb_view, cad_viewer, …)
+examples/        worked end-to-end builds (pager-buddy, …); product.yaml + the three dirs
 docs/            getting-started and friends
 ```
+
+The three domains are coupled **only through data** — the contract files named in a
+product's `product.yaml` (vibe-plm owns it), never by one skill calling another's code.
 
 ## Repo rules
 
@@ -47,6 +52,8 @@ docs/            getting-started and friends
 
 ## Checks (run the skill's own scripts; smallest first)
 
+- PLM: `python3 skills/vibe-plm/scripts/plm_check.py <product>/product.yaml` → manifest
+  sane + every interface contract resolves (source missing = error, artifact = warn).
 - PCB: `scripts/pcb_check.sh <proj>` → ERC + DRC to 0 errors / 0 unconnected
   (+ `BELLY_BOX=…` for the module belly keep-out).
 - CAD: `python check_fit.py` → board↔shell interference must be **0 mm³**.

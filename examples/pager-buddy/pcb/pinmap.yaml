@@ -1,0 +1,19 @@
+# pinmap.yaml — pcb -> firmware interface contract (the net map)
+#
+# Produced by vibe-pcb (mirrors gen_sch.py / the brief's §2 net map), consumed by
+# vibe-firmware (its config-as-code header is generated/checked against this).
+# One row per net. Keep in sync with BOTH the PCB net map AND the firmware pins;
+# bump `revision` in ../product.yaml on any change here.
+#
+# NOTE: pins below are PLACEHOLDERS for the stub — set them when the board is real.
+
+mcu: xiao-esp32s3                 # the module the GPIO names refer to
+bus:
+  i2c: { sda: GPIO5, scl: GPIO6, hz: 400000, addr: 0x3C }   # OLED display (SSD1306)
+
+pins:
+  - { signal: DISP_SDA, gpio: GPIO5, dir: io,  net: SDA,  to: display }
+  - { signal: DISP_SCL, gpio: GPIO6, dir: out, net: SCL,  to: display }
+  - { signal: BUZZER,   gpio: GPIO2, dir: out, net: BUZZ, to: buzzer }
+  - { signal: BTN_ACK,  gpio: GPIO3, dir: in,  net: BTN,  to: button, pull: up }
+  - { signal: LED_STAT, gpio: GPIO4, dir: out, net: LED,  to: status_led }

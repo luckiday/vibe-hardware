@@ -27,6 +27,14 @@ numbers** are shared by PCB ↔ enclosure (the board outline and connector posit
 the shell's pockets and cutouts). Change a number once in the spec and all three move —
 that's the whole point of keeping sources as small parametric files.
 
+That shared box is made concrete by **`vibe-plm`**: a `product.yaml` manifest plus three
+**interface contracts** — `pinmap.yaml` (PCB → firmware, the net map), `board.step`
+(PCB → enclosure, the 3D for the fit-check), and `constraints.yaml` (enclosure ↔ PCB, the
+fit numbers). The domains agree only through those files — never by one skill calling
+another's code — and a `revision` bumps when a change crosses a boundary so all three stay
+versioned together. vibe-plm is the layer *above* the three; it owns the contracts, not the
+work inside any domain.
+
 ## Two principles
 
 1. **Generate by script, not by GUI.** The sources of truth are generators /
