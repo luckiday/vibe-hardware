@@ -14,27 +14,44 @@ protocol: pager-buddy/status
 version: 1
 
 # ── transport ─────────────────────────────────────────────────────────────────
-# Level-0 (this slice):  Mac PUSHES — HTTP POST a full snapshot to the device on
-#   every change. The device is a dumb renderer: it shows the latest snapshot and
-#   holds no merge logic. (The Mac side owns the session registry.)
-# Level-1 (future):      device may also POLL `GET /v1/snapshot`, or hold a
-#   WebSocket; and `POST /v1/resolution` lets the device answer approve/ask back
-#   to the Mac (two-way). Declared here so both ends can grow into it.
+# Two legs, both carrying the SAME `snapshot` JSON below:
+#   1. hook → hub   (HTTP, loopback on the Mac): each Claude hook POSTs a full
+#      snapshot to the hub (pager_stub.py); the web mock GETs it. Internal to the Mac.
+#   2. hub → device (BLE): the real pager link. The device is a NimBLE *peripheral*
+#      (GATT server); the Mac is the *central* and WRITES snapshots to it. The
+#      device is a dumb renderer — it shows the latest snapshot, no merge logic.
+# bridge/ble_push.py is leg 2: it polls the hub (leg 1) and relays over BLE.
 transport:
-  push:                              # Level-0 (implemented)
-    method: POST
-    path: /v1/snapshot
-    content_type: application/json
-    body: snapshot                   # the Snapshot object below
-    response: '{"ok": true}'
-  poll:                              # Level-1 (optional)
-    method: GET
-    path: /v1/snapshot
-    returns: snapshot
-  resolution:                        # Level-1 (optional, two-way: device → Mac)
-    method: POST
-    path: /v1/resolution
-    body: '{ session_id: string, action: string }'   # action: allow | deny | <option label>
+  # ── leg 1: hook → hub (HTTP, Mac-local) ──────────────────────────────────────
+  http:
+    push:
+      method: POST
+      path: /v1/snapshot
+      content_type: application/json
+      body: snapshot                 # the Snapshot object below
+      response: '{"ok": true}'
+    poll:
+      method: GET
+      path: /v1/snapshot
+      returns: snapshot
+
+  # ── leg 2: hub → device (BLE GATT — the pager link, implemented) ──────────────
+  # 128-bit UUIDs; the canonical strings differ only in the last byte (role).
+  # Must match firmware/components/bridge/bridge.c and bridge/ble_push.py.
+  ble:
+    device_name: "pg-XXXX"           # last two MAC bytes; advertised in the scan response
+    service:    "00010000-7265-6761-702d-796464756200"
+    snapshot:                        # WRITE, Mac → device
+      uuid: "00010000-7265-6761-702d-796464756201"
+      # A snapshot is larger than one BLE write, so it is framed into chunks:
+      #   each write = [ver(1)=1, flags(1)] + payload
+      #   flags bit0 = START (first chunk; resets the device buffer)
+      #         bit1 = END   (last chunk; device parses + applies)
+      # chunk payload size = negotiated_MTU − 3 (ATT) − 2 (this header)
+      framing: "[ver=1, flags] + chunk;  flags: 0x01=START 0x02=END"
+    resolution:                      # NOTIFY, device → Mac (Level-1, reserved)
+      uuid: "00010000-7265-6761-702d-796464756202"
+      body: '{ session_id: string, action: string }'   # action: allow | deny | <option label>
 
 # ── Snapshot — the top-level message ────────────────────────────────────────────
 # A complete picture of all live sessions. The device renders whatever it last
@@ -55,10 +72,11 @@ session:
   id:       string         # stable session id (Claude session_id)
   name:     string         # short workspace name (cwd basename, prettified)
   agent:    string         # "Claude" (Codex / Gemini / … later)
-  term:     string         # terminal/IDE app, e.g. "iTerm"; "—" if unknown
-  age:      string         # humanized since-start, e.g. "27m" "1h" "3d"
+  term:     string         # terminal/IDE app, e.g. "iTerm" / "VS Code"; "—" if unknown
+  age:      string         # humanized time since LAST update (renderers re-age from `ts`)
+  ts:       number         # epoch seconds of LAST update — see `freshness` below
   state:    string         # see `states` below
-  task:     string         # the user's ask / current one-line summary (clipped)
+  task:     string         # the session's title: the user's ask, summarized to one clean line
   activity: "[Activity]"   # recent tool steps (most recent last); shown when working
   approve:  "Approve?"     # present iff state == "waiting"
   ask:      "Ask?"         # present iff state == "asking"
@@ -93,6 +111,28 @@ done:
   files:   "int?"          # files touched (optional)
   tests:   "string?"       # e.g. "8 passed" (optional)
 
+# ── freshness — sessions expire by INACTIVITY, not by SessionEnd ─────────────────
+# SessionEnd is unreliable (a closed / crashed / merely-idle CLI often never fires
+# it), and the Mac only pushes on a hook event — so a renderer must NOT treat the
+# last snapshot as permanent. Each session carries `ts` (epoch of its last update).
+# Every renderer (device, stub, web UI) should, on its own clock:
+#   - recompute `age` from `ts`, and
+#   - HIDE / drop any session where (now - ts) > idle_ttl_seconds
+# so closed/idle sessions fall off even with no new push. The Mac applies the same
+# TTL when it builds a snapshot (PAGER_BUDDY_IDLE_TTL). Long-running tools can be
+# quiet a while, so keep the TTL generous.
+#
+# CLOCK SOURCE — the device has no RTC/NTP, so its ONLY time source is this protocol.
+# The device anchors "now" on the snapshot's top-level `ts` plus a monotonic timer
+# (now ≈ ts + elapsed_since_receipt) and derives its local clock from `ts` vs `clock`.
+# Therefore the hub (pager_stub.py) RE-STAMPS top-level `ts`/`clock`/`date` to serve
+# time on every GET — a re-served snapshot must carry current time, not the stale
+# hook-build time, or the device clock drifts backward. The BLE relay (ble_push.py)
+# only forwards on a MEANINGFUL change (it ignores the volatile `ts`/`clock`/`date`
+# + per-session `age`), and the device re-ages/prunes/ticks locally between pushes.
+freshness:
+  idle_ttl_seconds: 600    # default; renderer + Mac both honor it (override via env / ?idle=)
+
 # ── Claude Code hook → state mapping (how the bridge fills the above) ────────────
 # Level-0 registers these hook events (bridge/install_hooks.py). Mapping is
 # best-effort; Level-1 (a stateful menubar app) will refine approve/ask detection
@@ -121,6 +161,7 @@ example:
       agent: "Claude"
       term: "iTerm"
       age: "27m"
+      ts: 1749998380
       state: "waiting"
       task: "fix the auth bug in middleware"
       activity:

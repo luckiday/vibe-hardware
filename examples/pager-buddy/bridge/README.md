@@ -5,22 +5,35 @@ Streams **Claude Code session status** from your Mac to the pager. This is the
 points at — the missing piece between a running agent and the device screen.
 
 Modeled on [open-vibe-island](../reference/open-vibe-island/) (gitignored study
-clone). Its pipeline is `agent hook → CLI (stdin) → socket → app → HTTP/SSE → device`;
-this is the **Level-0** slice of that — no Swift app yet, just hooks + HTTP.
+clone) and the [voicestick](../../../parts/parts/m5-stickc-s3/_ref/voicestick/) BLE
+peripheral. The device link is **BLE** (the firmware is a NimBLE GATT server); the
+hub + hooks stay on HTTP.
 
 ## How it works
 
 ```
-Claude Code  ──hook event (JSON on stdin)──▶  claude_pager_hook.py
-                                                 │  updates ~/.pager-buddy/state.json
-                                                 │  (file-backed session registry)
-                                                 ▼
-                                        HTTP POST /v1/snapshot
-                                                 │  full snapshot per protocol.yaml
-                                                 ▼
-                                   pager_stub.py   ←—— stands in for the ESP32 device
-                                   (renders an ASCII 135×240 screen)
+Claude Code ─hook event (JSON on stdin)─▶ claude_pager_hook.py
+                                             │  updates ~/.pager-buddy/state.json
+                                             │  (file-backed session registry)
+                                             ▼
+                                    HTTP POST /v1/snapshot
+                                             ▼
+                                      pager_stub.py  ── the hub: holds the latest
+                                       │  ▲             snapshot; serves the web mock
+                              GET poll │  │ render      (and an ASCII stand-in screen)
+                                       ▼  │
+                                    ble_push.py  ── BLE central
+                                             │  writes framed snapshot chunks
+                                       BLE write (GATT)
+                                             ▼
+                                   pager-buddy device  ── NimBLE peripheral
+                                   (firmware/components/bridge)
 ```
+
+The hooks + hub are unchanged; **ble_push.py** is the new leg that relays the hub's
+latest snapshot to the device over BLE (it also stands in for the future menubar
+app's BLE central). `pager_stub.py` still renders an ASCII screen / serves the web
+mock, so you can develop without hardware.
 
 Claude fires a hook on each lifecycle event and pipes a JSON payload to the hook
 command's **stdin**. The command maps it into the [protocol](protocol.yaml),
@@ -66,6 +79,7 @@ The bridge must be up to receive hook events. Two ways:
 ```bash
 ./run.sh                      # foreground in a terminal tab (Ctrl-C to stop)
                               #   → http://127.0.0.1:8787/ — open it, click Connect
+                              #   → also starts the BLE relay (ble_push.py) to the pager
 
 ./service.sh install          # auto-start on login + restart on crash (macOS LaunchAgent)
 ./service.sh status           # is it running?
@@ -75,8 +89,10 @@ The bridge must be up to receive hook events. Two ways:
 
 `run.sh` is best while iterating; `service.sh install` is the "always-on desk
 pager" setup. Both free port 8787 first and serve the design UI via `--ui`.
-Override the port with `PAGER_BUDDY_PORT` (and re-point the hook with
-`install_hooks.py install --url http://127.0.0.1:<port>/v1/snapshot`).
+`run.sh` also brings up the **BLE relay** to the device — best-effort: it's skipped
+with a note if `bleak` isn't installed (`pip install bleak`), and `PAGER_BUDDY_BLE=0`
+disables it (hub only). Override the port with `PAGER_BUDDY_PORT` (and re-point the
+hook with `install_hooks.py install --url http://127.0.0.1:<port>/v1/snapshot`).
 
 ## Use it for real (with your Claude Code)
 
@@ -100,9 +116,10 @@ Config via env (read by the hook): `PAGER_BUDDY_URL`, `PAGER_BUDDY_STATE`,
 
 | File | Role |
 |---|---|
-| [protocol.yaml](protocol.yaml) | **The contract.** Wire format = the design mock's session shape. Versioned. |
+| [protocol.yaml](protocol.yaml) | **The contract.** Wire format + the two transports (HTTP hub, BLE device). Versioned. |
 | [claude_pager_hook.py](claude_pager_hook.py) | Hook command: stdin event → registry → POST snapshot. `--demo` to self-drive. |
-| [pager_stub.py](pager_stub.py) | Fake device: `POST/GET /v1/snapshot`, renders the screen. ESP32 replaces it. |
+| [pager_stub.py](pager_stub.py) | The hub: `POST/GET /v1/snapshot`, ASCII screen, serves the web mock (`--ui`). |
+| [ble_push.py](ble_push.py) | BLE central: polls the hub, writes framed snapshots to the device. `pip install bleak`. |
 | [install_hooks.py](install_hooks.py) | Idempotent install / uninstall / status for `~/.claude/settings.json`. |
 
 ## What the device gets

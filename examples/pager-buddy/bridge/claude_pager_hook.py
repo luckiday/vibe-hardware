@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -33,7 +34,9 @@ from urllib import request as urlrequest
 DEFAULT_URL = "http://127.0.0.1:8787/v1/snapshot"
 DEFAULT_STATE = "~/.pager-buddy/state.json"
 MAX_ACTIVITY = 3            # tool steps kept per session
-STALE_AGE = 86_400         # drop sessions untouched for >24h
+# Sessions go stale by inactivity, not by SessionEnd (which is unreliable — a
+# closed/crashed/idle CLI often never fires it). Drop sessions idle past this.
+IDLE_TTL = int(os.environ.get("PAGER_BUDDY_IDLE_TTL", "600"))  # seconds (default 10 min)
 POST_TIMEOUT = 1.5         # seconds — keep small; we fail open
 
 
@@ -51,6 +54,53 @@ def clip(value, limit: int = 80):
     if len(collapsed) <= limit:
         return collapsed
     return collapsed[: limit - 1] + "…"
+
+
+def summarize(text, limit: int = 90):
+    """A clean one-line title/summary from a prompt or assistant message.
+
+    The tiny screen can't show markdown: pick the first meaningful line (skipping
+    code fences, preferring prose over a heading), strip inline markdown, and cap
+    at a sentence boundary. Turns a run-on '修好了。问题根因…\\n## 根因\\n…' blob into
+    just its lead line."""
+    if not text:
+        return None
+    first = None
+    fallback = None  # a heading, used only if there's no prose line
+    for raw_line in str(text).splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("```"):
+            continue
+        is_heading = bool(re.match(r"^#{1,6}\s+", line))
+        line = re.sub(r"^\s*(#{1,6}\s+|>\s+|[-*+]\s+|\d+[.)]\s+)", "", line).strip()
+        if not line:
+            continue
+        if is_heading:
+            fallback = fallback or line
+            continue
+        first = line
+        break
+    if first is None:
+        first = fallback or " ".join(str(text).split())
+
+    # strip inline markdown: code, bold/italic/strike, [text](url) -> text
+    first = re.sub(r"`+", "", first)
+    first = re.sub(r"(\*\*|\*|__|_|~~)", "", first)
+    first = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", first)
+    first = " ".join(first.split())
+
+    if len(first) <= limit:
+        return first
+    head = first[:limit]
+    last = None
+    for m in re.finditer(r"[.!?。！？]", head):
+        last = m
+    if last and last.end() >= 20:        # cut at the last full sentence that fits
+        return head[: last.end()]
+    space = head.rfind(" ")              # else break at a word boundary (no-op for CJK)
+    if space >= 40:
+        return head[:space] + "…"
+    return head[: limit - 1] + "…"
 
 
 def prettify(name: str) -> str:
@@ -266,7 +316,7 @@ def apply_event(registry: dict, payload: dict, now: float) -> None:
         session["state"] = "working"
     elif event == "UserPromptSubmit":
         session["state"] = "working"
-        session["task"] = clip(payload.get("prompt")) or session["task"]
+        session["task"] = summarize(payload.get("prompt")) or session["task"]
         _clear_actions(session)
     elif event == "PreToolUse":
         if tool == "AskUserQuestion":
@@ -293,13 +343,13 @@ def apply_event(registry: dict, payload: dict, now: float) -> None:
     elif event == "Notification":
         message = payload.get("message") or payload.get("title")
         if message:
-            session["task"] = clip(message)
+            session["task"] = summarize(message)
     elif event in ("PostToolUseFailure", "StopFailure"):
         session["state"] = "error"
         session["task"] = clip(payload.get("error") or payload.get("message")) or session["task"]
     elif event == "Stop":
         session["state"] = "done"
-        summary = clip(payload.get("last_assistant_message")) or session.get("task") or "Done."
+        summary = summarize(payload.get("last_assistant_message")) or session.get("task") or "Done."
         session["done"] = {"summary": summary}
         _clear_actions(session, keep_done=True)
 
@@ -309,14 +359,15 @@ def build_snapshot(registry: dict, now: float) -> dict:
     rows = []
     for session in registry.get("sessions", {}).values():
         touched = session.get("updated_at", session.get("started_at", now))
-        if now - touched > STALE_AGE:
+        if now - touched > IDLE_TTL:
             continue
         out = {
             "id": session["id"],
             "name": session["name"],
             "agent": session.get("agent", "Claude"),
             "term": session.get("term", "—"),
-            "age": humanize_age(session.get("started_at", now), now),
+            "age": humanize_age(touched, now),   # since last update (renderers re-age from ts)
+            "ts": round(touched),   # last-update epoch — renderers re-age + prune from this
             "state": session.get("state", "working"),
             "task": session.get("task", ""),
             "activity": session.get("activity", []),

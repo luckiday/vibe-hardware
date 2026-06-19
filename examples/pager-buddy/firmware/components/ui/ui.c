@@ -26,7 +26,9 @@ static const char *TAG = "ui";
 #define TICK_MS        10
 
 // palette (matches the web mock)
-#define C_BG     0x0a0c10
+// NOTE: the Montserrat fonts only carry ASCII + the LV_SYMBOL_* set. Any other Unicode
+// glyph (•, ▼, —, ‿ …) renders as a "tofu" box — use ASCII or an LV_SYMBOL_* instead.
+#define C_BG     0x0a0a0a   // neutral near-black (was 0x0a0c10, read blue on the panel)
 #define C_FG     0xe6e9ef
 #define C_DIM    0x8a93a0
 #define C_LINE   0x20242c
@@ -246,8 +248,8 @@ static void view_idle(lv_obj_t *scr, const app_model_t *m) {
     for (int i = 0; i < m->n; i++)
         if (m->sessions[i].state == ST_WAITING || m->sessions[i].state == ST_ASKING) need++;
 
-    lv_obj_t *face = mk_label(scr, need ? "•_•" : "•‿•", &lv_font_montserrat_16,
-                              need ? C_WAIT : C_DONE);
+    lv_obj_t *face = mk_label(scr, need ? LV_SYMBOL_WARNING : LV_SYMBOL_OK,
+                              &lv_font_montserrat_16, need ? C_WAIT : C_DONE);
     lv_obj_align(face, LV_ALIGN_CENTER, 0, -46);
     lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_28, C_FG);
     lv_obj_align(clk, LV_ALIGN_CENTER, 0, -16);
@@ -259,7 +261,7 @@ static void view_idle(lv_obj_t *scr, const app_model_t *m) {
     else      snprintf(sum, sizeof sum, "%d sessions  all clear", m->n);
     lv_obj_t *s = mk_label(scr, sum, &lv_font_montserrat_12, need ? C_WAIT : C_FG);
     lv_obj_align(s, LV_ALIGN_CENTER, 0, 30);
-    footer(scr, "— open", "▼ menu");
+    footer(scr, LV_SYMBOL_OK " open", LV_SYMBOL_DOWN " menu");
 }
 
 static void view_list(lv_obj_t *scr, const app_model_t *m) {
@@ -306,7 +308,7 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
         mk_label(l2, s->agent, &lv_font_montserrat_10, C_CHIPTX);
         mk_label(l2, state_label(s->state), &lv_font_montserrat_10, state_color(s->state));
     }
-    footer(scr, "— open", "▼ next");
+    footer(scr, LV_SYMBOL_OK " open", LV_SYMBOL_DOWN " next");
 }
 
 static void scr_working(lv_obj_t *scr, session_t *s) {
@@ -321,7 +323,7 @@ static void scr_working(lv_obj_t *scr, session_t *s) {
         lv_label_set_long_mode(a, LV_LABEL_LONG_DOT);
     }
     mk_label(c, "working...", &lv_font_montserrat_12, C_WORK);
-    footer(scr, "— back", "");
+    footer(scr, LV_SYMBOL_LEFT " back", "");
 }
 
 static void scr_approve(lv_obj_t *scr, session_t *s) {
@@ -336,7 +338,7 @@ static void scr_approve(lv_obj_t *scr, session_t *s) {
     char d[24];
     snprintf(d, sizeof d, "+%d -%d change", s->add, s->del);
     mk_label(c, d, &lv_font_montserrat_10, C_DIM);
-    footer(scr, "— confirm", "▼ switch");  // the Deny/Allow bar is drawn by ui_render (knows sel)
+    footer(scr, LV_SYMBOL_OK " confirm", LV_SYMBOL_DOWN " switch");  // Deny/Allow bar drawn by ui_render
 }
 
 static void scr_ask(lv_obj_t *scr, session_t *s, int sel) {
@@ -360,7 +362,7 @@ static void scr_ask(lv_obj_t *scr, session_t *s, int sel) {
         lv_obj_set_style_border_color(o, lv_color_hex(on ? C_ASK : 0x20262f), 0);
         mk_label(o, s->ask_opts[i], &lv_font_montserrat_12, on ? 0xc9fbff : C_FG);
     }
-    footer(scr, "— select", "▼ next");
+    footer(scr, LV_SYMBOL_OK " select", LV_SYMBOL_DOWN " next");
 }
 
 static void scr_done(lv_obj_t *scr, session_t *s) {
@@ -376,7 +378,7 @@ static void scr_done(lv_obj_t *scr, session_t *s) {
     char d[32];
     snprintf(d, sizeof d, "%d files - %s", s->files, s->tests ? s->tests : "");
     mk_label(c, d, &lv_font_montserrat_10, C_DIM);
-    footer(scr, "— Jump", "▼ switch");
+    footer(scr, LV_SYMBOL_OK " Jump", LV_SYMBOL_DOWN " switch");
 }
 
 void ui_render(const app_model_t *m) {

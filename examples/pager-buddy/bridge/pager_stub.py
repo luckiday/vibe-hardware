@@ -25,10 +25,16 @@ import argparse
 import json
 import os
 import sys
+import threading
+import time
+import unicodedata
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 WIDTH = 46  # inner width of the faux screen
+# Hide sessions idle past this (renderer-side freshness; matches the hook default).
+IDLE_TTL = int(os.environ.get("PAGER_BUDDY_IDLE_TTL", "600"))
+REFRESH = 5  # seconds — re-render on a timer so stale sessions drop without new pushes
 
 # When --ui is given, static files under this dir are served (set in main()).
 UI_DIR = None
@@ -66,9 +72,22 @@ def dot(state: str) -> str:
     return color(COLORS.get(state, "37"), "●")
 
 
-def trunc(text: str, width: int) -> str:
+def dwidth(text: str) -> int:
+    """Display columns — CJK / fullwidth glyphs take two cells in a terminal."""
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in text)
+
+
+def trunc(text, width: int) -> str:
     text = str(text)
-    return text if len(text) <= width else text[: width - 1] + "…"
+    if dwidth(text) <= width:
+        return text
+    out, w = "", 0
+    for c in text:
+        cw = 2 if unicodedata.east_asian_width(c) in ("W", "F") else 1
+        if w + cw > width - 1:
+            break
+        out, w = out + c, w + cw
+    return out + "…"
 
 
 def line(text: str = "") -> str:
@@ -77,7 +96,7 @@ def line(text: str = "") -> str:
     Padding ignores ANSI color codes so colored dots don't skew alignment.
     """
     visible = _strip_ansi(text)
-    pad = max(0, WIDTH - len(visible))
+    pad = max(0, WIDTH - dwidth(visible))
     return f"│ {text}{' ' * pad} │"
 
 
@@ -94,8 +113,37 @@ def _strip_ansi(text: str) -> str:
     return "".join(out)
 
 
+def humanize_age(seconds: float) -> str:
+    s = max(0, int(seconds))
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m"
+    if s < 86400:
+        return f"{s // 3600}h"
+    return f"{s // 86400}d"
+
+
+def live_sessions(snapshot: dict) -> list:
+    """Drop sessions idle past IDLE_TTL and re-age the rest on our own clock, so
+    closed/idle sessions disappear even when the Mac hasn't pushed an update."""
+    if not snapshot:
+        return []
+    now = time.time()
+    out = []
+    for s in snapshot.get("sessions", []):
+        ts = s.get("ts")
+        if ts is not None and now - ts > IDLE_TTL:
+            continue
+        s = dict(s)
+        if ts is not None:
+            s["age"] = humanize_age(now - ts)
+        out.append(s)
+    return out
+
+
 def render(snapshot: dict) -> str:
-    sessions = snapshot.get("sessions", []) if snapshot else []
+    sessions = live_sessions(snapshot)
     need = sum(1 for s in sessions if s.get("state") in ("waiting", "asking"))
     clock = snapshot.get("clock", "--:--") if snapshot else "--:--"
 
@@ -183,6 +231,8 @@ def _detail(s) -> list[str]:
         return [color("31", "✕ error") + "   " + trunc(s.get("task", ""), WIDTH - 12)]
     # working
     out = [trunc(s.get("name", ""), WIDTH)]
+    if s.get("task"):
+        out.append(color("2", trunc(s["task"], WIDTH)))   # the title: what it's doing
     for act in s.get("activity", [])[-3:]:
         detail = trunc(act.get("detail", ""), WIDTH - 14)
         out.append(f"  {act.get('tool', '?')}( {detail} )")
@@ -193,8 +243,9 @@ def _detail(s) -> list[str]:
 def paint(snapshot: dict) -> None:
     sys.stdout.write("\033[2J\033[H")  # clear + home
     sys.stdout.write(render(snapshot) + "\n")
-    sys.stdout.write(color("2", f"  updated {datetime.now().strftime('%H:%M:%S')} "
-                                f"· POST /v1/snapshot received\n"))
+    live = len(live_sessions(snapshot)) if snapshot else 0
+    sys.stdout.write(color("2", f"  {datetime.now().strftime('%H:%M:%S')} · {live} live "
+                                f"· idle>{IDLE_TTL}s drops off\n"))
     sys.stdout.flush()
 
 
@@ -235,7 +286,21 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/healthz":
             return self._send(200, {"ok": True})
         if self.path.startswith("/v1/snapshot"):
-            return self._send(200, _latest["snapshot"] or {"v": 1, "type": "snapshot", "sessions": []})
+            snap = _latest["snapshot"]
+            if snap:
+                # Re-stamp the time fields to NOW on serve: the device has no RTC and
+                # anchors its clock + session re-aging on the snapshot's `ts` (see
+                # protocol.yaml freshness). A re-served snapshot must carry serve-time,
+                # not the stale hook-build time, or the device's clock drifts backward.
+                moment = datetime.now()
+                snap = {**snap,
+                        "ts": round(time.time(), 3),
+                        "clock": moment.strftime("%H:%M"),
+                        "date": moment.strftime("%a %b %-d"),
+                        "sessions": live_sessions(snap)}  # serve only live sessions
+            else:
+                snap = {"v": 1, "type": "snapshot", "sessions": []}
+            return self._send(200, snap)
         if UI_DIR:
             return self._serve_static(self.path)
         self._send(404, {"error": "not found"})
@@ -270,6 +335,14 @@ def main() -> int:
             UI_DIR = None
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
+
+    def _refresh_loop():
+        while True:
+            time.sleep(REFRESH)
+            if _latest["snapshot"]:
+                paint(_latest["snapshot"])
+    threading.Thread(target=_refresh_loop, daemon=True).start()
+
     paint(None)
     shown_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     sys.stdout.write(color("2", f"  listening on http://{args.host}:{args.port}  "

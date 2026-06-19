@@ -219,6 +219,9 @@ body {
 .choice.sel { background: #fff; color: #111; border-color: #fff; }
 .choice.danger.sel { background: #3a1620; color: #ffd6da; border-color: var(--error); }
 
+/* working: the title (what the session is doing) under the name */
+.subtitle { font-size: 8.5px; color: var(--dim); margin: 1px 0 4px; line-height: 1.25; }
+
 /* working activity */
 .act { font-size: 9px; margin-top: 3px; }
 .act .tool { color: var(--working); }

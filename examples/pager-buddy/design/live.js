@@ -17,8 +17,17 @@
     : "http://127.0.0.1:8787/v1/snapshot";
   const BRIDGE_URL = params.get("bridge") || sameOrigin;
   const INTERVAL = 1000;
+  const IDLE_TTL_S = parseInt(params.get("idle") || "600", 10); // hide sessions idle past this
 
   const L = { timer: null, everConnected: false, prevActionable: new Set() };
+
+  function humanizeAge(secs) {
+    secs = Math.max(0, Math.floor(secs));
+    if (secs < 60) return secs + "s";
+    if (secs < 3600) return Math.floor(secs / 60) + "m";
+    if (secs < 86400) return Math.floor(secs / 3600) + "h";
+    return Math.floor(secs / 86400) + "d";
+  }
 
   function setStatus(text, on) {
     const node = el("liveStatus");
@@ -37,12 +46,16 @@
     if (!snap || !Array.isArray(snap.sessions)) return;
     if (snap.clock) D.clock = snap.clock;
     if (snap.date) D.date = snap.date;
-    D.sessions = snap.sessions.map((s) => ({
-      id: s.id, name: s.name, agent: s.agent, term: s.term, age: s.age,
-      state: s.state, task: s.task || "",
-      activity: Array.isArray(s.activity) ? s.activity : [],
-      approve: s.approve, ask: s.ask, done: s.done,
-    }));
+    const now = Date.now() / 1000;
+    D.sessions = snap.sessions
+      .filter((s) => s.ts == null || now - s.ts <= IDLE_TTL_S) // drop idle/closed sessions
+      .map((s) => ({
+        id: s.id, name: s.name, agent: s.agent, term: s.term,
+        age: s.ts != null ? humanizeAge(now - s.ts) : s.age,    // re-age on our clock
+        state: s.state, task: s.task || "",
+        activity: Array.isArray(s.activity) ? s.activity : [],
+        approve: s.approve, ask: s.ask, done: s.done,
+      }));
 
     // keep navigation coherent against the new data
     if (S.view === "session" && !D.sessions.some((x) => x.id === S.openId)) {
@@ -53,10 +66,10 @@
 
     // a NEW thing needs you → page (flash, stands in for the buzz). Auto-open it
     // only from idle, so a live update never yanks the user mid-browse.
-    const now = actionableIds();
+    const actionable = actionableIds();
     let fresh = null;
-    now.forEach((id) => { if (!L.prevActionable.has(id)) fresh = id; });
-    L.prevActionable = now;
+    actionable.forEach((id) => { if (!L.prevActionable.has(id)) fresh = id; });
+    L.prevActionable = actionable;
     if (fresh) {
       flash();
       if (S.view === "idle") return openSession(fresh); // openSession() renders

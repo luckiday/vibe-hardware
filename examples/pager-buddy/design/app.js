@@ -142,8 +142,9 @@ function scrWorking(s) {
   const acts = s.activity.map((a) =>
     `<div class="act"><span class="tool">${esc(a.tool)}(</span>${esc(a.detail)}<span class="tool">)</span>` +
     (a.sub ? `<div class="sub">└ ${esc(a.sub)}</div>` : "") + `</div>`).join("");
+  const sub = s.task ? `<div class="subtitle">${esc(s.task)}</div>` : "";
   return `<div class="content"><div class="head">${dot("working")}<b>${esc(s.name)}</b></div>` +
-    acts + `<div class="act spin" style="margin-top:4px">▌ working…</div></div>` +
+    sub + acts + `<div class="act spin" style="margin-top:4px">▌ working…</div></div>` +
     footer("— back", "");
 }
 
