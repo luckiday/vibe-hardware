@@ -1,0 +1,3 @@
+[submodule "parts"]
+	path = parts
+	url = git@github.com:luckiday/vibe-parts.git
