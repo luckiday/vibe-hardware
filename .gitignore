@@ -34,3 +34,6 @@ fp-info-cache
 # Firmware build trees (set per platform)
 build/
 .pio/
+
+# Reference clones (study material, not ours to commit)
+examples/*/reference/

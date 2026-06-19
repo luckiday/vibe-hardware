@@ -1,0 +1,128 @@
+# protocol.yaml — pager-buddy Mac↔device status protocol  (CONTRACT · v1)
+#
+# producer: the Mac bridge   (Level-0: bridge/claude_pager_hook.py; Level-1: a menubar app)
+# consumer: the firmware ui_status component  (and the design/ web mock)
+#
+# The SINGLE SOURCE OF TRUTH for the wire format that carries Claude Code session
+# status from the Mac to the pager. The `session` object below is intentionally
+# IDENTICAL to the design mock's session shape (examples/pager-buddy/design/data.js)
+# so the firmware can render a received snapshot directly — no translation layer.
+# Referenced from product.yaml `interfaces.pager_status`. Bump `version` on any
+# breaking change to the wire format.
+
+protocol: pager-buddy/status
+version: 1
+
+# ── transport ─────────────────────────────────────────────────────────────────
+# Level-0 (this slice):  Mac PUSHES — HTTP POST a full snapshot to the device on
+#   every change. The device is a dumb renderer: it shows the latest snapshot and
+#   holds no merge logic. (The Mac side owns the session registry.)
+# Level-1 (future):      device may also POLL `GET /v1/snapshot`, or hold a
+#   WebSocket; and `POST /v1/resolution` lets the device answer approve/ask back
+#   to the Mac (two-way). Declared here so both ends can grow into it.
+transport:
+  push:                              # Level-0 (implemented)
+    method: POST
+    path: /v1/snapshot
+    content_type: application/json
+    body: snapshot                   # the Snapshot object below
+    response: '{"ok": true}'
+  poll:                              # Level-1 (optional)
+    method: GET
+    path: /v1/snapshot
+    returns: snapshot
+  resolution:                        # Level-1 (optional, two-way: device → Mac)
+    method: POST
+    path: /v1/resolution
+    body: '{ session_id: string, action: string }'   # action: allow | deny | <option label>
+
+# ── Snapshot — the top-level message ────────────────────────────────────────────
+# A complete picture of all live sessions. The device renders whatever it last
+# received.
+snapshot:
+  v:        int            # protocol version (== version)
+  type:     string         # always "snapshot" in Level-0
+  ts:       number         # unix epoch seconds, when the Mac built it
+  clock:    string         # "HH:MM" — the Mac is the time source (device may lack RTC/NTP)
+  date:     string         # e.g. "Fri Jun 19"
+  sessions: "[Session]"    # most-recently-updated first
+  # NOTE: `battery` is NOT on the wire — it is device-owned; the firmware fills
+  # its own battery %. The design mock carries `battery` only because it fakes a device.
+
+# ── Session ─────────────────────────────────────────────────────────────────
+# One coding-agent session. Field names MATCH design/data.js exactly.
+session:
+  id:       string         # stable session id (Claude session_id)
+  name:     string         # short workspace name (cwd basename, prettified)
+  agent:    string         # "Claude" (Codex / Gemini / … later)
+  term:     string         # terminal/IDE app, e.g. "iTerm"; "—" if unknown
+  age:      string         # humanized since-start, e.g. "27m" "1h" "3d"
+  state:    string         # see `states` below
+  task:     string         # the user's ask / current one-line summary (clipped)
+  activity: "[Activity]"   # recent tool steps (most recent last); shown when working
+  approve:  "Approve?"     # present iff state == "waiting"
+  ask:      "Ask?"         # present iff state == "asking"
+  done:     "Done?"        # present iff state == "done"
+
+# ── state enum — drives dot color + which screen opens ──────────────────────────
+# Matches design/data.js + app.js (STATE_LABEL). The device never shows code/diffs.
+states:
+  working: "agent is running                  (dot: blue)"
+  waiting: "needs you — approve a permission   (dot: amber)  → requires `approve`"
+  asking:  "agent asked a question            (dot: cyan)   → requires `ask`"
+  done:    "turn finished                     (dot: green)  → requires `done`"
+  error:   "tool / turn failed                (dot: red)"
+
+activity:                  # one tool step
+  tool:   string           # "Edit", "Bash", "Read", "Analyzing", …
+  detail: string           # file path / command / short text
+  sub:    "string?"        # optional second line ("Running…", "+6 -2", …)
+
+approve:                   # the permission decision — STATUS ONLY, never code/diff
+  tool: string             # tool awaiting approval
+  file: string             # affected path (or command)
+  add:  "int?"             # added lines   (optional; omit if unknown)
+  del:  "int?"             # removed lines (optional)
+
+ask:
+  q:    string             # the question
+  opts: "[string]"         # selectable options
+
+done:
+  summary: string          # one-line result
+  files:   "int?"          # files touched (optional)
+  tests:   "string?"       # e.g. "8 passed" (optional)
+
+# ── Claude Code hook → state mapping (how the bridge fills the above) ────────────
+# Level-0 registers these hook events (bridge/install_hooks.py). Mapping is
+# best-effort; Level-1 (a stateful menubar app) will refine approve/ask detection
+# and add the two-way `resolution` path.
+event_mapping:
+  SessionStart:       "upsert session, state=working"
+  UserPromptSubmit:   "state=working, task=prompt"
+  PreToolUse:         "state=working, push activity{tool,detail}; tool==AskUserQuestion → asking + ask"
+  PermissionRequest:  "tool==AskUserQuestion → asking; else state=waiting + approve{tool,file}"
+  Notification:       "best-effort nudge → task=message (Level-1 refines)"
+  Stop:               "state=done, done.summary = last_assistant_message"
+  StopFailure:        "state=error"
+  PostToolUseFailure: "state=error"
+  SessionEnd:         "remove session"
+
+# ── example snapshot ────────────────────────────────────────────────────────────
+example:
+  v: 1
+  type: snapshot
+  ts: 1750000000
+  clock: "10:20"
+  date: "Fri Jun 19"
+  sessions:
+    - id: "abc123"
+      name: "fix auth bug"
+      agent: "Claude"
+      term: "iTerm"
+      age: "27m"
+      state: "waiting"
+      task: "fix the auth bug in middleware"
+      activity:
+        - { tool: "Edit", detail: "src/auth/middleware.ts", sub: "Running…" }
+      approve: { tool: "Edit", file: "src/auth/middleware.ts" }

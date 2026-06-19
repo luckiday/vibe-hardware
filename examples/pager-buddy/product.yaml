@@ -26,11 +26,20 @@ cad:                             # vibe-cad
   status: stub
   gate: "fit-check 0 mm^3 board<->shell interference"
 
+# --- mac-side bridge: streams Claude Code status to the device ---
+# Not one of the three hardware domains (plm_check validates only firmware/pcb/cad);
+# tracked here for visibility. Level-0 = python hooks + stub; Level-1 = menubar app.
+bridge:
+  dir: bridge/
+  status: wip
+  note: "Level-0 Claude-hook → HTTP snapshot bridge; see bridge/README.md"
+
 # --- interface contracts: the files TWO domains must agree on ---
 # vibe-plm (plm_check.py) checks each path resolves. SOURCE contracts
 # (.yaml/.json/.md) MUST exist; generated artifacts (.step/.glb/.stl) are
 # warned-not-failed until produced. Direction below is producer -> consumer.
 interfaces:
-  pinmap: pcb/pinmap.yaml                       # pcb  -> firmware  (the net map: pin <-> signal)
-  board_step: pcb/board.step                    # pcb  -> cad       (board 3D for the fit-check; generated)
-  enclosure_constraints: cad/constraints.yaml   # cad <-> pcb       (the shared fit numbers)
+  pinmap: pcb/pinmap.yaml                       # pcb    -> firmware  (the net map: pin <-> signal)
+  board_step: pcb/board.step                    # pcb    -> cad       (board 3D for the fit-check; generated)
+  enclosure_constraints: cad/constraints.yaml   # cad   <-> pcb       (the shared fit numbers)
+  pager_status: bridge/protocol.yaml            # bridge -> firmware  (Claude-status wire format)

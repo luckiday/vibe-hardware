@@ -19,6 +19,24 @@ No build step. `data.js` holds the sample sessions + the demo scenario; `app.js`
 state machine; `styles.css` renders the screen at **actual 135×240** inside a device
 frame. Use the **Zoom 1×/2×/3×** toggle to inspect (1× = real pixel size).
 
+### Live mode — show real Claude Code status
+
+The same UI can render **live** status from the [bridge](../bridge/) instead of the demo
+data. The wire format ([../bridge/protocol.yaml](../bridge/protocol.yaml)) was defined so
+a snapshot's `session` objects are exactly what these renderers already draw — `live.js`
+just swaps the data behind the screen and re-renders.
+
+```bash
+python3 ../bridge/pager_stub.py --ui            # serves THIS mock + the snapshot endpoint
+                                                #   → open http://127.0.0.1:8787/
+python3 ../bridge/claude_pager_hook.py --demo   # (other terminal) drive a scenario
+```
+
+Click **Bridge ▸ Connect** in the panel (or open `…/?live=1`); a new "needs you" flashes
+the screen (stands in for the buzz). Point elsewhere with
+`?bridge=http://host:port/v1/snapshot`. Offline it falls back to the demo data, and
+`▶ Play scenario` still works.
+
 The device deliberately shows **program status + the key selection** — never code or
 diffs (a 135px screen is too small to read code; the firmware shows the *decision*, not
 the source).
@@ -79,9 +97,12 @@ mock, toggle it with the **Power** buttons or `?batt=15&chg=1`. The board side e
 
 Button events map to `app_event_t` (e.g. `APP_EVT_SCROLL`, `APP_EVT_OK`,
 `APP_EVT_BACK`) consumed by the app task's state machine. Sessions/states arrive from the
-Claude Code hook bridge (a later stage); here they're mocked in `data.js`.
+Claude Code hook [bridge](../bridge/) — live via `live.js` (see **Live mode** above), or
+mocked in `data.js` when offline.
 
 ## Scope
 
-Front-end only — no device/firmware code, no network. Portrait 135×240. The firmware
-`ui_status` implementation is the next step, guided by this mock.
+Front-end + an opt-in read-only live feed (`live.js` polling the bridge snapshot). No
+firmware code; no two-way actions yet (approve/answer from the device is Level-1 — the
+protocol reserves `POST /v1/resolution`). Portrait 135×240. The firmware `ui_status`
+implementation is the next step, guided by this mock.

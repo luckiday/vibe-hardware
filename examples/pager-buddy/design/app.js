@@ -172,9 +172,12 @@ function scrDone(s) {
   const d = s.done;
   const jump = `<div class="choice${S.sel === 0 ? " sel" : ""}">⤴ Jump</div>`;
   const dis = `<div class="choice${S.sel === 1 ? " sel" : ""}">Dismiss</div>`;
+  const meta = [];                        // files/tests are optional on the wire
+  if (d.files != null) meta.push(`${d.files} files`);
+  if (d.tests) meta.push(esc(d.tests));
   return `<div class="content"><div class="head c-done">✓ ${esc(s.name)}</div>` +
     `<div class="q">${esc(d.summary)}</div>` +
-    `<div class="delta">${d.files} files · ${esc(d.tests)}</div>` +
+    (meta.length ? `<div class="delta">${meta.join(" · ")}</div>` : "") +
     `<div class="choices">${jump}${dis}</div></div>` +
     footer("— Jump", "▼ switch");
 }
