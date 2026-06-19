@@ -137,7 +137,10 @@ copper blind. (freerouting needs a JRE; if absent, route by `trk` and document i
 
 See `references/design-rules.md` → *Layered layout & the feedback loop* for the cluster
 helper shape (`cluster(name, anchor) · c.place(ref, slot)`), the `STAGE` flag, and the
-two numeric gates. The reference board's `gen_pcb.py` is the worked example.
+two numeric gates. The reference board's `gen_pcb.py` is the worked example. For the
+conventional **schematic + PCB standards** checklist — what makes a sheet/board read
+*professional* (title block, power symbols, signal flow, junctions, placement, silk, DfM) —
+see `references/professional-standards.md`.
 
 ## Run it (macOS, KiCad 10)
 
