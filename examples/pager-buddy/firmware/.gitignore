@@ -2,8 +2,7 @@
 build/
 sdkconfig
 sdkconfig.old
-managed_components/
-dependencies.lock
+managed_components/        # re-fetched on build; the lockfile (dependencies.lock) IS committed
 
 # Secrets — copy secrets.example.h to secrets.h and fill in (NEVER commit)
 main/secrets.h
