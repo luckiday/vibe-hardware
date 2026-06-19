@@ -131,6 +131,24 @@ hardware/<line>/structure-<name>/
 Off-the-shelf parts (servos, standoffs, the module itself) come from the
 **`step-parts`** catalog instead of being modeled.
 
+## Enclosure conventions (DfM, learned from shipped products)
+
+Patterns a polished consumer enclosure uses — bake these into the param block / builders:
+
+- **Indicator LEDs reach the user through a light pipe, not a hole.** A clear acrylic rod
+  (e.g. ⌀2 mm solid round) carries an on-board LED to the shell surface — model the bore + a
+  retaining shoulder; the LED never pokes out.
+- **Inset the screen/glass behind the front face** so it doesn't scratch when the device is set
+  face-down; the bezel overlaps the panel edge.
+- **Threaded brass heat-set inserts for screws, not screwing into plastic** — model the insert
+  boss (bore + melt relief); **hide the screws** (back-cover screws that also capture the shell,
+  not exposed on a show face).
+- **Anti-slip: textured surface + rubber feet** on the base (model recesses for the feet).
+- **Self-locating assembly + an exploded view.** Every part should drop into one position
+  (bore/stop/keyed); ship an `build_exploded()` view **and a numbered mechanical BOM** (screws
+  `M1.4×N`, gaskets, light pipe, inserts, battery + carrier) so a builder can assemble it.
+- **State print-relevant specs**: material, wall, the light-pipe rod stock, insert size, feet.
+
 ## When to reach for this vs others
 
 - Enclosure / bracket / mechanical fit → **here**.

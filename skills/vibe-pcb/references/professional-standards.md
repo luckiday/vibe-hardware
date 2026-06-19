@@ -5,6 +5,35 @@ industry conventions, not this repo's gotchas (those live in `design-rules.md`).
 board through both. The generators (`gen_sch.py` / `gen_pcb.py`) should *encode* these so
 every regen is conformant by construction.
 
+## Power architecture (design the rails BEFORE the schematic)
+
+A pro hardware writeup leads with a **power tree**, not a part. Do the same:
+
+- **Draw the power tree first.** A block diagram of every *source* → *conversion* → *rail* →
+  *loads*: e.g. `USB-C 5V → charger → batt → boost → 5V (auto-switch) → LDO → 3V3 → {MCU, SD,
+  mic, screen}`, with `5V → {amp, LEDs}`. It catches a missing rail, an **undersized regulator**
+  (sum the loads, check LDO/boost headroom — "one LDO covers 3V3 because total < 500 mA"), and
+  it *is* the schematic's power blocks + the PCB's current-flow placement.
+- **Set current-defining resistors from the PART's rating, not a round number.** A charger's
+  PROG resistor sets charge current to the **battery's max C-rate** (a 600 mAh 0.5C cell → ≤300 mA
+  → pick R per the datasheet); a boost/LDO feedback divider sets Vout. **Over-driving is a safety
+  risk, not just a spec miss** ("charge current > the cell's rating can be dangerous"). Put the
+  calc + the assumption in a comment.
+- **Input protection is standard, not optional.** USB-C: **CC1/CC2 pulled down 5.1k** (so a
+  PD/QC/AFC charger negotiates 5V), **ESD diodes on D+/D− and VBUS** (static through the connector
+  shell is a top MCU-killer). Add ESD/series-R on any externally-exposed line.
+- **Two sources → make-before-break.** Auto-switch (load-share **PMOS + ORing diode**, a pull-down
+  biasing the gate) between USB-5V and battery-boost-5V so the rail **never browns out** on
+  changeover.
+- **Design for variants — DNP/NC provisioning.** Leave footprints unpopulated (an `NC` resistor,
+  an alternate-regulator pad) so one board adapts to other parts/values; mark **DNP** and say why
+  ("R125 NC — reserved to fit an alternate boost IC"). Same idea as DNP pull-ups.
+- **Check the module's RESERVED pins before assigning any.** A WROOM/SiP ties some pins to internal
+  flash/PSRAM — **ESP32-S3 R8/R16V: IO35/36/37 = octal PSRAM, unusable** — verify against the module
+  datasheet, don't route them out. (A pin-planning gate that bites at layout time.)
+- **Leave debug/test access** — a reset button, a few test points / a debug header — cheap insurance
+  that saves bring-up.
+
 ## Schematic standards
 
 **Sheet & title block**
@@ -97,3 +126,14 @@ every regen is conformant by construction.
 - **PCB**: read the **per-layer copper plot** (one colour per net, F.Cu | B.Cu) — the routing
   review of record (the 3D render hides copper under mask); then 3D-fit against the enclosure.
 - Record dispositions (fixed / accepted-not-a-defect) in `REVIEW.md`.
+
+## Document the decisions (the WHY per block)
+
+A pro open-hardware writeup explains **each block's part choice and its reason** — not just a
+netlist. Capture the same in the brief / `REVIEW.md` (and code comments), block by block:
+*why this value* (charge R from the cell's C-rate), *why this part* (LDO headroom vs total
+load), *why a part is NC* (reserved for an alternate). A good doc order to follow:
+**attribution / license / disclaimer → overview → power tree → block-by-block hardware (with
+rationale) → mechanical → flashing & test → schematic / PCB / BOM / 3D / downloads**. If you
+reused upstream work, **credit it and state the license** up front. The decisions are the part
+a reader (and future-you) actually needs; a board nobody can reason about isn't really open.
