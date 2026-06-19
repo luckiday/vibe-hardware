@@ -79,13 +79,15 @@ def frame_chunks(payload: bytes, chunk: int) -> list[bytes]:
 async def find_device(adapter: str | None):
     print("[ble] scanning for the pager…")
     while True:
-        devs = await BleakScanner.discover(timeout=5.0, adapter=adapter)
-        for d in devs:
-            uuids = (d.details or {}).get("UUIDs", []) if isinstance(d.details, dict) else []
-            if (d.name and d.name.startswith(NAME_PREFIX)) or \
-               (SERVICE_UUID in [u.lower() for u in uuids]):
-                print(f"[ble] found {d.name or '?'}  ({d.address})")
-                return d
+        # Match on the SERVICE UUID (robust) — the GAP name can be stale: macOS caches
+        # it, so a unit that once ran other firmware may still report e.g. "VS-XXXX".
+        found = await BleakScanner.discover(timeout=5.0, adapter=adapter, return_adv=True)
+        for dev, adv in found.values():
+            uuids = [u.lower() for u in (adv.service_uuids or [])]
+            name = dev.name or (adv.local_name if adv else None) or ""
+            if SERVICE_UUID in uuids or name.startswith(NAME_PREFIX):
+                print(f"[ble] found {name or '?'} ({dev.address})")
+                return dev
         print("[ble] none yet, retrying…")
 
 
