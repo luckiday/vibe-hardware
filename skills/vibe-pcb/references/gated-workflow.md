@@ -6,7 +6,7 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 
 | # | Stage | Gate (pass =) | Enforced by |
 |---|---|---|---|
-| 1 | **Schematic, by block** | organized by function (power / MCU / interface / peripheral) — **not a pile** | `gen_sch.py` block frames + cluster grid; read the PDF |
+| 1 | **Schematic, by block** | organized by function (power / MCU / interface / peripheral), **not a pile**; **block frames auto-sized from content + uniform pad, aligned on a macro grid** | `gen_sch.py` `_frame()`/`_padf()` + align pass; read the PDF |
 | 2 | **Annotation** | refdes **unique, no `U?`/`R?`** left | generator assigns explicit refs (placeholders impossible) |
 | 3 | **ERC** | **no floating input · no power conflict · every rail has a driver/PWR_FLAG** | `kicad-cli sch erc` → 0 errors; know the warning classes |
 | 4 | **Netlist + footprints** | every part has a footprint; standard parts **IPC-7351**; sch↔pcb consistent | std lib for passives; custom lands flagged **EST**; `cross_analysis` |

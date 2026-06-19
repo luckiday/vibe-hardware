@@ -12,6 +12,14 @@ every regen is conformant by construction.
   (I²C addresses, default jumper states). An empty title block is the #1 "beginner" tell.
 - Keep the standard **frame + zone references** (A–D × 1–6); cite parts by zone in notes.
 - One **functional block per region**; multi-function designs span multiple sheets.
+- **Standardized block alignment (a rule, not per-board hand-tuning).** Draw a labelled frame
+  per functional block, **auto-sized from the block's content bbox** (symbol body + pins +
+  power symbols + label/value text) plus a **uniform padding** — never eyeballed boxes. Then
+  **align the frames on a macro grid**: a top row of blocks shares one top/bottom edge, a
+  full-width block below spans their combined width. Components inside sit on the 1.27 mm grid
+  with even spacing. This is what separates a tidy product sheet from "boxes drawn around a
+  pile." (Implementation: a `_comp_bbox(ref)` → `_frame(members)` → align → `+PAD` pass in the
+  generator, so every regen reproduces the alignment; see `gen_sch.py`.)
 
 **Reading direction (signal flow)**
 - **Inputs left → outputs right; power at top, ground at bottom.** Lay the sheet so a reader
