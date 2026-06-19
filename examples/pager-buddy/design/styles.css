@@ -1,0 +1,281 @@
+/* StickC S3 display mock — device frame + 135x240 screen, dark theme. */
+:root {
+  --bg: #0a0c10;
+  --fg: #e6e9ef;
+  --dim: #8a93a0;
+  --line: #20242c;
+  --sel: #1f6feb;
+  --working: #4aa3ff;
+  --waiting: #ffb020;
+  --asking: #35d0d8;
+  --done: #46d369;
+  --error: #ff5d5d;
+  --scale: 1; /* 1 = actual 135x240 px; zoom buttons bump it for inspection */
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #0d0e12;
+  color: var(--fg);
+  font: 14px ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+.stage {
+  display: flex;
+  gap: 48px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px 64px;
+  flex-wrap: wrap;
+}
+
+/* ---------- device body (chrome scales with --scale, so 1x = actual 135px) ---------- */
+.device {
+  position: relative;
+  padding: calc(10px * var(--scale)) calc(10px * var(--scale)) calc(9px * var(--scale));
+  background: linear-gradient(155deg, #3d4046, #2b2d32 55%, #232529); /* matte charcoal */
+  border: 2px solid #1c1e22;
+  border-radius: calc(12px * var(--scale));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55), inset 0 0 0 2px #15171b;
+}
+.bezel {
+  padding: calc(4px * var(--scale));
+  background: #050608;
+  border-radius: calc(4px * var(--scale));
+  border: 1px solid #0b0c0e; /* black LCD bezel */
+}
+.slot {
+  width: calc(135px * var(--scale));
+  height: calc(240px * var(--scale));
+  overflow: hidden;
+  border-radius: calc(2px * var(--scale));
+}
+.screen-scale {
+  transform: scale(var(--scale));
+  transform-origin: top left;
+}
+
+/* front (blue) button KEY1 = OK / hold = back — a blue pill, like the real device */
+.btn-front {
+  display: block;
+  margin: calc(7px * var(--scale)) auto calc(2px * var(--scale));
+  width: calc(30px * var(--scale));
+  height: calc(11px * var(--scale));
+  border-radius: calc(6px * var(--scale));
+  border: 1px solid #1a3a8a;
+  background: linear-gradient(#5b8cff, #2f6bff 55%, #1f54c8);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .45), inset 0 1px 2px rgba(255, 255, 255, .4);
+  cursor: pointer;
+}
+.btn-front:active { filter: brightness(1.15); }
+
+/* power button (left edge) — decorative: hold=boot · double=off · press=on */
+.btn-power {
+  position: absolute;
+  left: calc(-3px * var(--scale));
+  top: 30%;
+  width: calc(3px * var(--scale));
+  height: calc(13px * var(--scale));
+  border-radius: 3px;
+  background: linear-gradient(#3a3e47, #23262d);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+
+/* side button on the right edge = scroll */
+.btn-side {
+  position: absolute;
+  right: calc(-3px * var(--scale));
+  top: 72%; /* near the bottom of the right edge, like the real KEY2 */
+  width: calc(3px * var(--scale));
+  height: calc(22px * var(--scale));
+  border: none;
+  border-radius: 3px;
+  background: linear-gradient(#3a3e47, #23262d);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .5);
+  cursor: pointer;
+}
+.btn-side:active { filter: brightness(1.3); }
+
+.usb {
+  width: calc(15px * var(--scale));
+  height: calc(2.5px * var(--scale));
+  background: #000;
+  border-radius: 3px;
+  margin: calc(4px * var(--scale)) auto 0;
+}
+.label { text-align: center; color: var(--dim); font-size: 11px; margin-top: 8px; }
+
+/* ---------- the 135x240 screen ---------- */
+.screen {
+  width: 135px;
+  height: 240px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 10px ui-monospace, Menlo, Consolas, monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.statusbar {
+  height: 15px;
+  flex: 0 0 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5px;
+  font-size: 8px;
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+}
+/* battery indicator — voicestick style: shell + proportional fill + tip + % */
+.batt { display: inline-flex; align-items: center; gap: 3px; }
+.batt .bolt { font-size: 8px; color: #5ec4ff; }
+.batt-icon {
+  position: relative; box-sizing: border-box;
+  width: 13px; height: 7px; padding: 1px;
+  border: 1px solid #6b7280; border-radius: 2px;
+}
+.batt-icon::after {
+  content: ""; position: absolute; right: -2.5px; top: 1.5px;
+  width: 1.5px; height: 3px; background: #6b7280; border-radius: 1px;
+}
+.batt-fill { height: 100%; border-radius: 1px; background: #67c59b; }
+.batt-pct { font-size: 8px; color: var(--dim); }
+.b-ok  .batt-fill { background: #67c59b; } /* on battery */
+.b-chg .batt-fill { background: #5ec4ff; } /* charging / USB */
+.b-low .batt-fill { background: #f97373; } /* ≤20% */
+.b-low .batt-pct { color: #f97373; }
+.content { flex: 1 1 auto; overflow: hidden; padding: 4px 5px; }
+.footer {
+  height: 14px;
+  flex: 0 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5px;
+  font-size: 8px;
+  color: var(--dim);
+  border-top: 1px solid var(--line);
+}
+
+/* session list rows */
+.row { padding: 3px 4px; border-radius: 4px; }
+.row + .row { margin-top: 2px; }
+.row.sel { background: #16243f; box-shadow: inset 2px 0 0 var(--sel); }
+.row .l1 { display: flex; align-items: center; gap: 5px; }
+.row .name {
+  flex: 1 1 auto; font-size: 10px; color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .age { font-size: 8px; color: var(--dim); }
+.row .l2 { display: flex; gap: 4px; margin: 2px 0 0 11px; }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+.s-working { background: var(--working); }
+.s-waiting { background: var(--waiting); }
+.s-asking  { background: var(--asking); }
+.s-done    { background: var(--done); }
+.s-error   { background: var(--error); }
+.c-working { color: var(--working); }
+.c-waiting { color: var(--waiting); }
+.c-asking  { color: var(--asking); }
+.c-done    { color: var(--done); }
+.c-error   { color: var(--error); }
+
+.chip {
+  font-size: 7px; padding: 1px 3px; border-radius: 3px;
+  background: #1a1e26; color: #b8c0cc; border: 1px solid #262b34;
+}
+
+/* action screens */
+.head { font-size: 9px; margin-bottom: 3px; display: flex; gap: 4px; align-items: center; }
+.path { font-size: 8.5px; color: var(--fg); word-break: break-all; margin-bottom: 3px; }
+.q { font-size: 10px; color: var(--fg); margin-bottom: 5px; line-height: 1.3; }
+.big { font-size: 14px; color: var(--fg); margin: 4px 0 2px; }
+
+.dl { font-size: 7.5px; white-space: pre; padding: 0 2px; border-radius: 2px; line-height: 1.4; }
+.dl .ln { color: #4a525e; }
+.dl.add { background: #123524; color: #93e6b0; }
+.dl.del { background: #3a1620; color: #f6a3ab; }
+.dl.ctx { color: var(--dim); }
+.delta { font-size: 8px; color: var(--dim); margin-top: 3px; }
+
+.opt {
+  font-size: 9.5px; padding: 4px 5px; border-radius: 4px; margin-top: 3px;
+  background: #12161d; border: 1px solid #20262f;
+}
+.opt.sel { background: #0e2d33; border-color: var(--asking); color: #c9fbff; }
+.opt .k { color: var(--dim); margin-right: 5px; }
+
+.choices { display: flex; gap: 6px; position: absolute; left: 5px; right: 5px; bottom: 20px; }
+.choice {
+  flex: 1; text-align: center; font-size: 9.5px; padding: 5px 0; border-radius: 5px;
+  background: #14181f; border: 1px solid #262c36; color: var(--fg);
+}
+.choice.sel { background: #fff; color: #111; border-color: #fff; }
+.choice.danger.sel { background: #3a1620; color: #ffd6da; border-color: var(--error); }
+
+/* working activity */
+.act { font-size: 9px; margin-top: 3px; }
+.act .tool { color: var(--working); }
+.act .sub { color: var(--dim); margin: 0 0 0 9px; font-size: 8px; }
+.spin { color: var(--working); }
+
+/* idle / glance */
+.idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.clock-big { font-size: 30px; letter-spacing: 1px; }
+.date { font-size: 9px; color: var(--dim); }
+.face { font-size: 18px; margin: 6px 0 2px; }
+.summary { font-size: 9px; color: var(--fg); text-align: center; }
+.summary b.need { color: var(--waiting); }
+
+.toast {
+  position: absolute; left: 8px; right: 8px; bottom: 38px;
+  background: #11151c; border: 1px solid #2a313c; border-radius: 5px;
+  font-size: 8.5px; padding: 4px 6px; color: #cdd4de; text-align: center;
+}
+
+/* page flash (stands in for the buzz) */
+.screen.flash::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--waiting); animation: flash .45s ease-out 3;
+}
+@keyframes flash { from { opacity: 1; } to { opacity: 0; } }
+
+/* ---------- side panel ---------- */
+.panel { width: 280px; max-width: 88vw; padding-top: 8px; }
+.panel h1 { font-size: 16px; margin: 0 0 2px; }
+.panel .sub { color: var(--dim); margin: 0 0 18px; font-size: 12.5px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.controls button {
+  font: 13px ui-sans-serif, sans-serif; padding: 9px 10px; border-radius: 8px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.controls button:hover { background: #222632; }
+.controls #cPlay { grid-column: 1 / -1; background: #15233f; border-color: #25406e; }
+.zoom { display: flex; align-items: center; gap: 6px; margin: -6px 0 16px; font-size: 12px; color: var(--dim); }
+.zoom button {
+  font: 12px ui-sans-serif, sans-serif; padding: 4px 9px; border-radius: 6px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+}
+.zoom button.on { background: #15233f; border-color: #2f6bff; color: #cfe0ff; }
+.power { display: flex; align-items: center; gap: 6px; margin: -6px 0 16px; font-size: 12px; color: var(--dim); }
+.power button {
+  font: 12px ui-sans-serif, sans-serif; padding: 4px 9px; border-radius: 6px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+}
+.power button.on { background: #102a3f; border-color: #5ec4ff; color: #bfe6ff; }
+kbd {
+  font: 11px ui-monospace, monospace; background: #0d0f14; border: 1px solid #2c323c;
+  border-radius: 4px; padding: 1px 5px; color: var(--dim);
+}
+.legend { display: grid; gap: 5px; margin: 4px 0 16px; font-size: 12px; color: #c4ccd6; }
+.legend .row2 { display: flex; align-items: center; gap: 7px; }
+.legend .dot { width: 8px; height: 8px; }
+.help { font-size: 12px; color: var(--dim); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; }
+.help b { color: #c4ccd6; }

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pager-buddy · StickC S3 display mock</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="stage">
+    <!-- the device -->
+    <div class="device">
+      <div class="bezel">
+        <div class="slot">
+          <div class="screen-scale">
+            <div class="screen" id="screen"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn-side" id="btnSide" title="KEY2 (side) — scroll (cycle)"></button>
+      <div class="btn-power" title="Power — hold: boot · double: off · press: on"></div>
+      <button class="btn-front" id="btnFront" title="KEY1 (blue) — OK · hold = back"></button>
+      <div class="usb"></div>
+      <div class="label">M5StickC S3</div>
+    </div>
+
+    <!-- controls / legend -->
+    <aside class="panel">
+      <h1>pager-buddy · StickC S3</h1>
+      <p class="sub">135×240 display mock — Vibe Island, simplified</p>
+
+      <div class="controls">
+        <button id="cScroll">▼ Scroll <kbd>↓</kbd></button>
+        <button id="cOk">— OK <kbd>⏎</kbd></button>
+        <button id="cBack">↩ Back <kbd>⌫</kbd></button>
+        <button id="cPlay">▶ Play scenario <kbd>p</kbd></button>
+      </div>
+
+      <div class="zoom">
+        Zoom
+        <button data-z="1" class="on">1×</button>
+        <button data-z="2">2×</button>
+        <button data-z="3">3×</button>
+        <span>· 1× = actual 135×240</span>
+      </div>
+
+      <div class="power">
+        Power
+        <button id="pChg">⚡ Charging</button>
+        <button id="pLow">🔋 Low</button>
+        <button id="pFull">Full</button>
+      </div>
+
+      <div class="legend">
+        <div class="row2"><span class="dot s-working"></span> working</div>
+        <div class="row2"><span class="dot s-waiting"></span> needs you (approve)</div>
+        <div class="row2"><span class="dot s-asking"></span> asking</div>
+        <div class="row2"><span class="dot s-done"></span> done</div>
+        <div class="row2"><span class="dot s-error"></span> error</div>
+      </div>
+
+      <div class="help">
+        <b>Side</b> (right) = cycle highlight, wraps.<br />
+        <b>Front</b> (blue) = OK / confirm. <b>Hold front</b> = back / home.<br />
+        Flow: <b>idle → Monitor list → Approve / Ask / Done</b>.
+      </div>
+    </aside>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
