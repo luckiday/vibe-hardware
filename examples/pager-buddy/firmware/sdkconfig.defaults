@@ -10,6 +10,11 @@ CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_FREERTOS_HZ=1000
 
+# app_main runs the LVGL render loop (ui_tick + ui_render). The default 3584 B
+# stack overflows when building the deeper detail screens (Approve/Ask/Done), so
+# give it room — LVGL drawing + our screen builders need several KB.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
 # Native-USB S3: console is USB Serial/JTAG (no UART bridge) — see vibe-firmware gotcha
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
