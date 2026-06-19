@@ -140,7 +140,10 @@ helper shape (`cluster(name, anchor) · c.place(ref, slot)`), the `STAGE` flag, 
 two numeric gates. The reference board's `gen_pcb.py` is the worked example. For the
 conventional **schematic + PCB standards** checklist — what makes a sheet/board read
 *professional* (title block, power symbols, signal flow, junctions, placement, silk, DfM) —
-see `references/professional-standards.md`.
+see `references/professional-standards.md`. For the **gated workflow** (schematic→fab as 8
+stages, each with a pass/fail gate, mapped to the `gen_pcb.py` P1–P8 phases + which script
+enforces it) — and the rule to score gates honestly, not self-congratulate — see
+`references/gated-workflow.md`.
 
 ## Run it (macOS, KiCad 10)
 
