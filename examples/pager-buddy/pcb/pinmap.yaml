@@ -1,19 +1,48 @@
 # pinmap.yaml — pcb -> firmware interface contract (the net map)
 #
-# Produced by vibe-pcb (mirrors gen_sch.py / the brief's §2 net map), consumed by
-# vibe-firmware (its config-as-code header is generated/checked against this).
-# One row per net. Keep in sync with BOTH the PCB net map AND the firmware pins;
-# bump `revision` in ../product.yaml on any change here.
-#
-# NOTE: pins below are PLACEHOLDERS for the stub — set them when the board is real.
+# Source of truth for the M5StickC S3 (ESP32-S3-PICO-1-N8R8) pinout the firmware
+# targets. Mirrors firmware/main/board_pins.h. Reference:
+# https://docs.m5stack.com/en/core/StickS3
+# Bump `revision` in ../product.yaml on any change here.
 
-mcu: xiao-esp32s3                 # the module the GPIO names refer to
+mcu: esp32-s3-pico-1-n8r8         # 8 MB flash, 8 MB octal PSRAM, dual LX7 @240 MHz
+board: m5-stickc-s3               # base reference device (display + IMU + audio built in)
+
 bus:
-  i2c: { sda: GPIO5, scl: GPIO6, hz: 400000, addr: 0x3C }   # OLED display (SSD1306)
+  i2c:                            # IMU + PMIC + audio codec share one bus
+    sda: GPIO47
+    scl: GPIO48
+    hz: 100000
+    devices:
+      - { name: BMI270, role: imu,   addr: 0x68 }
+      - { name: M5PM1,  role: pmic,  addr: 0x6e }
+      - { name: ES8311, role: codec, addr: 0x18 }
+  spi:                            # LCD (ST7789P3, 135x240)
+    mosi: GPIO39
+    sclk: GPIO40
+  i2s:                            # audio: speaker (ES8311 + AW8737 amp) + MEMS mic
+    mclk: GPIO18
+    bclk: GPIO17
+    lrck: GPIO15
+    dout: GPIO14
+    din:  GPIO16
 
 pins:
-  - { signal: DISP_SDA, gpio: GPIO5, dir: io,  net: SDA,  to: display }
-  - { signal: DISP_SCL, gpio: GPIO6, dir: out, net: SCL,  to: display }
-  - { signal: BUZZER,   gpio: GPIO2, dir: out, net: BUZZ, to: buzzer }
-  - { signal: BTN_ACK,  gpio: GPIO3, dir: in,  net: BTN,  to: button, pull: up }
-  - { signal: LED_STAT, gpio: GPIO4, dir: out, net: LED,  to: status_led }
+  # display — ST7789P3
+  - { signal: LCD_MOSI, gpio: GPIO39, dir: out, to: display }
+  - { signal: LCD_SCLK, gpio: GPIO40, dir: out, to: display }
+  - { signal: LCD_DC,   gpio: GPIO45, dir: out, to: display, notes: "RS" }
+  - { signal: LCD_CS,   gpio: GPIO41, dir: out, to: display }
+  - { signal: LCD_RST,  gpio: GPIO21, dir: out, to: display }
+  - { signal: LCD_BL,   gpio: GPIO38, dir: out, to: display, notes: "backlight" }
+  # buttons (active-low)
+  - { signal: BTN_A, gpio: GPIO11, dir: in, to: button, notes: "KEY1 front — ACK/silence" }
+  - { signal: BTN_B, gpio: GPIO12, dir: in, to: button, notes: "KEY2 side" }
+  # IR (RMT peripheral)
+  - { signal: IR_TX, gpio: GPIO46, dir: out, to: ir_led }
+  - { signal: IR_RX, gpio: GPIO42, dir: in,  to: ir_rx }
+  # Grove HY2.0-4P
+  - { signal: GROVE_A, gpio: GPIO9,  dir: io, to: grove, notes: "yellow" }
+  - { signal: GROVE_B, gpio: GPIO10, dir: io, to: grove, notes: "white" }
+  # battery
+  - { signal: BAT_ADC, gpio: GPIO44, dir: in, to: pmic, notes: "battery monitor" }

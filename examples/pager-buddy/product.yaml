@@ -14,8 +14,9 @@ summary: "A desk pager for Claude Code: lights / glyph / buzz on session-state c
 # --- the three domains (each is a self-contained vibe-* project) ---
 firmware:                        # vibe-firmware
   dir: firmware/
-  status: stub                   # stub | wip | clean | released
-  toolchain: TBD                 # e.g. esp-idf (pinned image tag) / platformio
+  status: wip                    # stub | wip | clean | released
+  toolchain: "esp-idf v5.5 (Docker espressif/idf:v5.5)"
+  board: m5-stickc-s3            # base reference device (ESP32-S3-PICO-1-N8R8)
 pcb:                             # vibe-pcb
   dir: pcb/
   status: stub
