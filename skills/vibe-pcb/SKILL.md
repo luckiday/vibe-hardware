@@ -106,11 +106,13 @@ into **isolated absolute mm**, where they're lost on the next edit and read amat
 You don't *auto-solve* ③ — you **change the representation and add a feedback loop** so it
 plays to relational reasoning + reading images, not blind one-shot geometry:
 
-1. **Clusters/cells, relative placement.** Group parts into named clusters (MCU, power,
-   connector, mount); place each part **relative to its cluster anchor**, and each cluster
-   on a board **grid cell** — not the sheet origin. Same for the schematic: a module is a
-   box in a grid cell, pins exit to labelled ports. The grid removes the degrees of freedom
-   the model is bad at; a cluster becomes a first-class object you can render and move as one.
+1. **Clusters/cells, a two-level floorplan.** Group parts into named clusters (MCU, power,
+   connector, mount). **MACRO**: each cluster has an *origin* — arrange the coarse layout by
+   moving whole blocks (edit one origin → every member part **and** the cluster's auto-sized
+   box move as a unit). **MICRO**: a part sits at a slot *relative to its origin*, not the
+   sheet origin. The box is derived from the members' real geometry, so the coarse stage shows
+   true block sizes to pack against. Same on the schematic: a module is a box in a grid cell,
+   shared cluster power nets drawn as real rails (one label), signals as net labels.
 2. **Coarse → fine; separate placement from routing, topology from geometry.** Lay out
    *clusters as blocks* first (floorplan: power-in, signal flow, connectors on edges), then
    parts within a cluster, then route. The mess comes from solving placement + topology +

@@ -92,19 +92,34 @@ but `place(x,y)` / `trk([…])` throw the relations away and keep only the numbe
 are brittle and look amateur. Don't auto-solve ③; **change the representation + close a
 visual loop** (full rationale in SKILL.md → *Layered layout*). Three moves:
 
-**1 — Clusters as first-class objects (relative, not absolute).** A thin helper over
-`place(...)` so a part's home is `cluster + slot`, not a magic mm pair. Anchors can be
-chosen to *reproduce the current coordinates exactly* — so adopting it on an already-routed
-board moves nothing and keeps DRC at 0/0/0; the win is that the **relations** are now in the
-source and a whole cluster moves as one.
+**1 — Clusters as first-class objects: a TWO-LEVEL floorplan.** Split layout into a
+**macro** level (where each block sits) and a **micro** level (parts within a block):
+
+- **MACRO** — each cluster has an *origin*; you arrange the coarse layout by moving whole
+  blocks. Move a cluster as a **unit** by editing ONE origin line — every member part *and*
+  the cluster's box follow together. This is the coarse step you do first.
+- **MICRO** — a part's home is `cluster.at(dx,dy)`: a slot *relative to the origin*.
+- **The box is AUTO-derived from the members' real geometry** (pad extents), not guessed —
+  so the coarse stage shows true block sizes to pack against. Origins can be chosen to
+  reproduce an already-routed board's coords exactly → adopting this **moves nothing**
+  (DRC stays 0/0/0); the win is the relations live in the source and blocks move as one.
 
 ```python
 class Cluster:
-    def __init__(self, name, ax, ay, pitch=2.0): self.n,self.ax,self.ay,self.p = name,ax,ay,pitch
-    def at(self, dx, dy): return self.ax+dx, self.ay+dy        # part relative to the cluster anchor
-PWR = Cluster("power", CX-7.0, CY)                             # one grid cell
-place(..., *PWR.at(0, +3.0), 90, {...}, flip=True)            # C1: anchor + slot, reads as a relation
+    all = {}
+    def __init__(self, name, ox, oy): self.name,self.ox,self.oy,self.members = name,ox,oy,[]; Cluster.all[name]=self
+    def at(self, dx, dy): return (self.ox+dx, self.oy+dy)      # MICRO slot, relative to origin
+    def add(self, fp): self.members.append(fp); return fp      # register part -> auto box + face
+    def box(self, pad=0.3): ...                                # real bbox from member pad extents
+PWR = Cluster("PWR", CX, CY)                                   # MACRO origin (move this -> all follow)
+PWR.add(place(..., *PWR.at(-7,+3), 90, {...}, flip=True))     # C1 = origin + slot
 ```
+
+The coarse→fine loop is then: in `STAGE=floorplan` read the **box sizes** printed per
+cluster (`box PWR[B] 9.5 x 9.6 mm @ origin (100,100)`) and the rendered boxes, **nudge
+origins to pack the blocks** (whole clusters move), watch the macro gate, then place + route.
+`MOVE="NAME:dx,dy"` (coarse stages only — never the routed full board) A/Bs a macro move
+without editing code, so you can feel the HPWL change before committing.
 
 **2 — Stage the generator; render the skeleton; read it back.** Gate `gen_pcb.py` on a
 `STAGE` env so it can stop early and emit a *skeleton* image for the model to read before any
@@ -124,16 +139,48 @@ Render each stage headless and **look at it**: `kicad-cli pcb render … --side 
 wraps this. The loop is: render floorplan → read → fix placement → render place → read →
 route → render full → read. Perception-in-the-loop, not one blind shot.
 
-**3 — Two cheap numeric gates (no render needed).** Before routing, fail fast on bad
-placement: **courtyard overlap** (any two F.CrtYd / B.CrtYd polys intersect → parts collide)
-and **ratsnest total length** (`board.GetConnectivity()` air-wire length — a proxy for
-placement quality; minimise before you route). Both run in `pcbnew` in milliseconds.
+**3 — Cheap numeric gates, MACRO + micro (no render needed).** Fail fast on bad placement,
+in `pcbnew`, in milliseconds — print on every regen:
+- **MACRO: same-face cluster-box overlap** — do any two clusters' auto-boxes intersect on
+  the same face? The coarse-floorplan check; arrange origins until it's empty before you even
+  place parts. (Face-aware: passives on B *under* the MCU on F don't count.)
+- **micro: pad-extent overlap** (two same-face footprints' pads intersect → parts collide)
+  and **HPWL** (half-perimeter wirelength — sum each net's pad-bbox half-perimeter; the
+  classic placement-quality proxy; minimise before routing — watch it rise when a `MOVE`
+  worsens the layout). (`ratsnest total length` from `board.GetConnectivity()` is an
+  equivalent proxy if you prefer the air-wire sum.)
 
 **Routing half — freerouting is a real CLI.** Placement has no auto tool (→ the loop above),
 but routing does: `kicad-cli pcb export specctra <proj>.kicad_pcb -o b.dsn` →
 `freerouting -de b.dsn -do b.ses` → `kicad-cli pcb import specctra … b.ses`. Quality needs a
 cleanup pass and a JRE must be installed; for a trivial board keep scripted `trk`. Either
 way the model's job is to **read the routed render and accept/reject**, not to place copper blind.
+
+**Read routing per layer — the copper plot is the review of record.** The 3D render hides
+copper under soldermask, so a 2D **per-net, per-layer** plot (one colour per net, F.Cu | B.Cu
+split) is how you actually check the route — *nothing of a different net crosses on the same
+layer* (the same short DRC flags). Regenerate it whenever the board changes (it goes stale
+silently): `kicad-cli pcb export pdf <proj>.kicad_pcb --mode-multipage --layers F.Cu,B.Cu,Edge.Cuts`,
+or a matplotlib per-net plot for colour-by-net.
+
+## Schematic standardization — the same idea on the sheet
+
+The sheet reads amateur for the same reason: scattered parts + a net **label stuck on every
+pin** (label-soup that looks like "missing wires"). Standardize with a small fixed vocabulary
+so it reads as blocks with real connections — and keep it ERC-clean *by construction*:
+
+- **Module = a grid cell.** Group each module's symbols in its own region (MCU | CONN row,
+  POWER cluster below); a module/sensor swap moves one block.
+- **Short pin display names.** Long `D4/SDA/GPIO5`-style names collide inside a narrow body —
+  show the silk alias (`SDA`, `D6`); the full GPIO map lives in the net map, not the symbol.
+  (ERC keys off pin number + type, never the display name — renaming is free.)
+- **Shared cluster power net → a real RAIL, ONE label.** A net on ≥2 co-located pins
+  (the passives' `VIN`, the caps' `GND`) is drawn as an actual wire — a trunk + a drop to each
+  pin — with a *single* net label, the standard "power distribution" look, instead of a label
+  per pin. **Add a `(junction)` where a drop T's the trunk** (≥3 wires meeting need one, or the
+  pin reads "not connected"); two end pins land on the trunk's endpoints and need none.
+- **Signals / cross-module nets stay net labels** (`SDA`/`SCL` between MCU and connector) —
+  conventional, and cheaper than routing a wire across the sheet.
 
 ## Generator conventions (so regen stays clean)
 
