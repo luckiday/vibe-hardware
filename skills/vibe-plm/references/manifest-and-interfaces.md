@@ -91,6 +91,33 @@ The check classifies a contract by file extension:
 This keeps the gate honest: a not-yet-built `board.step` shouldn't fail integration, but
 a missing `pinmap.yaml` (which firmware *needs* to build) should.
 
+## Beyond the three: runtime / service contracts (the vibe-glue concern)
+
+The three contracts above are the **hardware** seams (pins, board 3D, fit numbers). A
+product often also has a **runtime** seam: a wire protocol between the device and an
+external service — e.g. pager-buddy's Claude-status link
+([`examples/pager-buddy/bridge/protocol.yaml`](../../../examples/pager-buddy/bridge/protocol.yaml),
+hook → bridge → device). That's adjacent to vibe-plm's core (the roadmap's *vibe-glue*),
+**not** a fourth hardware contract — but the same contract discipline applies, and these
+lessons (learned wiring it over HTTP, then BLE) generalize:
+
+- **Versioned wire format; one producer, many consumers.** Bump the protocol `version`
+  on any breaking change — same rule as a hardware contract's `revision`.
+- **Make the wire shape == the design/mock data shape.** When the message is field-for-
+  field identical to the UI mock's data, every consumer (firmware, web mock, an ASCII
+  stub) renders a received message directly — **no translation layer**.
+- **Declare field ownership.** Say which fields are *device-owned* vs *link-provided*:
+  battery is device-owned and is **not** on the wire; the clock/time **is** link-provided
+  because a clock-less device has no RTC. Ambiguity here causes drift.
+- **Put liveness/expiry in the contract, not just code.** Carry a per-item `ts` and a
+  TTL; every renderer re-ages + drops stale items **on its own clock** — so a missing
+  "end" event or a dropped link can't strand stale state on screen.
+- **Keep it transport-independent.** The same JSON rode HTTP (Level-0) then BLE with no
+  schema change — declare the transport(s) separately from the message schema, so a
+  transport swap isn't a contract break.
+- **A forward-on-change relay dedupes on meaningful fields only** — ignore volatile
+  derived fields (re-stamped time, recomputed age) or it pushes every tick.
+
 ## Keeping a contract in sync
 
 - A contract has **one producer**. Only the producer regenerates it; the consumer reads.

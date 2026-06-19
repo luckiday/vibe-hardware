@@ -149,7 +149,12 @@ skill. (A one-command scaffolder is a TODO — see below.)
 - **Tying them together** — the manifest, the contracts, the revision, the release gate,
   scaffolding a new product → **here**.
 - The agent-status **hook→bridge→device** glue (a runtime feature of an example, not a
-  cross-domain contract) is a different concern — see the roadmap's `vibe-glue` idea.
+  cross-domain hardware contract) is a different concern — the roadmap's `vibe-glue` idea.
+  It's a *runtime/service wire contract*, though, so the same discipline applies; the
+  hard-won lessons (versioned wire format, wire-shape == mock data, device- vs
+  link-owned fields, in-contract freshness/TTL, transport-independence) are captured in
+  [`references/manifest-and-interfaces.md`](references/manifest-and-interfaces.md)
+  ("Beyond the three"), worked in `examples/pager-buddy/bridge/protocol.yaml`.
 
 ## TODO (fill in as products teach you)
 

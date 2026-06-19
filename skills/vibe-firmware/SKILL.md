@@ -103,6 +103,10 @@ partitions, PM, and the gotchas) are in
 - **Reproducible deps + dual-slot from day one.** Pin managed components and **commit the
   lockfile** (`dependencies.lock`); ship the dual-slot OTA partition table even before
   OTA exists, so a field update never forces a flash re-layout that wipes user data.
+- **Connectivity is a transport-agnostic data producer.** A link/network component
+  exposes *what arrived* (a borrow/seq/online surface), never *how* — so swapping the
+  transport (Wi-Fi↔BLE) doesn't touch `main`, and the link never calls the UI. A
+  clock-less device gets its **time from the link** (epoch + monotonic timer), not an RTC.
 
 ## Run it
 
@@ -121,8 +125,10 @@ in `platformio.ini`) · `arduino-cli compile --fqbn <board>`.
 
 - [x] ESP-IDF modular structure → `references/esp-idf-structure.md`; pinned Docker build
       + config-as-code BSP demoed in `examples/pager-buddy/firmware/`.
-- [ ] Finish the pager-buddy bring-up: display (ST7789) → audio → the Wi-Fi/BLE status
-      client → OTA — one peripheral at a time.
+- [x] pager-buddy bring-up so far: display (ST7789 + LVGL) and the **BLE status link**
+      (NimBLE peripheral, hardware-tested) — see `references/esp-idf-structure.md`
+      (connectivity) + the hard-won `references/bringup-gotchas.md`.
+- [ ] Remaining pager-buddy bring-up: audio → OTA — one peripheral at a time.
 - [ ] A `scripts/` build wrapper (mirrors `vibe-pcb`'s `pcb_check.sh`: one command →
       reproducible build + size report).
 - [ ] Driver-pattern references for non-ESP platforms (Arduino / PlatformIO / Zephyr).

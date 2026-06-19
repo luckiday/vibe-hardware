@@ -10,11 +10,13 @@ under a part's `_ref/` to read). Keep your own code generic; this is the method.
 - [The shape: three layers, thin main](#the-shape)
 - [Board-support layer (BSP)](#bsp)
 - [Domain components](#domains)
+- [Connectivity: a transport-agnostic link component](#connectivity)
 - [main: thin orchestrator](#main)
 - [sdkconfig.defaults: the platform contract](#sdkconfig)
 - [Partitions + OTA: dual-slot from day one](#ota)
 - [Managed components: idf_component.yml + the lockfile](#managed)
 - [Power management (battery devices)](#pm)
+- [Bring-up & flashing gotchas](bringup-gotchas.md)
 
 <a name="the-shape"></a>
 ## The shape: three layers, thin main
@@ -99,6 +101,42 @@ idf_component_register(
 **Drive a domain by intent, not internals.** The UI component owns *how* it renders;
 callers say *what* state to show: `ui_status_set_ready()`, `ui_status_set_error(msg)`,
 `ui_status_set_ota_progress(written, size)`. The display logic never leaks into `main`.
+
+<a name="connectivity"></a>
+## Connectivity: a transport-agnostic link component
+
+A network/link domain (the "talk to a host service" component) is just another domain —
+but two patterns earn their keep:
+
+**Keep the API transport-agnostic.** Expose *what data arrived*, not *how*: e.g.
+`bridge_start()`, `bridge_online()`, `bridge_seq()` (bumps per message), and a
+borrow/release pair that hands `main` the parsed model under a lock. In the worked
+example this exact surface survived a **Wi-Fi+HTTP → BLE swap with zero changes to
+`main`** — only the component's `.c` changed. The link is a *data producer*; it never
+calls the UI.
+
+**BLE: the device is a GATT _peripheral_ (server); the host is the _central_.** Modeled
+on the studied `voice_ble` reference (NimBLE). Minimal shape:
+
+- **Inbound** (host → device) = a characteristic with `BLE_GATT_CHR_F_WRITE`; its
+  `access_cb` receives the bytes. **Outbound** (device → host) = a `…_F_NOTIFY`
+  characteristic (`ble_gatts_notify_custom`).
+- **Chunk anything bigger than one ATT write.** A write carries ≤ `MTU − 3` bytes
+  (≈ 244 at MTU 247). Frame a larger payload (e.g. a JSON snapshot) as
+  `[ver, flags] + chunk` with START/END flags and **reassemble device-side** into a
+  buffer, parse on END. A bad/partial message self-heals if the host re-sends.
+- **Initiate the MTU exchange from the device** (`ble_gattc_exchange_mtu`) on connect —
+  some centrals never do, leaving you stuck at the 23-byte default.
+- No bonding for a LAN-local toy (`ble_hs_cfg.sm_bonding = 0`); advertise a service UUID
+  + a name (`pg-XXXX` from the MAC). Match on the **service UUID** host-side — the GAP
+  *name* is cached by the OS and can be stale (a re-flashed unit may still show an old name).
+
+**A clock-less device gets its time from the link.** No RTC/NTP → the device has no wall
+clock. Carry an epoch + a human clock string in the message, anchor on it plus a
+**monotonic timer** (`now ≈ msg_ts + esp_timer_elapsed`), and derive/age everything from
+that — so the display stays correct *between* messages and while disconnected. Have the
+host re-stamp the time fields on each serve so the anchor never goes stale. (Wire-format
++ freshness semantics belong in the contract — see `vibe-plm`.)
 
 <a name="main"></a>
 ## main: thin orchestrator
