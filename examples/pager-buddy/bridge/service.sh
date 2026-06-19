@@ -15,8 +15,16 @@ LABEL="com.pagerbuddy.bridge"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/$LABEL.log"
 PORT="${PAGER_BUDDY_PORT:-8787}"
-PY="${PAGER_BUDDY_PY:-/usr/bin/python3}"
-command -v "$PY" >/dev/null 2>&1 || PY=python3
+# Pick a python that can import bleak (the BLE relay needs it); PAGER_BUDDY_PY wins.
+# Resolve to an ABSOLUTE path — launchd runs with a minimal PATH.
+PY="${PAGER_BUDDY_PY:-}"
+if [ -z "$PY" ]; then
+  for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+    command -v "$c" >/dev/null 2>&1 || continue
+    PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
+  done
+fi
+PY="$(command -v "$PY" 2>/dev/null || echo "$PY")"
 
 write_plist() {
   mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
@@ -28,12 +36,15 @@ write_plist() {
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$PY</string>
-    <string>$DIR/pager_stub.py</string>
-    <string>--ui</string>
-    <string>--port</string>
-    <string>$PORT</string>
+    <string>/bin/bash</string>
+    <string>$DIR/run.sh</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PAGER_BUDDY_PORT</key><string>$PORT</string>
+    <key>PAGER_BUDDY_PY</key><string>$PY</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$LOG</string>
@@ -45,14 +56,17 @@ EOF
 
 case "${1:-}" in
   install)
-    pkill -f pager_stub.py 2>/dev/null || true
+    pkill -f 'pager_stub.py|ble_push.py' 2>/dev/null || true
     lsof -ti ":$PORT" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     write_plist
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load "$PLIST"
-    echo "✓ installed + started LaunchAgent $LABEL"
-    echo "  UI → http://127.0.0.1:$PORT/    logs: $LOG"
+    echo "✓ installed + started LaunchAgent $LABEL (hub + BLE relay, via run.sh)"
+    echo "  python: $PY    UI → http://127.0.0.1:$PORT/    logs: $LOG"
     echo "  auto-starts on login · run './service.sh uninstall' to remove."
+    echo "  note: a background LaunchAgent doing BLE may need Bluetooth permission —"
+    echo "        if the relay never connects, prefer the 'pager' shell command (your"
+    echo "        terminal already has Bluetooth access)."
     ;;
   uninstall)
     launchctl unload "$PLIST" 2>/dev/null || true

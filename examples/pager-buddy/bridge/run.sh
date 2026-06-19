@@ -12,9 +12,16 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PAGER_BUDDY_PORT:-8787}"
-PY="${PAGER_BUDDY_PY:-/usr/bin/python3}"
-command -v "$PY" >/dev/null 2>&1 || PY=python3
 BLE="${PAGER_BUDDY_BLE:-1}"
+# Pick python: an explicit PAGER_BUDDY_PY wins; else prefer one that can import bleak
+# (the BLE relay needs it), falling back to any python3 (hub still runs, relay skips).
+PY="${PAGER_BUDDY_PY:-}"
+if [ -z "$PY" ]; then
+  for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+    command -v "$c" >/dev/null 2>&1 || continue
+    PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
+  done
+fi
 
 # free the port if a previous bridge is lingering
 if lsof -ti ":$PORT" >/dev/null 2>&1; then
@@ -38,7 +45,7 @@ pids+=("$hub_pid")
 if [ "$BLE" != "0" ]; then
   if "$PY" -c "import bleak" >/dev/null 2>&1; then
     echo "BLE relay → scanning for the pager (pg-XXXX)…"
-    "$PY" "$DIR/ble_push.py" --hub "http://127.0.0.1:$PORT/v1/snapshot" &
+    PYTHONUNBUFFERED=1 "$PY" "$DIR/ble_push.py" --hub "http://127.0.0.1:$PORT/v1/snapshot" &
     pids+=("$!")
   else
     echo "BLE relay skipped — 'bleak' not installed (pip install bleak). Hub only."
