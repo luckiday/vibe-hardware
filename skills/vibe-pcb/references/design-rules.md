@@ -85,6 +85,56 @@ worked on xiao-carrier (example):
 - **Route, regen, DRC, repeat** — and check the belly gate each loop. A reroute that
   looks fine often crosses a cluster trace; let DRC find it rather than eyeballing.
 
+## Layered layout & the feedback loop (beating "③ place & route")
+
+The model is weak at one-shot absolute-coordinate geometry — it thinks in **relations**,
+but `place(x,y)` / `trk([…])` throw the relations away and keep only the numbers, so layouts
+are brittle and look amateur. Don't auto-solve ③; **change the representation + close a
+visual loop** (full rationale in SKILL.md → *Layered layout*). Three moves:
+
+**1 — Clusters as first-class objects (relative, not absolute).** A thin helper over
+`place(...)` so a part's home is `cluster + slot`, not a magic mm pair. Anchors can be
+chosen to *reproduce the current coordinates exactly* — so adopting it on an already-routed
+board moves nothing and keeps DRC at 0/0/0; the win is that the **relations** are now in the
+source and a whole cluster moves as one.
+
+```python
+class Cluster:
+    def __init__(self, name, ax, ay, pitch=2.0): self.n,self.ax,self.ay,self.p = name,ax,ay,pitch
+    def at(self, dx, dy): return self.ax+dx, self.ay+dy        # part relative to the cluster anchor
+PWR = Cluster("power", CX-7.0, CY)                             # one grid cell
+place(..., *PWR.at(0, +3.0), 90, {...}, flip=True)            # C1: anchor + slot, reads as a relation
+```
+
+**2 — Stage the generator; render the skeleton; read it back.** Gate `gen_pcb.py` on a
+`STAGE` env so it can stop early and emit a *skeleton* image for the model to read before any
+copper is committed:
+
+```python
+STAGE = os.environ.get("STAGE", "full")     # floorplan | place | full
+… place footprints …
+if STAGE == "floorplan": draw_cluster_boxes(); board.Save(out); sys.exit()   # boxes+labels only
+… (ratsnest is automatic from net assignment) …
+if STAGE == "place":     board.Save(out); sys.exit()                          # parts+courtyards+ratsnest, NO trk/via
+… trk()/via() copper …                                                       # full
+```
+
+Render each stage headless and **look at it**: `kicad-cli pcb render … --side top` (or the
+2D plot for ratsnest/courtyards), then read the PNG. `scripts/pcb_skeleton.sh <proj> <stage>`
+wraps this. The loop is: render floorplan → read → fix placement → render place → read →
+route → render full → read. Perception-in-the-loop, not one blind shot.
+
+**3 — Two cheap numeric gates (no render needed).** Before routing, fail fast on bad
+placement: **courtyard overlap** (any two F.CrtYd / B.CrtYd polys intersect → parts collide)
+and **ratsnest total length** (`board.GetConnectivity()` air-wire length — a proxy for
+placement quality; minimise before you route). Both run in `pcbnew` in milliseconds.
+
+**Routing half — freerouting is a real CLI.** Placement has no auto tool (→ the loop above),
+but routing does: `kicad-cli pcb export specctra <proj>.kicad_pcb -o b.dsn` →
+`freerouting -de b.dsn -do b.ses` → `kicad-cli pcb import specctra … b.ses`. Quality needs a
+cleanup pass and a JRE must be installed; for a trivial board keep scripted `trk`. Either
+way the model's job is to **read the routed render and accept/reject**, not to place copper blind.
+
 ## Generator conventions (so regen stays clean)
 
 - **Edit `gen_*.py`, never the `.kicad_*`.** The GUI files are outputs; hand-edits
@@ -92,7 +142,9 @@ worked on xiao-carrier (example):
   dump it semantically and fold the intent back into the generator — don't let the
   two diverge.)
 - Coordinates are **absolute mm** from a pad dump; the `gen_pcb.py` helpers
-  (`place / mhole / trk / via / silk / add_model`) are the whole vocabulary.
+  (`place / mhole / trk / via / silk / add_model`) are the whole vocabulary. Prefer
+  expressing placement through **clusters** (above) so the source carries the *relations*,
+  not bare numbers — anchors can reproduce the same mm, so it's a zero-risk refactor.
 - Register project libs via `sym-lib-table` / `fp-lib-table` (emitted by
   `gen_sch.py`) so there's no GUI "rescue" prompt.
 - A custom module land (e.g. a 2×7 castellated XIAO footprint) lives in
