@@ -1,0 +1,9 @@
+# ESP-IDF build tree + generated config
+build/
+sdkconfig
+sdkconfig.old
+# managed_components/ is re-fetched on build; the lockfile (dependencies.lock) IS committed
+managed_components/
+
+# Secrets — copy secrets.example.h to secrets.h and fill in (NEVER commit)
+main/secrets.h

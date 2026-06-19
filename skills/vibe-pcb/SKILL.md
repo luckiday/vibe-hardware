@@ -95,6 +95,56 @@ spec (prose)  ──►  generate  ──►  validate  ──►  review  ─�
    the war story + CPL/BOM gotchas are in `references/fab-and-3d.md`). Then walk the
    **physical-verify-before-ordering** checklist.
 
+## Layered layout + the visual feedback loop (placement is the hard part)
+
+The KiCad python ecosystem is three layers and **only the first two automate cleanly**:
+① connectivity / netlist, ② footprint association, ③ **place & route**. No CLI does ③
+one-shot — and a language model is *worst* exactly here: it reasons in **relations**
+("decoupling cap hugs the IC pin", "connector on the edge", "SDA reaches R1 without
+crossing the VIN cluster") but `place(x,y)` / `trk([(x,y)…])` force those relations down
+into **isolated absolute mm**, where they're lost on the next edit and read amateurish.
+You don't *auto-solve* ③ — you **change the representation and add a feedback loop** so it
+plays to relational reasoning + reading images, not blind one-shot geometry:
+
+1. **Clusters/cells, a two-level floorplan.** Group parts into named clusters (MCU, power,
+   connector, mount). **MACRO**: each cluster has an *origin* — arrange the coarse layout by
+   moving whole blocks (edit one origin → every member part **and** the cluster's auto-sized
+   box move as a unit). **MICRO**: a part sits at a slot *relative to its origin*, not the
+   sheet origin. The box is derived from the members' real geometry, so the coarse stage shows
+   true block sizes to pack against. Same on the schematic: a module is a box in a grid cell,
+   shared cluster power nets drawn as real rails (one label), signals as net labels.
+2. **Coarse → fine; separate placement from routing, topology from geometry.** Lay out
+   *clusters as blocks* first (floorplan: power-in, signal flow, connectors on edges), then
+   parts within a cluster, then route. The mess comes from solving placement + topology +
+   geometry together in absolute coords; fix (and verify) placement first and routing's
+   search space collapses.
+3. **Render the skeleton, read it, iterate — don't draw it all in one shot.** Stage the
+   generator and render each stage to an image you (the model) actually read back:
+   - `STAGE=floorplan` → cluster boxes + labels only → *is the signal flow / edge placement sane?*
+   - `STAGE=place` → footprints + courtyards + **ratsnest, no copper** → *overlaps? does the ratsnest knot?*
+   - `STAGE=full` → copper → *crossings / clearance?*
+   This turns blind generation into **perception-in-the-loop**, the one place a vision model
+   compensates for weak one-shot geometry. Two **cheap numeric gates** flag bad placement
+   without even rendering: **courtyard overlap** (= parts collide) and **ratsnest total
+   length** (a proxy for placement quality — minimise it before routing).
+
+**Division of labour for ③.** "No CLI" is true for *placement* but **not for routing** —
+`freerouting` runs headless (`.kicad_pcb` → Specctra `.dsn` → `freerouting -de … -do …` →
+`.ses` back). So: **placement = model + the visual loop** (judgment-heavy, decides whether
+the board looks professional); **routing = freerouting** (or scripted `trk` for a trivial
+board), with the model only **reading the render to accept/reject** — never hand-placing
+copper blind. (freerouting needs a JRE; if absent, route by `trk` and document it.)
+
+See `references/design-rules.md` → *Layered layout & the feedback loop* for the cluster
+helper shape (`cluster(name, anchor) · c.place(ref, slot)`), the `STAGE` flag, and the
+two numeric gates. The reference board's `gen_pcb.py` is the worked example. For the
+conventional **schematic + PCB standards** checklist — what makes a sheet/board read
+*professional* (title block, power symbols, signal flow, junctions, placement, silk, DfM) —
+see `references/professional-standards.md`. For the **gated workflow** (schematic→fab as 8
+stages, each with a pass/fail gate, mapped to the `gen_pcb.py` P1–P8 phases + which script
+enforces it) — and the rule to score gates honestly, not self-congratulate — see
+`references/gated-workflow.md`.
+
 ## Run it (macOS, KiCad 10)
 
 The generators and validators need **KiCad's bundled tools**, not system python:

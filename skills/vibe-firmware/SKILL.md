@@ -5,19 +5,27 @@ description: >-
   plain-language spec to a reproducible build that flashes and runs, driven by an AI
   coding agent. Use when bringing up a new board, adding a peripheral/driver, wiring a
   device to a network service, or shipping an update. Key facts this skill encodes:
-  build in a PINNED toolchain (a Docker image / locked SDK version) so it's bit-for-bit
-  reproducible and "works on my machine" version drift can't bite; keep board/pin
-  config as CODE (one header / Kconfig, not scattered magic numbers) so it tracks the
-  PCB's net map; never ship an OTA/fleet update without a real-hardware test first.
-  FRAMEWORK — fill in your platform's commands (this stub is platform-agnostic; the
-  worked example is examples/pager-buddy/).
+  structure the firmware as LAYERED COMPONENTS, not one big main.c — a board-support
+  layer (BSP) is the ONLY place pin numbers + low-level init live and exposes a typed
+  API (i2c bus, PMIC/battery, buttons) so nothing else touches a raw GPIO; ONE COMPONENT
+  PER DOMAIN (display/ui, audio, connectivity…) each with a single public header as its
+  only surface; and a THIN main that wires them via callbacks + a FreeRTOS event queue +
+  a small state machine. Build in a PINNED toolchain (a Docker image / locked SDK) so
+  it's bit-for-bit reproducible; keep board/pin config as CODE (the BSP header) mirroring
+  the PCB net map; ship dual-slot OTA from day one and NEVER publish an update without a
+  real-hardware test first. ESP-IDF is the worked-through platform — the modular layout,
+  CMake/idf_component.yml, sdkconfig/partitions, and the gotchas (native-USB console, the
+  managed-dep lockfile, PM locks) are in references/esp-idf-structure.md; the worked
+  example is examples/pager-buddy/firmware/. Method ports to Arduino/PlatformIO/Zephyr.
 ---
 
 # Text → firmware (beginner + agent → a board that runs)
 
-> ⚠️ **Framework stub.** The *method and rules* below are real and platform-agnostic;
-> the exact toolchain commands are yours to fill in for ESP-IDF / Arduino-CLI /
-> PlatformIO / Zephyr. See `examples/pager-buddy/` for a worked target.
+> The *method and rules* below are platform-agnostic. **ESP-IDF is the worked-through
+> platform** — see [`references/esp-idf-structure.md`](references/esp-idf-structure.md)
+> for the modular component layout, and
+> [`examples/pager-buddy/firmware/`](../../examples/pager-buddy/firmware/) for a building
+> example. Fill in the equivalent commands for Arduino-CLI / PlatformIO / Zephyr.
 
 The firmware half of a small product. You describe what the device should do and which
 pins go where (from the **same net map** the [`vibe-pcb`](../vibe-pcb/) board
@@ -34,8 +42,11 @@ spec + pin map ─► code ─► build (pinned) ─► flash + monitor ─► (
 
 1. **Spec** — what it does + the **pin/peripheral map**. Reuse the board's net map so
    firmware pins and the PCB agree (a swapped sensor → a one-line pin + address change).
-2. **Code** — drivers + app for your platform. Keep board specifics (pins, bus speeds,
-   addresses, feature flags) in **one config-as-code** place that mirrors the net map.
+2. **Code — as layered components, not one `main.c`.** Build a **board-support layer**
+   first (the one home for pins + low-level init + a typed API), then **one component per
+   domain** (display, audio, net…), then a **thin `main`** that wires them. Board
+   specifics (pins, bus speeds, addresses) live in the BSP header — config-as-code that
+   mirrors the net map. See *Structure* below + `references/esp-idf-structure.md`.
 3. **Build — reproducibly.** Build inside a **pinned toolchain** (a Docker image at a
    fixed SDK version, or a locked PlatformIO/SDK pin), *not* whatever is on your host.
    Version drift between a local SDK and CI is the #1 source of "works on my machine"
@@ -48,6 +59,30 @@ spec + pin map ─► code ─► build (pinned) ─► flash + monitor ─► (
    a clean compile is not enough (a code-clean path can still exhaust RAM or crashloop
    only on hardware with a live peripheral). Gate the publish behind a deliberate,
    post-test trigger.
+
+## Structure: layered components, thin main
+
+Don't grow one `main.c`. Split the firmware into **three layers**, each touching a
+peripheral in exactly one place — so a board/sensor swap is a localized edit and each
+domain stands on its own:
+
+1. **Board-support layer (BSP)** — `components/<board>_board/`. The **only** place pin
+   numbers and low-level init live; exposes `*_init()` + typed accessors (the I²C bus
+   handle, PMIC battery/power, button state, deep-sleep prep). Its header *is* the
+   config-as-code that mirrors the PCB net map. Nothing else reads a raw GPIO.
+2. **Domain components** — `components/<domain>/` (display/ui, audio, connectivity…),
+   one per function. Each has a **single public header** (`include/<domain>.h`) as its
+   only surface — `init` + intent verbs + callback typedefs; the `.c` stays hidden.
+   Drive a domain by *what* (`ui_set_error(msg)`), not *how*.
+3. **Thin `main`** — `REQUIRES` the BSP + every domain; `app_main` inits each layer then
+   runs the app. **Decouple with callbacks + a FreeRTOS queue + a state machine**: ISRs/
+   timers/net post a typed event; one task consumes it and drives one explicit state
+   enum. `main` is the conductor, not a driver.
+
+Dependency rule: `domains → BSP → drivers`, `main → everything`; lower layers never call
+up. The full ESP-IDF mechanics (CMake `REQUIRES`, `idf_component.yml`, `sdkconfig`,
+partitions, PM, and the gotchas) are in
+[`references/esp-idf-structure.md`](references/esp-idf-structure.md).
 
 ## Rules this skill encodes (platform-agnostic)
 
@@ -62,28 +97,40 @@ spec + pin map ─► code ─► build (pinned) ─► flash + monitor ─► (
 - **Hardware test before any release.** Especially before an OTA that touches fielded
   devices. Watch heap/reboots for a sustained run, exercise failure paths (peripheral
   unplugged, network loss).
+- **One peripheral, one place (the BSP).** Pins + low-level init live only in the
+  board-support component; domains ask the board, never the GPIO. A board swap is then
+  one component, not a grep across drivers.
+- **Reproducible deps + dual-slot from day one.** Pin managed components and **commit the
+  lockfile** (`dependencies.lock`); ship the dual-slot OTA partition table even before
+  OTA exists, so a field update never forces a flash re-layout that wipes user data.
 
-## Run it  *(fill in for your platform)*
+## Run it
+
+ESP-IDF, pinned in Docker (the authoritative build) — `examples/pager-buddy/firmware/`
+ships a working `idf.sh` wrapper around this:
 
 ```bash
-# examples — replace with your toolchain:
-#   ESP-IDF (pinned):   docker run --rm -v "$PWD":/work -w /work espressif/idf:vX.Y idf.py build
-#   PlatformIO:         pio run                 # platformio.ini pins the platform version
-#   Arduino-CLI:        arduino-cli compile --fqbn <board>
-# flash + monitor over USB (local toolchain, needs the cable):
-#   idf.py flash monitor   /   pio run -t upload -t monitor   /   arduino-cli upload && monitor
+docker run --rm -v "$PWD":/project -w /project espressif/idf:v5.5 idf.py build  # reproducible
+idf.py -p <PORT> flash monitor       # flash + serial (host toolchain; needs the cable)
 ```
+
+Other platforms — same shape, different command: `pio run` (PlatformIO pins the platform
+in `platformio.ini`) · `arduino-cli compile --fqbn <board>`.
 
 ## TODO (fill in)
 
-- [ ] Pick the platform + pin the toolchain (image tag / `platformio.ini` / SDK rev).
-- [ ] `references/` — your driver patterns, the config-as-code layout, the OTA + safety
-      model, the build/flash/monitor commands.
-- [ ] A `scripts/` build wrapper (mirrors `vibe-pcb`'s `pcb_check.sh` idea: one
-      command → reproducible build + size report).
+- [x] ESP-IDF modular structure → `references/esp-idf-structure.md`; pinned Docker build
+      + config-as-code BSP demoed in `examples/pager-buddy/firmware/`.
+- [ ] Finish the pager-buddy bring-up: display (ST7789) → audio → the Wi-Fi/BLE status
+      client → OTA — one peripheral at a time.
+- [ ] A `scripts/` build wrapper (mirrors `vibe-pcb`'s `pcb_check.sh`: one command →
+      reproducible build + size report).
+- [ ] Driver-pattern references for non-ESP platforms (Arduino / PlatformIO / Zephyr).
 
 ## Keeping this current (living doc)
 
 When a bring-up teaches you a gotcha (a heap overflow only on real hardware, a toolchain
-pin that mattered), fold it back here and commit it. See the other skills' "Keeping this
-current" notes.
+pin that mattered), fold it back here and commit it. The modular structure above was
+distilled from a studied reference design (`78/voicestick` — ESP-IDF for the M5StickC S3)
+plus the pager-buddy bring-up; when a new reference or build teaches a better pattern,
+fold it in. See the other skills' "Keeping this current" notes.

@@ -1,0 +1,24 @@
+# constraints.yaml — cad <-> pcb interface contract (the shared fit numbers)
+#
+# The ONE set of numbers the board outline (vibe-pcb) and the shell (vibe-cad)
+# both read. Change a number here and both sides move. Units: mm.
+# Bump `revision` in ../product.yaml on any change here.
+#
+# NOTE: numbers below are PLACEHOLDERS for the stub — set them from the real board.
+
+board:
+  outline: { l: 40, w: 30, t: 1.6, corner_r: 2 }      # board L x W x thickness
+  mount_holes:
+    dia: 2.2                                            # M2 clearance
+    positions: [[3, 3], [37, 3], [3, 27], [37, 27]]
+stack:
+  standoff_h: 4                    # board sits this high off the shell floor
+  total_h: 14                      # closed shell internal height
+ports:
+  usb_c: { edge: "-X", center_y: 15, w: 9, h: 3.5 }    # USB-C exit cutout
+windows:
+  display: { x: 8, y: 6, w: 24, h: 14 }                # OLED cutout in the front face
+  button:  { x: 20, y: 24, dia: 6 }
+  led:     { x: 34, y: 24, dia: 2 }                    # light-pipe bore (not a bare hole)
+keepouts:
+  antenna: "no shell wall within 8 mm of the module's PCB-antenna edge"

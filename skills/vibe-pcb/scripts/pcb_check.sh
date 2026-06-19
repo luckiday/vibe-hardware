@@ -24,7 +24,7 @@ python3 gen_sch.py            # schematic writer — plain python
 "$PY"   gen_pcb.py            # pcb builder — needs the bundled python's pcbnew
 
 echo "-> ERC";    "$CLI" sch erc "$PROJ.kicad_sch" -o "$PROJ-erc.rpt" >/dev/null
-echo "-> DRC";    "$CLI" pcb drc "$PROJ.kicad_pcb" -o "$PROJ-drc.rpt" >/dev/null
+echo "-> DRC";    "$CLI" pcb drc --refill-zones "$PROJ.kicad_pcb" -o "$PROJ-drc.rpt" >/dev/null
 echo "-> render"; "$CLI" pcb render "$PROJ.kicad_pcb" -o "$PROJ-pcb-top.png" \
                      --side top --background opaque -w 950 --height 600 >/dev/null
 
