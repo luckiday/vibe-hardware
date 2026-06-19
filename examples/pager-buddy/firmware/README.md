@@ -7,22 +7,33 @@ Bring-up firmware for the pager, built on the **M5StickC S3** (ESP32-S3-PICO-1-N
 Built with **ESP-IDF v5.5** in a **pinned Docker toolchain** so the build is
 reproducible regardless of the host SDK (per [`vibe-firmware`](../../../skills/vibe-firmware/)).
 
-## What it does today (stage-1 bring-up)
+## What it does today (display UI, stub data)
 
-[`main/main.c`](main/main.c) proves the board is alive *without* guessing at the
-PMIC/LCD init sequence:
+Renders the pager UI on the LCD — the screens from
+[`../design/`](../design/) (the web mock), driven by the two buttons. **No network
+yet**: the sessions are stubbed in [`main/main.c`](main/main.c).
 
-- logs chip info (cores, flash, PSRAM, heap);
-- turns the LCD backlight on (G38);
-- configures both buttons (KEY1/KEY2, active-low) and reports them each heartbeat;
-- inits the shared I²C bus (SDA G47 / SCL G48) and **scans** it — expect
-  **BMI270 @0x68**, **M5PM1 @0x6e**, **ES8311 @0x18**.
+- **SIDE** (KEY2) = scroll/cycle the highlight (wraps) · **FRONT** (KEY1) = OK ·
+  **hold FRONT** = back.
+- Screens: idle (clock + battery) → Monitor list → Approve / Ask / Done / Working.
+- Battery indicator reads the real **M5PM1** PMIC (falls back to a stub value).
 
-Pins live in [`main/board_pins.h`](main/board_pins.h) (config-as-code), which mirrors
-the [`../pcb/pinmap.yaml`](../pcb/pinmap.yaml) contract — keep them in sync.
+### Structure — layered per [`vibe-firmware`](../../../skills/vibe-firmware/)
 
-> **Status:** *builds clean* in the pinned toolchain (verified). **Not yet flashed to
-> hardware** — a clean compile is not a bring-up. Flash + watch the serial log next.
+```
+components/stick_s3_board/   BSP — the only home for pins; brings up I²C, powers the
+                             LCD rail via the M5PM1 PMIC, owns buttons + battery
+components/ui/               ST7789 + LVGL bring-up and the screen renderers
+main/main.c                  thin: stub model + state machine + button poll + render loop
+```
+
+Pins live in [`components/stick_s3_board/include/stick_s3_board.h`](components/stick_s3_board/include/stick_s3_board.h)
+(config-as-code), mirroring the [`../pcb/pinmap.yaml`](../pcb/pinmap.yaml) contract.
+The LCD only lights because the BSP enables its rail through the PMIC — driving the
+backlight GPIO alone is not enough on this hardware.
+
+> **Status:** *builds clean* in the pinned toolchain (LVGL + ST7789, verified). Flash it
+> and drive the screens with the two buttons to verify on real hardware.
 
 ## Build — reproducible (Docker, authoritative)
 
@@ -51,8 +62,9 @@ cp main/secrets.example.h main/secrets.h   # then fill it in — never commit se
 
 ## Next stages (incremental bring-up — one peripheral at a time)
 
-- [ ] **LCD** — ST7789P3 over SPI via `esp_lcd` (`esp_lcd_panel_st7789`) → status glyphs.
-- [ ] **PMIC** — M5PM1 init over I²C (battery, rail enables); needs the register map.
+- [x] **PMIC** — M5PM1 powers the LCD rail + battery reads (`stick_s3_board`).
+- [x] **LCD** — ST7789P3 over SPI via `esp_lcd` + LVGL; the design screens (`ui`).
+- [ ] **Wi-Fi/BLE status client** — replace the stub with the Claude Code hook bridge
+      ([`../bridge/`](../bridge/)); KEY1 acks, screen flashes on a new "needs you".
 - [ ] **Audio "buzz"** — ES8311 + AW8737 over I²S → a short tone on a page.
-- [ ] **Wi-Fi status client** — poll/subscribe the Claude Code hook bridge; KEY1 acks.
 - [ ] **OTA** — only after a real-hardware soak test (heap/reboots, failure paths).

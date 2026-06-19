@@ -1,5 +1,5 @@
 idf_component_register(
     SRCS "main.c"
     INCLUDE_DIRS "."
-    REQUIRES driver nvs_flash spi_flash
+    REQUIRES stick_s3_board ui esp_timer driver
 )
