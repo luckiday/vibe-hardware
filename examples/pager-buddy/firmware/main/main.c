@@ -44,9 +44,7 @@ static bool    s_screen_off;         // tier-1 state: backlight blanked, BLE sti
 static esp_pm_lock_handle_t s_no_light_sleep;  // held while the screen is ON (no light sleep → no LCD flicker)
 
 // --- stub data (shown until the first BLE snapshot arrives; same sample as the mock) ---
-// Some entries are Chinese to exercise CJK rendering (ui.c uses the PuHui fonts for the
-// title/body labels). Latin still renders in the same labels, so the two can be mixed.
-static const char *deploy_opts[] = {"生产环境", "预发布", "仅本地"};
+static const char *deploy_opts[] = {"Production", "Staging", "Local only"};
 static const char *act_fix[]     = {"Edit(src/auth/middleware.ts)"};
 static const char *act_backend[] = {"Write(src/routes/users.ts)"};
 static const char *act_opt[]     = {"Analyzing the slow queries", "Read(schema.prisma)",
@@ -57,14 +55,14 @@ static session_t stub_sessions[] = {
     {.name = "vibe hardware", .agent = "Claude", .term = "VS Code", .age = "27m", .state = ST_WORKING,
      .task = "fix the auth bug in the login middleware",
      .appr_tool = "Edit", .appr_file = "src/auth/middleware.ts", .add = 3, .del = 1,
-     .ask_q = "选择部署目标？", .ask_opts = deploy_opts, .ask_n = 3,
-     .done_summary = "已修复登录中间件的鉴权问题。", .files = 3, .tests = "8 passed",
+     .ask_q = "Choose deploy target?", .ask_opts = deploy_opts, .ask_n = 3,
+     .done_summary = "Fixed the auth bug in the login middleware.", .files = 3, .tests = "8 passed",
      .act = act_fix, .act_n = 1},
     {.name = "vibe hardware", .agent = "Codex", .term = "Terminal", .age = "1h", .state = ST_WORKING,
      .task = "build the users REST endpoint with pagination",
      .act = act_backend, .act_n = 1},
-    {.name = "数据库优化", .agent = "Gemini", .term = "Ghostty", .age = "5h", .state = ST_WORKING,
-     .task = "加速仪表盘的慢查询",
+    {.name = "db optimization", .agent = "Gemini", .term = "Ghostty", .age = "5h", .state = ST_WORKING,
+     .task = "speed up the slow dashboard queries",
      .act = act_opt, .act_n = 3},
 };
 #define STUB_N ((int)(sizeof(stub_sessions) / sizeof(stub_sessions[0])))

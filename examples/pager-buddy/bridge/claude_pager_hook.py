@@ -61,7 +61,7 @@ def summarize(text, limit: int = 90):
 
     The tiny screen can't show markdown: pick the first meaningful line (skipping
     code fences, preferring prose over a heading), strip inline markdown, and cap
-    at a sentence boundary. Turns a run-on '修好了。问题根因…\\n## 根因\\n…' blob into
+    at a sentence boundary. Turns a run-on 'Fixed it. Root cause…\\n## Root cause\\n…' blob into
     just its lead line."""
     if not text:
         return None

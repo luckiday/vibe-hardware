@@ -121,8 +121,8 @@ function viewList() {
   if (!D.sessions.length) {
     return `<div class="content"><div class="idle">` +
       `<div class="face c-done">•‿•</div>` +
-      `<div class="summary">暂无任务</div>` +
-      `</div></div>` + footer("", "▼ 返回");
+      `<div class="summary">No active tasks</div>` +
+      `</div></div>` + footer("", "▼ back");
   }
   const rows = D.sessions.map((s, i) => {
     const sel = i === S.sel ? " sel" : "";
