@@ -45,6 +45,8 @@ POST_TIMEOUT = 1.5         # seconds — keep small; we fail open
 # the pager, waits for the user to press Allow/Deny there, and returns that decision to
 # Claude Code (permissionDecision allow|deny) — so the device drives the VS Code session.
 # Set PAGER_BUDDY_GATE="" (or "off"/"none") to disable; it then behaves push-only.
+# Only active in "default" permission mode — bypassPermissions/acceptEdits/plan never
+# prompt, so the gate stays out of the way there (no spurious Allow on the device).
 # A blocking hook must finish under Claude's hook timeout (~60 s), so keep GATE_TIMEOUT
 # below that; on timeout we stay silent and Claude falls back to its own prompt.
 def _gate_tools() -> set:
@@ -572,9 +574,16 @@ def main() -> int:
     # Two-way gate: for a gated tool, block on the device for an Allow/Deny and return
     # it to Claude as a permission decision. Anything else (incl. timeout / device
     # offline) falls through to the normal push so we always fail open.
+    #
+    # Only gate in "default" permission mode — the one mode where Claude would otherwise
+    # prompt the user. In bypassPermissions / acceptEdits / plan it auto-allows or defers
+    # and never prompts, so gating there would pop a spurious Allow on the device for a
+    # tool that's already been auto-approved. Treat a missing field as "default" (older
+    # Claude builds that don't send it still get the gate).
     event = payload.get("hook_event_name") or ""
     tool = payload.get("tool_name") or ""
-    if event == "PreToolUse" and tool in GATE_TOOLS:
+    mode = payload.get("permission_mode") or "default"
+    if event == "PreToolUse" and tool in GATE_TOOLS and mode == "default":
         decision = gated_approval(payload, url, state_path)
         if decision in ("allow", "deny"):
             if decision == "allow":     # let the device's screen return to "running"
