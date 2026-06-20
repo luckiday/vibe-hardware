@@ -37,3 +37,4 @@ build/
 
 # Reference clones (study material, not ours to commit)
 examples/*/reference/
+docs/references/_clones/

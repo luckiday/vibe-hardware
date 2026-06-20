@@ -21,7 +21,7 @@ arrives it shows stub sessions from [`main/main.c`](main/main.c).
   the wire); clock/date come from the snapshot (the Mac is the time source).
 - **BLE**: the device is a NimBLE **peripheral** advertising as `pg-XXXX`; the Mac
   connects and writes status snapshots. Modeled on
-  [`voicestick`](../../../parts/parts/m5-stickc-s3/_ref/voicestick/firmware/components/voice_ble/).
+  [`voicestick`](../../../docs/references/_clones/voicestick/firmware/components/voice_ble/).
 
 ### Structure — layered per [`vibe-firmware`](../../../skills/vibe-firmware/)
 

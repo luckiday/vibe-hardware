@@ -4,7 +4,8 @@ How to lay out an ESP-IDF firmware as **layered components** so it stays testabl
 reusable across boards, and OTA-ready — instead of one giant `main.c`. Distilled from
 the in-repo worked example (`examples/pager-buddy/firmware/`) and a studied reference
 design (`78/voicestick` — ESP-IDF firmware for the same M5StickC S3; clone it locally
-under a part's `_ref/` to read). Keep your own code generic; this is the method.
+to read — see [`docs/awesome-firmware.md`](../../../docs/awesome-firmware.md)). Keep
+your own code generic; this is the method.
 
 ## Contents
 - [The shape: three layers, thin main](#the-shape)

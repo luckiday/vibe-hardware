@@ -5,7 +5,7 @@ Streams **Claude Code session status** from your Mac to the pager. This is the
 points at — the missing piece between a running agent and the device screen.
 
 Modeled on [open-vibe-island](../reference/open-vibe-island/) (gitignored study
-clone) and the [voicestick](../../../parts/parts/m5-stickc-s3/_ref/voicestick/) BLE
+clone) and the [voicestick](../../../docs/references/_clones/voicestick/) BLE
 peripheral. The device link is **BLE** (the firmware is a NimBLE GATT server); the
 hub + hooks stay on HTTP.
 
