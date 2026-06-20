@@ -1,7 +1,6 @@
 // bridge — BLE peripheral that receives Claude Code status snapshots.
 //
-// NimBLE GATT server (modeled on voicestick's firmware/components/voice_ble — see
-// docs/awesome-firmware.md; clone under docs/references/_clones/voicestick).
+// NimBLE GATT server (modeled on parts/.../voicestick/firmware/components/voice_ble).
 // The Mac (central) writes snapshot JSON to the SNAPSHOT characteristic; because a
 // snapshot is larger than one BLE write, the host frames it as chunks with a 2-byte
 // header [ver, flags] where flags carry START/END. We reassemble, parse with cJSON
@@ -62,7 +61,16 @@ static store_t           s_store[2];     // double buffer
 static store_t          *s_live;         // store main reads (NULL until first snapshot)
 static bridge_view_t     s_view;         // filled by bridge_borrow()
 static volatile uint32_t s_seq;          // snapshot counter
-static SemaphoreHandle_t s_lock;         // guards s_live / s_view
+static SemaphoreHandle_t s_lock;         // guards s_live / s_view / settings
+
+// ── audio settings (Mac-owned), received over the control characteristic ─────────
+// The device never originates these — main applies them to the audio component when
+// bridge_take_settings() reports a change. Defaults mirror the audio component's NVS
+// defaults so behavior is sane before the Mac ever pushes.
+static bool     s_set_enabled = true;
+static int      s_set_volume  = 60;
+static uint32_t s_set_seq;        // bumps on each received settings write
+static uint32_t s_set_taken;      // last seq main consumed
 
 // ── small JSON helpers ──────────────────────────────────────────────────────────
 static const char *J_str(const cJSON *o, const char *k) {
@@ -115,6 +123,7 @@ static void parse_session(store_t *m, int i, const cJSON *js) {
     s->agent = dup_arena(m, J_str(js, "agent"));
     s->term  = dup_arena(m, J_str(js, "term"));
     s->age   = dup_arena(m, J_str(js, "age"));
+    s->task  = dup_arena(m, J_str(js, "task"));    // the user's ask — disambiguates same-name sessions
     s->state = parse_state(J_str(js, "state"));
 
     // approve {tool,file,add,del}  (state == waiting)
@@ -201,6 +210,7 @@ static void apply_snapshot(const char *body) {
 //   service     00010000-7265-6761-702d-796464756200
 //   snapshot    00010000-7265-6761-702d-796464756201   (WRITE — Mac → device)
 //   resolution  00010000-7265-6761-702d-796464756202   (NOTIFY — device → Mac, Level-1)
+//   control     00010000-7265-6761-702d-796464756203   (WRITE — Mac → device; settings)
 #define PB_UUID(role) BLE_UUID128_INIT( \
     (role), 0x62, 0x75, 0x64, 0x64, 0x79, 0x2d, 0x70, \
     0x61, 0x67, 0x65, 0x72, 0x00, 0x00, 0x01, 0x00)
@@ -208,6 +218,7 @@ static void apply_snapshot(const char *body) {
 static const ble_uuid128_t s_svc_uuid  = PB_UUID(0x00);
 static const ble_uuid128_t s_snap_uuid = PB_UUID(0x01);
 static const ble_uuid128_t s_res_uuid  = PB_UUID(0x02);
+static const ble_uuid128_t s_ctrl_uuid = PB_UUID(0x03);
 
 // snapshot framing: 2-byte header [ver, flags] + payload chunk
 #define PB_FRAME_VER   1
@@ -222,6 +233,9 @@ static char          s_device_name[8] = "pg-0000";
 
 static char   s_rx[BR_RX_MAX];   // snapshot reassembly buffer
 static size_t s_rx_len;
+
+static char   s_ctrl_rx[256];    // control (settings) reassembly buffer — messages are tiny
+static size_t s_ctrl_rx_len;
 
 static void start_advertising(void);
 
@@ -266,6 +280,61 @@ static int notify_only_cb(uint16_t conn_handle, uint16_t attr_handle,
     return 0;   // resolution char is notify-only; nothing to read/write here
 }
 
+// Parse a reassembled control message — {"audio":0|1,"vol":0..100} — and store the
+// settings under the lock, bumping s_set_seq so main picks them up. Pure receiver:
+// we never touch the audio component here; main applies it (bridge_take_settings).
+static void apply_settings(const char *body) {
+    cJSON *root = cJSON_Parse(body);
+    if (!root) { ESP_LOGW(TAG, "settings: invalid JSON"); return; }
+    const cJSON *a = cJSON_GetObjectItemCaseSensitive(root, "audio");
+    const cJSON *v = cJSON_GetObjectItemCaseSensitive(root, "vol");
+
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    if (cJSON_IsBool(a))        s_set_enabled = cJSON_IsTrue(a);
+    else if (cJSON_IsNumber(a)) s_set_enabled = (a->valueint != 0);
+    if (cJSON_IsNumber(v)) {
+        int vol = v->valueint;
+        if (vol < 0) vol = 0; else if (vol > 100) vol = 100;
+        s_set_volume = vol;
+    }
+    s_set_seq++;
+    bool en = s_set_enabled; int vol = s_set_volume;
+    xSemaphoreGive(s_lock);
+    cJSON_Delete(root);
+    ESP_LOGI(TAG, "settings: audio=%s volume=%d", en ? "on" : "off", vol);
+}
+
+// Mac → device: reassemble framed control chunks (same framing as snapshot); apply on END.
+static int control_write_cb(uint16_t conn_handle, uint16_t attr_handle,
+                            struct ble_gatt_access_ctxt *ctxt, void *arg) {
+    (void)conn_handle; (void)attr_handle; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+
+    uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
+    if (len < 2) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+
+    uint8_t frame[260];
+    if (len > sizeof(frame)) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    if (ble_hs_mbuf_to_flat(ctxt->om, frame, len, NULL) != 0) return BLE_ATT_ERR_UNLIKELY;
+
+    if (frame[0] != PB_FRAME_VER) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t flags = frame[1];
+    const uint8_t *payload = frame + 2;
+    uint16_t plen = len - 2;
+
+    if (flags & PB_FLAG_START) s_ctrl_rx_len = 0;
+    if (s_ctrl_rx_len + plen >= sizeof(s_ctrl_rx)) { s_ctrl_rx_len = 0; return 0; }
+    memcpy(s_ctrl_rx + s_ctrl_rx_len, payload, plen);
+    s_ctrl_rx_len += plen;
+
+    if (flags & PB_FLAG_END) {
+        s_ctrl_rx[s_ctrl_rx_len] = '\0';
+        apply_settings(s_ctrl_rx);
+        s_ctrl_rx_len = 0;
+    }
+    return 0;
+}
+
 static const struct ble_gatt_svc_def s_gatt_services[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -281,6 +350,11 @@ static const struct ble_gatt_svc_def s_gatt_services[] = {
                 .access_cb = notify_only_cb,
                 .val_handle = &s_res_attr_handle,
                 .flags = BLE_GATT_CHR_F_NOTIFY,
+            },
+            {
+                .uuid = &s_ctrl_uuid.u,
+                .access_cb = control_write_cb,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
             },
             {0},
         },
@@ -309,6 +383,7 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
         s_connected = false;
         s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
         s_rx_len = 0;
+        s_ctrl_rx_len = 0;
         start_advertising();
         return 0;
     case BLE_GAP_EVENT_MTU:
@@ -445,6 +520,20 @@ const bridge_view_t *bridge_borrow(void) {
 
 void bridge_release(void) {
     if (s_lock) xSemaphoreGive(s_lock);
+}
+
+bool bridge_take_settings(bool *enabled, int *volume) {
+    if (!s_lock) return false;
+    bool changed = false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    if (s_set_seq != s_set_taken) {
+        s_set_taken = s_set_seq;
+        if (enabled) *enabled = s_set_enabled;
+        if (volume)  *volume  = s_set_volume;
+        changed = true;
+    }
+    xSemaphoreGive(s_lock);
+    return changed;
 }
 
 esp_err_t bridge_send_resolution(const char *session_id, const char *action) {

@@ -27,6 +27,7 @@ static i2c_master_dev_handle_t s_pmic;
 #define HOLD_LDO         (1 << 5)
 #define LCD_RAIL_GPIO    (1 << 2)   // M5PM1 GPIO2 gates the LCD (L3B) rail
 #define CHG_SENSE_GPIO   (1 << 0)   // M5PM1 GPIO0 = charge sense input
+#define PA_EN_GPIO       (1 << 3)   // M5PM1 GPIO3 enables the AW8737 speaker amp (PA)
 
 static esp_err_t reg_rd(uint8_t reg, uint8_t *v) {
     return i2c_master_transmit_receive(s_pmic, &reg, 1, v, 1, 100);
@@ -106,6 +107,19 @@ esp_err_t board_init(void) {
 
 bool board_btn_front(void) { return gpio_get_level(BOARD_PIN_BTN_FRONT) == 0; }
 bool board_btn_side(void) { return gpio_get_level(BOARD_PIN_BTN_SIDE) == 0; }
+
+i2c_master_bus_handle_t board_i2c_bus(void) { return s_bus; }
+
+// Enable/disable the AW8737 speaker amp via M5PM1 GPIO3 (push-pull, high = on). Same
+// register dance as the LCD rail on GPIO2; the codec's pa_pin stays -1 because the PA
+// is a PMIC pin, not an ESP32 GPIO (per xiaozhi-esp32 m5stack-stick-s3). Best-effort.
+void board_audio_amp(bool on) {
+    if (!s_pmic) return;
+    reg_upd(R_GPIO_FUNC0, PA_EN_GPIO, 0);   // GPIO3 = plain GPIO
+    reg_upd(R_GPIO_MODE, 0, PA_EN_GPIO);    // output
+    reg_upd(R_GPIO_DRV, PA_EN_GPIO, 0);     // push-pull
+    reg_upd(R_GPIO_OUT, on ? 0 : PA_EN_GPIO, on ? PA_EN_GPIO : 0);  // high → amp on
+}
 
 static esp_err_t read_mv(uint8_t reg, int *mv) {
     if (!s_pmic) return ESP_ERR_INVALID_STATE;

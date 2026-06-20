@@ -75,3 +75,22 @@ h, m)` fails the build even when *you* know `h,m < 60`.
 passed. Redirect to a file and check the real status (`idf.sh build > log 2>&1; echo $?`),
 then grep the log for `error:` / `ninja: build stopped`. (Also seen: a wrapper script
 losing its `+x` bit → `permission denied: ./idf.sh`; `chmod +x` and commit it.)
+
+## ES8311 audio: playback ≠ capture, and the amp may need a kick
+
+`esp_codec_dev` + ES8311 is the same part for record and play, but the config differs:
+an output path is an I²S **TX** channel (`i2s_new_channel(&cfg, &tx, NULL)`),
+`es8311_codec_cfg.codec_mode = ESP_CODEC_DEV_WORK_MODE_DAC`, and
+`esp_codec_dev_cfg.dev_type = ESP_CODEC_DEV_TYPE_OUT` — mirror an existing capture
+component but flip those three. Loudness is free: `esp_codec_dev_set_out_vol(dev, 0..100)`
+— don't scale the PCM for volume, generate it near full-scale and let the codec attenuate.
+Reuse the board's shared I²C bus handle for codec control (pass `.bus_handle`); don't open a
+second bus. **The speaker amp enable is easy to miss:** a class-D PA (e.g. M5's AW8737) has a
+shutdown/enable line, and the DAC opens cleanly with *no error* while the speaker stays
+silent if it's not asserted. It is **not always an ESP32 GPIO** — on the M5StickC S3 the PA
+enable is a **PMIC pin (M5PM1 GPIO3)**, so the codec's `pa_pin` stays `-1` and you toggle the
+amp through the PMIC instead (cross-checked against xiaozhi-esp32's `m5stack-stick-s3` board:
+`AUDIO_CODEC_GPIO_PA = GPIO_NUM_NC`, "PA control via PM1_G3"). Gate the amp to the playback
+window and only enable it once the I²S line is driving silence (`auto_clear`) — powering it
+into a floating input hisses/pops. If a board reference exists for your exact part, read its
+PA wiring before guessing `pa_pin`.

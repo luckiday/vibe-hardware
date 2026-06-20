@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include "esp_err.h"
+#include "driver/i2c_master.h"
 
 // --- pins (mirror pcb/pinmap.yaml) ---
 #define BOARD_PIN_BTN_FRONT 11   // KEY1 (blue, front) — OK / hold = back
@@ -21,8 +22,31 @@
 #define BOARD_PIN_LCD_RST   21
 #define BOARD_PIN_LCD_BL    38   // backlight
 
+// --- audio (ES8311 codec + AW8737 amp over I²S; mirror pcb/pinmap.yaml) ---
+// Pin names follow the codec's perspective:
+//   ES8311_DIN  = codec serial data input  (DSDIN, MCU → codec, speaker path) = GPIO14
+//   ES8311_DOUT = codec serial data output (ASDOUT, codec → MCU, mic path)    = GPIO16
+#define BOARD_PIN_ES8311_MCLK 18
+#define BOARD_PIN_ES8311_BCLK 17
+#define BOARD_PIN_ES8311_LRCK 15
+#define BOARD_PIN_ES8311_DIN  14
+#define BOARD_PIN_ES8311_DOUT 16
+#define BOARD_ES8311_I2C_ADDR 0x18
+
 // Bring up I2C + PMIC (LCD power rail) + buttons. Call once, before ui_init().
 esp_err_t board_init(void);
+
+// The shared I2C master bus (IMU + PMIC + ES8311 codec live on it). Valid after
+// board_init(); NULL if I2C init failed. The audio component needs it for ES8311
+// codec control. (Mirrors voicestick's stick_s3_board_i2c_bus.)
+i2c_master_bus_handle_t board_i2c_bus(void);
+
+// Enable/disable the speaker power amp (AW8737). On the StickC S3 the PA enable is
+// NOT an ESP32 GPIO — it's M5PM1 PMIC GPIO3 (per the xiaozhi-esp32 m5stack-stick-s3
+// board). The audio component gates it to the playback window so the amp isn't
+// powered into a floating I²S line (which hisses) between tones. No-op if the PMIC
+// is absent. Best-effort; the codec's own pa_pin stays -1.
+void board_audio_amp(bool on);
 
 // Buttons (active-low; true = pressed).
 bool board_btn_front(void);

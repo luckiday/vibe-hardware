@@ -34,6 +34,9 @@ transport:
       method: GET
       path: /v1/snapshot
       returns: snapshot
+    settings:                        # device audio settings (the CLI ↔ hub leg)
+      get:  { method: GET,  path: /v1/settings, returns: settings }
+      post: { method: POST, path: /v1/settings, body: settings, response: settings }
 
   # ── leg 2: hub → device (BLE GATT — the pager link, implemented) ──────────────
   # 128-bit UUIDs; the canonical strings differ only in the last byte (role).
@@ -52,6 +55,10 @@ transport:
     resolution:                      # NOTIFY, device → Mac (Level-1, reserved)
       uuid: "00010000-7265-6761-702d-796464756202"
       body: '{ session_id: string, action: string }'   # action: allow | deny | <option label>
+    control:                         # WRITE, Mac → device (audio settings; additive — no version bump)
+      uuid: "00010000-7265-6761-702d-796464756203"
+      body: '{ audio: 0|1, vol: 0..100 }'      # abbreviated keys to fit a small write
+      framing: "[ver=1, flags] + chunk;  flags: 0x01=START 0x02=END"   # same as snapshot
 
 # ── Snapshot — the top-level message ────────────────────────────────────────────
 # A complete picture of all live sessions. The device renders whatever it last
@@ -110,6 +117,24 @@ done:
   summary: string          # one-line result
   files:   "int?"          # files touched (optional)
   tests:   "string?"       # e.g. "8 passed" (optional)
+
+# ── Settings — device AUDIO config (NOT status) ─────────────────────────────────
+# Mac-owned knobs for the pager's alert audio, carried on the `control` BLE
+# characteristic (and the /v1/settings HTTP leg). The hub holds them, the CLI
+# (bridge/pager_settings.py) edits them, ble_push.py relays them to the device, which
+# also persists them in NVS so the first alert after a cold boot honors the last
+# choice. Kept SEPARATE from `snapshot` on purpose: status streams device-ward
+# continuously; settings change rarely and only on user action.
+#
+# Alert *triggering* is DEVICE-owned: the firmware decides WHEN to beep from the
+# snapshots it already receives — it tones when a session newly enters waiting /
+# asking / done, a DISTINCT pattern per state (waiting = urgent double-beep, asking =
+# single mid tone, done = soft descending tone). The wire below carries only WHETHER
+# audio is on and HOW LOUD — never the trigger.
+settings:
+  audio_enabled: bool      # master enable for alert tones (default true)
+  volume:        int       # 0..100, codec output volume (default 60)
+  # On the `control` characteristic the keys are abbreviated: { "audio": 0|1, "vol": 0..100 }
 
 # ── freshness — sessions expire by INACTIVITY, not by SessionEnd ─────────────────
 # SessionEnd is unreliable (a closed / crashed / merely-idle CLI often never fires

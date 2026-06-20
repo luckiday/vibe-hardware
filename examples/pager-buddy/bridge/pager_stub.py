@@ -63,6 +63,47 @@ STATE_LABEL = {
 
 _latest = {"snapshot": None}
 
+# ── audio settings (device-bound; relayed to the pager over BLE) ──────────────────
+# The pager plays an alert tone on needs-you/done; these control it. The CLI
+# (pager_settings.py) POSTs here, ble_push.py polls /v1/settings and writes them to
+# the device's control characteristic. Persisted so they survive a hub restart.
+SETTINGS_PATH = os.path.expanduser(
+    os.environ.get("PAGER_BUDDY_SETTINGS", "~/.pager-buddy/settings.json"))
+DEFAULT_SETTINGS = {"audio_enabled": True, "volume": 60}
+
+
+def _clamp_vol(v) -> int:
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        v = DEFAULT_SETTINGS["volume"]
+    return max(0, min(100, v))
+
+
+def load_settings() -> dict:
+    try:
+        with open(SETTINGS_PATH) as fh:
+            data = json.load(fh)
+        return {"audio_enabled": bool(data.get("audio_enabled", True)),
+                "volume": _clamp_vol(data.get("volume", DEFAULT_SETTINGS["volume"]))}
+    except Exception:
+        return dict(DEFAULT_SETTINGS)
+
+
+def save_settings(s: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+        with open(SETTINGS_PATH, "w") as fh:
+            json.dump(s, fh)
+    except Exception:
+        pass
+
+
+_settings = load_settings()
+# Last per-state counts seen, so the demo bell rings on a NEW needs-you/done (a rise),
+# not on every re-paint — mirrors the firmware's count-based alert trigger.
+_alert_counts = {"waiting": 0, "asking": 0, "done": 0}
+
 
 def color(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m"
@@ -249,6 +290,25 @@ def paint(snapshot: dict) -> None:
     sys.stdout.flush()
 
 
+def maybe_bell(snapshot: dict) -> None:
+    """Demo aid: ring the terminal bell + print a note when a needs-you/done state
+    newly appears, so the stub 'beeps' like the real pager (no hardware needed).
+    Honors the audio_enabled setting; rings once per rise, not on every paint."""
+    sessions = live_sessions(snapshot)
+    cur = {"waiting": 0, "asking": 0, "done": 0}
+    for s in sessions:
+        st = s.get("state")
+        if st in cur:
+            cur[st] += 1
+    fired = next((st for st in ("waiting", "asking", "done")
+                  if cur[st] > _alert_counts[st]), None)
+    _alert_counts.update(cur)
+    if fired and _settings.get("audio_enabled", True):
+        sys.stdout.write("\a")  # terminal bell
+        sys.stdout.write(color("33", f"  🔔 alert: {fired} · vol {_settings['volume']}\n"))
+        sys.stdout.flush()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):  # silence default request logging
         pass
@@ -285,6 +345,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/healthz":
             return self._send(200, {"ok": True})
+        if self.path.startswith("/v1/settings"):
+            return self._send(200, _settings)
         if self.path.startswith("/v1/snapshot"):
             snap = _latest["snapshot"]
             if snap:
@@ -306,6 +368,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path.startswith("/v1/settings"):
+            return self._post_settings()
         if not self.path.startswith("/v1/snapshot"):
             return self._send(404, {"error": "not found"})
         length = int(self.headers.get("Content-Length", 0))
@@ -316,7 +380,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "invalid json"})
         _latest["snapshot"] = snapshot
         paint(snapshot)
+        maybe_bell(snapshot)
         self._send(200, {"ok": True})
+
+    def _post_settings(self):
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b""
+        try:
+            body = json.loads(raw) if raw else {}
+        except Exception:
+            return self._send(400, {"error": "invalid json"})
+        if "audio_enabled" in body:
+            _settings["audio_enabled"] = bool(body["audio_enabled"])
+        if "volume" in body:
+            _settings["volume"] = _clamp_vol(body["volume"])
+        save_settings(_settings)
+        sys.stdout.write(color("36", f"  ⚙ settings: audio "
+                                     f"{'on' if _settings['audio_enabled'] else 'off'} "
+                                     f"· vol {_settings['volume']}\n"))
+        sys.stdout.flush()
+        self._send(200, _settings)
 
 
 def main() -> int:
@@ -347,6 +430,9 @@ def main() -> int:
     shown_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     sys.stdout.write(color("2", f"  listening on http://{args.host}:{args.port}  "
                                 f"(POST /v1/snapshot · Ctrl-C to stop)\n"))
+    sys.stdout.write(color("2", f"  audio {'on' if _settings['audio_enabled'] else 'off'} "
+                                f"· vol {_settings['volume']}  "
+                                f"(change with pager_settings.py → /v1/settings)\n"))
     if UI_DIR:
         sys.stdout.write(color("36", f"  live UI → open http://{shown_host}:{args.port}/\n"))
     sys.stdout.flush()

@@ -37,6 +37,7 @@ except ImportError:
 SERVICE_UUID     = "00010000-7265-6761-702d-796464756200"
 SNAPSHOT_UUID    = "00010000-7265-6761-702d-796464756201"  # WRITE  (Mac → device)
 RESOLUTION_UUID  = "00010000-7265-6761-702d-796464756202"  # NOTIFY (device → Mac, Level-1)
+CONTROL_UUID     = "00010000-7265-6761-702d-796464756203"  # WRITE  (Mac → device, settings)
 
 FRAME_VER   = 1
 FLAG_START  = 0x01
@@ -44,12 +45,16 @@ FLAG_END    = 0x02
 NAME_PREFIX = "pg-"
 
 
-def fetch_snapshot(hub_url: str) -> dict | None:
+def fetch_json(url: str) -> dict | None:
     try:
-        with urllib.request.urlopen(hub_url, timeout=2) as r:
+        with urllib.request.urlopen(url, timeout=2) as r:
             return json.loads(r.read())
     except Exception:
         return None
+
+
+def fetch_snapshot(hub_url: str) -> dict | None:
+    return fetch_json(hub_url)
 
 
 def content_key(snap: dict) -> str:
@@ -99,6 +104,7 @@ async def on_resolution(_handle, data: bytearray):
 
 
 async def run(args: argparse.Namespace) -> int:
+    settings_url = args.hub.replace("/v1/snapshot", "/v1/settings")
     while True:  # reconnect loop
         dev = await find_device(args.adapter)
         try:
@@ -112,7 +118,9 @@ async def run(args: argparse.Namespace) -> int:
                 except Exception:
                     pass  # resolution is Level-1; ok if absent
 
+                # Both keys reset per connection → snapshot + settings re-push on reconnect.
                 last_key = None
+                last_settings_key = None
                 while client.is_connected:
                     snap = fetch_snapshot(args.hub)
                     if snap is not None:
@@ -125,6 +133,25 @@ async def run(args: argparse.Namespace) -> int:
                             n = len(snap.get("sessions", []))
                             print(f"[ble] → snapshot ({len(body)}B, {n} session(s))")
                             last_key = key
+
+                    # Audio settings → the control characteristic (compact {audio,vol}).
+                    st = fetch_json(settings_url)
+                    if st is not None:
+                        skey = json.dumps(st, sort_keys=True, separators=(",", ":"))
+                        if skey != last_settings_key:
+                            payload = json.dumps(
+                                {"audio": 1 if st.get("audio_enabled", True) else 0,
+                                 "vol": int(st.get("volume", 60))},
+                                separators=(",", ":")).encode()
+                            try:
+                                for fr in frame_chunks(payload, chunk):
+                                    await client.write_gatt_char(CONTROL_UUID, fr, response=False)
+                                print(f"[ble] → settings {payload.decode()}")
+                                last_settings_key = skey
+                            except Exception as e:
+                                # control char may be absent on older firmware — don't
+                                # let it kill the snapshot path; retry next loop.
+                                print(f"[ble] settings write skipped ({e})")
                     await asyncio.sleep(args.interval)
         except Exception as e:
             print(f"[ble] disconnected ({e}); rescanning…")

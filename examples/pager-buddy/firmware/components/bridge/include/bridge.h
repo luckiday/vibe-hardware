@@ -43,6 +43,12 @@ const char *bridge_device_name(void);  // "pg-XXXX" — for an on-screen pairing
 const bridge_view_t *bridge_borrow(void);
 void                 bridge_release(void);
 
+// Audio settings pushed by the Mac over the control characteristic (Mac-owned).
+// Returns true and fills *enabled/*volume only when the settings CHANGED since the
+// last call (edge-triggered) — main then applies them to the audio component. The
+// bridge stays a pure receiver; it never touches audio itself.
+bool bridge_take_settings(bool *enabled, int *volume);
+
 // Level-1 (reserved, two-way): notify a decision back to the Mac over the
 // resolution characteristic. action = "allow" | "deny" | <option label>.
 esp_err_t bridge_send_resolution(const char *session_id, const char *action);

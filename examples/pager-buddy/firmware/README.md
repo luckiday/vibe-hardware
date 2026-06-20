@@ -30,8 +30,12 @@ components/stick_s3_board/   BSP — the only home for pins; brings up I²C, pow
                              LCD rail via the M5PM1 PMIC, owns buttons + battery
 components/ui/               ST7789 + LVGL bring-up and the screen renderers
 components/bridge/           BLE (NimBLE) peripheral; reassembles + parses snapshot
-                             JSON into the shared app model (a pure data producer)
-main/main.c                  thin: state machine + button poll + binds live/stub + render
+                             JSON into the shared app model (a pure data producer);
+                             also receives audio settings on the control characteristic
+components/audio/            ES8311 (DAC) + AW8737 over I²S; alert tones + NVS-backed
+                             enable/volume (a self-contained FreeRTOS task)
+main/main.c                  thin: state machine + button poll + binds live/stub + render;
+                             fires alert tones + applies pushed audio settings
 ```
 
 Pins live in [`components/stick_s3_board/include/stick_s3_board.h`](components/stick_s3_board/include/stick_s3_board.h)
@@ -91,5 +95,11 @@ cp main/secrets.example.h main/secrets.h   # then fill it in — never commit se
       the Mac bridge ([`../bridge/`](../bridge/)) into the live model (`bridge`).
 - [ ] **Two-way + page** — device → Mac approve/answer over the resolution
       characteristic; screen flashes / wakes on a new "needs you".
-- [ ] **Audio "buzz"** — ES8311 + AW8737 over I²S → a short tone on a page.
+- [x] **Audio "buzz"** — ES8311 (DAC) + AW8737 over I²S → a distinct alert tone when a
+      session newly enters waiting/asking/done (`audio` component). Enable/volume are
+      Mac-controlled via the bridge `control` characteristic (`../bridge/pager_settings.py`)
+      and persisted in NVS; FRONT = ACK/silence. The speaker amp enable is **M5PM1 PMIC
+      GPIO3** (not an ESP32 GPIO — confirmed against xiaozhi-esp32's `m5stack-stick-s3`),
+      driven by `board_audio_amp()` and gated to the playback window. Builds + boots on
+      the device (`audio: ready`); confirm the tone is audible on your unit.
 - [ ] **OTA** — only after a real-hardware soak test (heap/reboots, failure paths).
