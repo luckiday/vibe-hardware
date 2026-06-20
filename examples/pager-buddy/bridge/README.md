@@ -119,7 +119,7 @@ Config via env (read by the hook): `PAGER_BUDDY_URL`, `PAGER_BUDDY_STATE`,
 | [protocol.yaml](protocol.yaml) | **The contract.** Wire format + the two transports (HTTP hub, BLE device). Versioned. |
 | [claude_pager_hook.py](claude_pager_hook.py) | Hook command: stdin event → registry → POST snapshot. `--demo` to self-drive. |
 | [pager_stub.py](pager_stub.py) | The hub: `POST/GET /v1/snapshot`, ASCII screen, serves the web mock (`--ui`). |
-| [ble_push.py](ble_push.py) | BLE central: polls the hub, writes framed snapshots **and audio settings** to the device. `pip install bleak`. |
+| [ble_push.py](ble_push.py) | BLE central: polls the hub, writes framed snapshots **and audio settings** to the device. Writes are change-gated (idle = zero BLE traffic) and the hub poll **backs off** when nothing changes (`--idle-interval`, default 10 s; snaps back to `--interval` on the next change). `pip install bleak`. |
 | [pager_settings.py](pager_settings.py) | The **audio settings session**: enable/disable alert audio + set volume (interactive, or `--audio on/off --volume N`). Talks to the hub; the relay forwards to the device. |
 | [install_hooks.py](install_hooks.py) | Idempotent install / uninstall / status for `~/.claude/settings.json`. |
 

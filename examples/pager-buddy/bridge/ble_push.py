@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import functools
 import json
+import os
 import sys
 import urllib.request
 
@@ -147,7 +148,16 @@ async def run(args: argparse.Namespace) -> int:
                 # Both keys reset per connection → snapshot + settings re-push on reconnect.
                 last_key = None
                 last_settings_key = None
+                # Adaptive poll: run fast while things change, then ease off toward
+                # --idle-interval when nothing has for a while (idle = no snapshot/settings
+                # change — typically Claude Code isn't running). Any change snaps back to
+                # --interval at once. We never stop polling, so the device still updates;
+                # idle just means we check the (local) hub less often. The device-ward
+                # write path is already change-gated, so idle = zero BLE traffic regardless.
+                interval = args.interval
+                idle = False
                 while client.is_connected:
+                    changed = False
                     snap = fetch_snapshot(args.hub)
                     if snap is not None:
                         key = content_key(snap)
@@ -159,6 +169,7 @@ async def run(args: argparse.Namespace) -> int:
                             n = len(snap.get("sessions", []))
                             print(f"[ble] → snapshot ({len(body)}B, {n} session(s))")
                             last_key = key
+                            changed = True
 
                     # Audio settings → the control characteristic (compact {audio,vol}).
                     st = fetch_json(settings_url)
@@ -174,11 +185,23 @@ async def run(args: argparse.Namespace) -> int:
                                     await client.write_gatt_char(CONTROL_UUID, fr, response=False)
                                 print(f"[ble] → settings {payload.decode()}")
                                 last_settings_key = skey
+                                changed = True
                             except Exception as e:
                                 # control char may be absent on older firmware — don't
                                 # let it kill the snapshot path; retry next loop.
                                 print(f"[ble] settings write skipped ({e})")
-                    await asyncio.sleep(args.interval)
+
+                    if changed:
+                        if idle:
+                            print(f"[ble] activity — polling every {args.interval:g}s")
+                        interval, idle = args.interval, False
+                    elif interval < args.idle_interval:
+                        # geometric ramp toward the idle cap (~20 s of quiet to settle)
+                        interval = min(args.idle_interval, interval * 1.5)
+                        if interval >= args.idle_interval and not idle:
+                            idle = True
+                            print(f"[ble] idle — backing off to {args.idle_interval:g}s polls")
+                    await asyncio.sleep(interval)
         except Exception as e:
             print(f"[ble] disconnected ({e}); rescanning…")
         await asyncio.sleep(1.0)
@@ -188,9 +211,16 @@ def main() -> int:
     p = argparse.ArgumentParser(description="relay snapshots to the pager over BLE")
     p.add_argument("--hub", default="http://127.0.0.1:8787/v1/snapshot",
                    help="bridge hub snapshot endpoint to poll (default: local pager_stub.py)")
-    p.add_argument("--interval", type=float, default=1.0, help="hub poll seconds (default 1.0)")
+    p.add_argument("--interval", type=float, default=1.0,
+                   help="active hub poll seconds (default 1.0)")
+    p.add_argument("--idle-interval", type=float,
+                   default=float(os.environ.get("PAGER_BUDDY_IDLE_POLL", "10")),
+                   help="idle poll seconds — ramp here when nothing changes, e.g. Claude "
+                        "Code isn't running (default 10; set == --interval to disable)")
     p.add_argument("--adapter", default=None, help="BLE adapter (Linux hciX; ignored on macOS)")
     args = p.parse_args()
+    if args.idle_interval < args.interval:   # an idle cap below the active rate is nonsense
+        args.idle_interval = args.interval
     try:
         return asyncio.run(run(args))
     except KeyboardInterrupt:
