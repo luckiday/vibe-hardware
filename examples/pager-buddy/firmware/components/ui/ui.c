@@ -172,6 +172,21 @@ static const char *state_label(sess_state_t s) {
         default:         return "error";
     }
 }
+// Abbreviate an app/terminal name so the list meta row fits one line next to the agent +
+// state: multi-word or CamelCase -> initials ("VS Code" -> "VSC"); single word -> 3 + "."
+// ("Terminal" -> "Ter."). lv_label copies the text, so a caller stack buffer is fine.
+static const char *term_short(const char *s, char *buf, size_t n) {
+    int c = 0; bool sep = true;
+    for (const char *p = s; *p && c < (int)n - 1; p++) {
+        if (*p == ' ' || *p == '-' || *p == '_') { sep = true; continue; }
+        if (sep || (*p >= 'A' && *p <= 'Z')) buf[c++] = *p;   // word-initial or interior capital
+        sep = false;
+    }
+    if (c >= 2) { buf[c] = 0; return buf; }                    // >=2 initials -> "VSC"
+    int i = 0; for (; s[i] && i < 3 && i < (int)n - 2; i++) buf[i] = s[i];
+    buf[i++] = '.'; buf[i] = 0;                                // else first 3 + "."
+    return buf;
+}
 static lv_obj_t *mk_label(lv_obj_t *p, const char *txt, const lv_font_t *f, uint32_t c) {
     lv_obj_t *l = lv_label_create(p);
     lv_label_set_text(l, txt);
@@ -201,6 +216,14 @@ static void rule(lv_obj_t *scr, int y) {
     lv_obj_set_style_bg_opa(r, LV_OPA_COVER, 0);
     lv_obj_align(r, LV_ALIGN_TOP_MID, 0, y);
 }
+// soft-white hairline — brackets the idle status band and serves as the menu divider
+static void wrule(lv_obj_t *scr, int y) {
+    lv_obj_t *r = mk_box(scr);
+    lv_obj_set_size(r, HRES, 1);
+    lv_obj_set_style_bg_color(r, lv_color_hex(C_FG), 0);
+    lv_obj_set_style_bg_opa(r, LV_OPA_50, 0);
+    lv_obj_align(r, LV_ALIGN_TOP_MID, 0, y);
+}
 
 // ---------- Teenage-Engineering line-art kit ----------
 // Procedural 1px neon line-art (lv_line / lv_arc / lv_anim) — no image assets, nothing to
@@ -210,7 +233,7 @@ static void rule(lv_obj_t *scr, int y) {
 static const lv_point_precise_t bt_pts[]    = {{4,5},{10,9},{7,12},{7,2},{10,5},{4,9}};  // bluetooth rune
 static const lv_point_precise_t slash_pts[] = {{1,1},{11,13}};                            // offline slash
 static const lv_point_precise_t chk_pts[]   = {{1,6},{5,10},{12,2}};                      // check
-static const lv_point_precise_t dchev_pts[] = {{1,3},{6,8},{11,3}};                       // down chevron (SIDE)
+static const lv_point_precise_t rchev_pts[] = {{3,1},{8,6},{3,11}};                       // right chevron ">" (next/menu)
 static const lv_point_precise_t lchev_pts[] = {{8,1},{3,6},{8,11}};                       // left chevron (back)
 static const lv_point_precise_t tri_pts[]   = {{7,1},{13,13},{1,13},{7,1}};               // warning triangle
 static const lv_point_precise_t excl_pts[]  = {{7,5},{7,9}};                              // warning "!" stem
@@ -290,8 +313,8 @@ static void icon_battery(lv_obj_t *scr, const app_model_t *m) {
 // The lv_anim is driven by lv_timer_handler (ui_tick); lv_obj_clean deletes the anims with
 // the objects, so a rebuild just restarts the pulse. The 1 Hz tick uses ui_refresh_time
 // (no clean), so the animation runs uninterrupted between the infrequent idle rebuilds.
-#define RING_MIN 8
-#define RING_MAX 52
+#define RING_MIN 10
+#define RING_MAX 90
 static void ring_anim_cb(void *var, int32_t v) {   // v: 0..1000
     lv_obj_t *r = (lv_obj_t *)var;
     int sz = RING_MIN + (RING_MAX - RING_MIN) * v / 1000;
@@ -299,10 +322,10 @@ static void ring_anim_cb(void *var, int32_t v) {   // v: 0..1000
     lv_obj_align(r, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_border_opa(r, (lv_opa_t)(LV_OPA_COVER - v * LV_OPA_COVER / 1000), 0);
 }
-static void hero_rings(lv_obj_t *scr, uint32_t color, bool agitated) {
+static void hero_rings(lv_obj_t *scr, uint32_t color, bool agitated, int dy) {
     lv_obj_t *box = mk_box(scr);
     lv_obj_set_size(box, RING_MAX, RING_MAX);
-    lv_obj_align(box, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_align(box, LV_ALIGN_CENTER, 0, dy);
     uint32_t dur = agitated ? 1400 : 2600;
     for (int i = 0; i < 3; i++) {
         lv_obj_t *r = mk_box(box);
@@ -322,7 +345,7 @@ static void hero_rings(lv_obj_t *scr, uint32_t color, bool agitated) {
         lv_anim_start(&a);
     }
     lv_obj_t *d = mk_box(box);   // steady center dot
-    lv_obj_set_size(d, 7, 7);
+    lv_obj_set_size(d, 9, 9);
     lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(d, lv_color_hex(color), 0);
     lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
@@ -374,11 +397,8 @@ static void status_bar(lv_obj_t *scr, const app_model_t *m) {
 typedef enum { FI_NONE, FI_OK, FI_DOWN, FI_BACK } foot_icon_t;
 static void foot_side(lv_obj_t *scr, bool left, foot_icon_t k, const char *label) {
     if (k == FI_NONE && (!label || !label[0])) return;
-    lv_obj_t *tag = mk_box(scr);
+    lv_obj_t *tag = mk_box(scr);            // no frame — just the button glyph + white label
     lv_obj_set_size(tag, LV_SIZE_CONTENT, 13);
-    lv_obj_set_style_border_width(tag, 1, 0);
-    lv_obj_set_style_border_color(tag, lv_color_hex(C_LINE), 0);
-    lv_obj_set_style_pad_hor(tag, 3, 0);
     lv_obj_set_flex_flow(tag, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(tag, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(tag, 3, 0);
@@ -387,17 +407,17 @@ static void foot_side(lv_obj_t *scr, bool left, foot_icon_t k, const char *label
         lv_obj_set_size(pill, 11, 6);
         lv_obj_set_style_radius(pill, 3, 0);
         lv_obj_set_style_border_width(pill, 1, 0);
-        lv_obj_set_style_border_color(pill, lv_color_hex(C_DIM), 0);
+        lv_obj_set_style_border_color(pill, lv_color_hex(C_FG), 0);
     } else if (k == FI_DOWN) {
-        add_line(tag, dchev_pts, 3, C_DIM);
+        add_line(tag, rchev_pts, 3, C_FG);  // ">" = next / menu
     } else if (k == FI_BACK) {
-        add_line(tag, lchev_pts, 3, C_DIM);
+        add_line(tag, lchev_pts, 3, C_FG);
     }
-    if (label && label[0]) mk_label(tag, label, &lv_font_montserrat_10, C_DIM);
-    lv_obj_align(tag, left ? LV_ALIGN_BOTTOM_LEFT : LV_ALIGN_BOTTOM_RIGHT, left ? 3 : -3, -2);
+    if (label && label[0]) mk_label(tag, label, &lv_font_montserrat_10, C_FG);
+    lv_obj_align(tag, left ? LV_ALIGN_BOTTOM_LEFT : LV_ALIGN_BOTTOM_RIGHT, left ? 4 : -4, -2);
 }
 static void footer(lv_obj_t *scr, foot_icon_t li, const char *ll, foot_icon_t ri, const char *rl) {
-    rule(scr, VRES - 16);
+    wrule(scr, VRES - 16);                  // soft-white divider above the menu (= status's line below)
     foot_side(scr, true, li, ll);
     foot_side(scr, false, ri, rl);
 }
@@ -438,32 +458,43 @@ static void choices(lv_obj_t *scr, const char *a, const char *b, int sel, bool d
 
 // ---------- screens ----------
 static void view_idle(lv_obj_t *scr, const app_model_t *m) {
-    int need = 0;
-    for (int i = 0; i < m->n; i++)
-        if (m->sessions[i].state == ST_WAITING || m->sessions[i].state == ST_ASKING) need++;
+    // Home glance color = the most action-needing state, consistent with the per-session
+    // palette: error(red) > needs-you/asking(amber) > working(blue) > all done(green).
+    int need = 0, work = 0, err = 0;
+    for (int i = 0; i < m->n; i++) {
+        switch (m->sessions[i].state) {
+            case ST_WAITING: case ST_ASKING: need++; break;
+            case ST_WORKING: work++; break;
+            case ST_ERROR:   err++;  break;
+            default: break;                       // ST_DONE
+        }
+    }
+    uint32_t col; char l2[20];
+    if      (err)  { col = C_ERR;  snprintf(l2, sizeof l2, "%d error", err); }
+    else if (need) { col = C_WAIT; snprintf(l2, sizeof l2, "%d need you", need); }
+    else if (work) { col = C_WORK; snprintf(l2, sizeof l2, "%d working", work); }
+    else           { col = C_DONE; snprintf(l2, sizeof l2, "all clear"); }
 
-    hero_rings(scr, need ? C_WAIT : C_DONE, need > 0);   // status-aware breathing-rings mark
-
-    lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_40, C_FG);
-    lv_obj_align(clk, LV_ALIGN_CENTER, 0, -6);
-    s_clk_big = clk;   // ui_refresh_time() ticks this in place — the one and only clock here
+    // iPhone-style stack: date + time at the top, the ring fills the square in the middle,
+    // a white status band at the bottom. A little extra breathing room around the text.
     lv_obj_t *date = mk_label(scr, m->date, &lv_font_montserrat_12, C_DIM);
-    lv_obj_align(date, LV_ALIGN_CENTER, 0, 22);
+    lv_obj_align(date, LV_ALIGN_TOP_MID, 0, 18);
+    lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_40, C_FG);
+    lv_obj_align(clk, LV_ALIGN_TOP_MID, 0, 30);
+    s_clk_big = clk;   // ui_refresh_time() ticks this in place — the one and only clock here
 
-    // summary as a wide, two-line framed box (near full width, centered text)
-    uint32_t sc = need ? C_WAIT : C_DIM;
+    // the breathing ring fills the square gap between the clock and the status band; color = status
+    hero_rings(scr, col, need || err, 13);
+
+    // status band: white text (same as the clock + menu), no box and no line above — the
+    // footer's soft-white divider is the only line; the text gets some padding above it.
     char sum[40];
-    if (need) snprintf(sum, sizeof sum, "%d sessions\n%d need you", m->n, need);
-    else      snprintf(sum, sizeof sum, "%d sessions\nall clear", m->n);
-    lv_obj_t *sbox = mk_box(scr);
-    lv_obj_set_size(sbox, HRES - 12, LV_SIZE_CONTENT);
-    lv_obj_set_style_border_width(sbox, 1, 0);
-    lv_obj_set_style_border_color(sbox, lv_color_hex(sc), 0);
-    lv_obj_set_style_pad_ver(sbox, 3, 0);
-    lv_obj_t *sl = mk_label(sbox, sum, &lv_font_montserrat_12, sc);
-    lv_obj_set_width(sl, lv_pct(100));
+    snprintf(sum, sizeof sum, "%d sessions\n%s", m->n, l2);
+    lv_obj_t *sl = mk_label(scr, sum, &lv_font_montserrat_12, C_FG);
+    lv_obj_set_width(sl, HRES);
     lv_obj_set_style_text_align(sl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sbox, LV_ALIGN_CENTER, 0, 50);
+    lv_obj_set_style_text_line_space(sl, 3, 0);
+    lv_obj_align(sl, LV_ALIGN_BOTTOM_MID, 0, -23);
     footer(scr, FI_OK, "OPEN", FI_DOWN, "MENU");
 }
 
@@ -537,18 +568,21 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
             lv_obj_set_height(l2, LV_SIZE_CONTENT);
             lv_obj_set_flex_flow(l2, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(l2, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-            lv_obj_set_style_pad_column(l2, 4, 0);
-            lv_obj_set_style_pad_left(l2, 11, 0);
+            lv_obj_set_style_pad_column(l2, 3, 0);
+            lv_obj_set_style_pad_left(l2, 8, 0);
             mk_chip(l2, s->agent, &lv_font_montserrat_10, C_DIM);
-            if (s->term && s->term[0]) mk_chip(l2, s->term, &lv_font_montserrat_10, C_DIM);
+            if (s->term && s->term[0]) {
+                char tb[8];
+                mk_chip(l2, term_short(s->term, tb, sizeof tb), &lv_font_montserrat_10, C_DIM);
+            }
             mk_label(l2, state_label(s->state), &lv_font_montserrat_10, state_color(s->state));
         }
     }
     s_age_n = m->n < UI_MAX_ROWS ? m->n : UI_MAX_ROWS;
     if (m->n == 0) {
-        hero_rings(scr, C_DONE, false);     // same calm breathing mark as idle
+        hero_rings(scr, C_DONE, false, -26);   // same calm breathing mark as idle
         lv_obj_t *ph = mk_chip(scr, "no active tasks", &lv_font_montserrat_10, C_DIM);
-        lv_obj_align(ph, LV_ALIGN_CENTER, 0, 8);
+        lv_obj_align(ph, LV_ALIGN_CENTER, 0, 32);
     }
     if (sel_row) {                          // flex sizes aren't computed until layout runs
         lv_obj_update_layout(c);            // so update first, then scroll the row into view

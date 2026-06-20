@@ -6,6 +6,19 @@ const el = (id) => document.getElementById(id);
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// Abbreviate an app/terminal name so the list meta row fits one line: multi-word or
+// CamelCase -> initials ("VS Code" -> "VSC"); single word -> first 3 + "." ("Terminal" -> "Ter.").
+function abbrev(s) {
+  if (!s) return "";
+  let caps = "", sep = true;
+  for (const ch of s) {
+    if (ch === " " || ch === "-" || ch === "_") { sep = true; continue; }
+    if (sep || (ch >= "A" && ch <= "Z")) caps += ch;
+    sep = false;
+  }
+  return caps.length >= 2 ? caps : s.slice(0, 3) + ".";
+}
+
 const S = { view: "idle", sel: 0, openId: null };
 let playTimer = null;
 
@@ -96,7 +109,7 @@ const IC = {
   check: (w = 10) => svg(`<path d="M4 13l5 5L20 6"/>`, w),
   warn:  (w = 11) => svg(`<path d="M12 3l10 17H2L12 3z"/><path d="M12 10v4"/><path d="M12 17v.4"/>`, w),
   ask:   (w = 11) => svg(`<rect x="3" y="4" width="18" height="13"/><path d="M3 17v4l5-4"/>`, w),  // speech box
-  chev:  (w = 9)  => svg(`<path d="M5 9l7 7 7-7"/>`, w),                                       // SIDE = scroll/next
+  chev:  (w = 9)  => svg(`<path d="M9 5l7 7-7 7"/>`, w),                                        // ">" = next / menu
   back:  (w = 10) => svg(`<path d="M11 6l-5 5 5 5"/><path d="M6 11h13"/>`, w),
   front: (w = 11) => svg(`<rect x="3" y="8" width="18" height="8"/>`, w),                      // the FRONT pill = OK
 };
@@ -133,29 +146,44 @@ function footer(l, r) {
 }
 function dot(state) { return `<span class="dot s-${state}"></span>`; }
 
-// breathing-rings hero: color = status (green all-clear / amber needs-you), `agi` = faster pulse
-function rings(need) {
-  const cls = need ? "c-waiting agi" : "c-done";
-  return `<div class="rings ${cls}"><span></span><span></span><span></span></div>`;
+// breathing-rings hero — `cls` is the status color class, `agi` = faster pulse
+function rings(cls, agi) {
+  return `<div class="rings c-${cls} ${agi ? "agi" : ""}"><span></span><span></span><span></span></div>`;
+}
+
+// Overall home-glance status. PRIORITY — the most action-needing state wins, so the home
+// never masks something that needs you (mirrors firmware view_idle):
+//   error (red)  >  needs-you/asking (amber)  >  working (blue)  >  all done (green)
+function homeStatus() {
+  let need = 0, work = 0, err = 0;
+  for (const s of D.sessions) {
+    if (s.state === "waiting" || s.state === "asking") need++;
+    else if (s.state === "working") work++;
+    else if (s.state === "error") err++;
+  }
+  if (err)  return { cls: "error",   l2: `${err} error`,     agi: true };
+  if (need) return { cls: "waiting", l2: `${need} need you`, agi: true };
+  if (work) return { cls: "working", l2: `${work} working`,  agi: false };
+  return { cls: "done", l2: "all clear", agi: false };
 }
 
 function viewIdle() {
-  const { total, need } = counts();
-  const line1 = `${total} sessions`;
-  const line2 = need > 0 ? `${need} need you` : `all clear`;
+  const st = homeStatus();
+  const line1 = `${D.sessions.length} sessions`;
+  // iPhone-style stack: date + time grouped at top, icon in the middle, status at the bottom
   return `<div class="content"><div class="idle">` +
-    rings(need > 0) +
-    `<div class="clock-big">${esc(D.clock)}</div>` +
-    `<div class="date">${esc(D.date)}</div>` +
-    `<div class="tag summary ${need > 0 ? "need" : ""}">${esc(line1)}<br>${esc(line2)}</div>` +
+    `<div class="ihead"><div class="date">${esc(D.date)}</div>` +
+    `<div class="clock-big">${esc(D.clock)}</div></div>` +
+    rings(st.cls, st.agi) +
+    `<div class="summary">${esc(line1)}<br>${esc(st.l2)}</div>` +
     `</div></div>` + footer(tag(IC.front(), "open"), tag(IC.chev(), "menu"));
 }
 
 function viewList() {
   if (!D.sessions.length) {
     return `<div class="content"><div class="idle">` +
-      rings(false) +
-      `<div class="tag summary">no active tasks</div>` +
+      rings("done", false) +
+      `<div class="summary">no active tasks</div>` +
       `</div></div>` + footer("", tag(IC.back(), "back"));
   }
   const rows = D.sessions.map((s, i) => {
@@ -165,7 +193,8 @@ function viewList() {
       `<div class="l1">${dot(s.state)}<span class="name">${esc(s.name)}</span>` +
       `<span class="age">${esc(s.age)}</span></div>` +
       `<div class="l2"><span class="chip">${esc(s.agent)}</span>` +
-      `<span class="lstate c-${s.state}">${STATE_LABEL[s.state]}</span></div>` +  // term shown on the session screen
+      `<span class="chip">${esc(abbrev(s.term))}</span>` +  // abbreviated so agent+term+state fit one row
+      `<span class="lstate c-${s.state}">${STATE_LABEL[s.state]}</span></div>` +
       `</div>`;
   }).join("");
   return `<div class="content">${rows}</div>` + footer(tag(IC.front(), "open"), tag(IC.chev(), "next"));

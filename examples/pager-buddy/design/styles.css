@@ -159,15 +159,21 @@ body {
 .footer {
   height: 16px; flex: 0 0 16px;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 5px; border-top: 1px solid var(--line);
+  padding: 0 5px; border-top: 1px solid rgba(230, 233, 239, .5);   /* soft-white menu divider */
 }
+.footer .tag { border: 0; padding: 0; color: var(--fg); }   /* menu hints: no box, white text */
 
 /* ---------- idle / glance: breathing-rings hero + single clock ---------- */
-.idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
-.rings { position: relative; width: 56px; height: 50px; color: var(--done); }   /* color = status */
+/* iPhone-style stack: date+time at top, icon in the middle, status at the bottom */
+.idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 8px 0 6px; }
+.ihead { display: flex; flex-direction: column; align-items: center; gap: 1px; }   /* date over time */
+/* ring/summary color follows status priority: error > needs-you > working > all done */
+.rings { position: relative; width: 88px; height: 82px; color: var(--done); }   /* big square; c-done = green */
 .rings.c-waiting { color: var(--waiting); }
+.rings.c-working { color: var(--working); }
+.rings.c-error   { color: var(--error); }
 .rings span {
-  position: absolute; inset: 0; margin: auto; width: 14px; height: 14px;
+  position: absolute; inset: 0; margin: auto; width: 16px; height: 16px;
   border: 1px solid currentColor; border-radius: 50%; opacity: 0;
   animation: ring 2.6s ease-out infinite;
 }
@@ -176,18 +182,19 @@ body {
 .rings.agi span { animation-duration: 1.4s; }   /* needs-you → pulse faster */
 .rings::after {                                  /* steady center dot */
   content: ""; position: absolute; inset: 0; margin: auto;
-  width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+  width: 9px; height: 9px; border-radius: 50%; background: currentColor;
 }
-@keyframes ring {
+@keyframes ring {            /* grow to fill the square (base 16px → ~77px) */
   0%   { transform: scale(.35); opacity: .85; }
   80%  { opacity: .12; }
-  100% { transform: scale(2.5); opacity: 0; }
+  100% { transform: scale(4.8); opacity: 0; }
 }
 .clock-big { font-size: 40px; letter-spacing: 1px; color: var(--fg); font-weight: 300; }
 .date { font-size: 9px; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; }
-/* summary: a wide, two-line framed box (overrides the inline-flex .tag) */
-.summary { display: block; width: calc(100% - 12px); text-align: center; line-height: 1.45; padding: 3px 4px; }
-.summary.need { color: var(--waiting); }
+/* status band: white text (same as the clock + menu), no box — a hairline above it; the
+   footer's top border is the line below */
+.summary { display: block; width: 100%; text-align: center; color: var(--fg); font-size: 9.5px;
+  letter-spacing: .3px; line-height: 1.6; padding: 7px 4px 5px; }
 
 /* ---------- session list ---------- */
 .row { padding: 3px 4px; border: 1px solid transparent; }
