@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import sys
 import urllib.request
@@ -96,26 +97,33 @@ async def find_device(adapter: str | None):
         print("[ble] none yet, retrying…")
 
 
-async def forward_resolution(hub_url: str, _handle, data: bytearray):
-    """Forward device resolution (user selection) to the hub."""
+def _post_resolution(res_url: str, res: dict) -> dict:
+    req = urllib.request.Request(
+        res_url, data=json.dumps(res).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=2) as r:
+        return json.loads(r.read())
+
+
+async def forward_resolution(hub_url: str, _sender, data: bytearray):
+    """Forward a device resolution (the user's on-device selection) to the hub.
+
+    Registered with bleak as an async (coroutine) callback so bleak awaits it — a
+    plain function returning a coroutine would be left un-awaited (bleak 3.x only
+    awaits `iscoroutinefunction` callbacks). The blocking HTTP POST is offloaded to
+    a thread so it doesn't stall the BLE loop (which is also pushing snapshots)."""
     try:
-        res = json.loads(data)
-        print(f"[ble] ← resolution {res}")
-        res_url = hub_url.replace("/v1/snapshot", "/v1/resolution")
-        try:
-            req = urllib.request.Request(
-                res_url,
-                data=json.dumps(res).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=2) as r:
-                reply = json.loads(r.read())
-                print(f"[ble] → hub /v1/resolution {reply}")
-        except Exception as e:
-            print(f"[ble] hub forward failed ({e})")
-    except json.JSONDecodeError:
+        res = json.loads(bytes(data))
+    except (json.JSONDecodeError, UnicodeDecodeError):
         print(f"[ble] ← resolution {bytes(data)!r}")
+        return
+    print(f"[ble] ← resolution {res}")
+    res_url = hub_url.replace("/v1/snapshot", "/v1/resolution")
+    try:
+        reply = await asyncio.to_thread(_post_resolution, res_url, res)
+        print(f"[ble] → hub /v1/resolution {reply}")
+    except Exception as e:
+        print(f"[ble] hub forward failed ({e})")
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -129,10 +137,10 @@ async def run(args: argparse.Namespace) -> int:
                 chunk = max(20, mtu - 3 - 2)
                 print(f"[ble] connected (MTU {mtu}, chunk {chunk}B). pushing snapshots…")
                 try:
+                    # functools.partial of an async fn stays a coroutine function, so
+                    # bleak awaits it (a lambda would not be — see forward_resolution).
                     await client.start_notify(
-                        RESOLUTION_UUID,
-                        lambda h, d: forward_resolution(args.hub, h, d)
-                    )
+                        RESOLUTION_UUID, functools.partial(forward_resolution, args.hub))
                 except Exception:
                     pass  # resolution is Level-1; ok if absent
 
