@@ -22,7 +22,6 @@ static const char *TAG = "audio";
 
 #define AUDIO_SAMPLE_RATE 16000
 #define GEN_CHUNK         256          // samples per esp_codec_dev_write
-#define FADE_MS           4            // raised edge to avoid clicks
 #define QUEUE_DEPTH       4
 #define NVS_NS            "audio"
 
@@ -159,14 +158,17 @@ static void release(void) {
     if (s_tx)       { i2s_channel_disable(s_tx); i2s_del_channel(s_tx); s_tx = NULL; }
 }
 
-// Generate a frequency glide f0→f1 (f0==f1 ⇒ steady tone) for `ms`, with short raised
-// edges so it doesn't click, and stream it to the codec. Bails early on audio_stop().
+// Generate a frequency glide f0→f1 (f0==f1 ⇒ steady tone) for `ms`.
+// Synthesis: fundamental + 2× harmonic (0.72·sin(f) + 0.22·sin(2f)) for warmth.
+// Envelope: 8ms attack, 40ms decay tail, for natural chime-like release.
+// Bails early on audio_stop().
 static void gen(double f0, double f1, int ms) {
     if (!s_codec) return;
-    const int total = AUDIO_SAMPLE_RATE * ms / 1000;
-    const int fade  = AUDIO_SAMPLE_RATE * FADE_MS / 1000;
+    const int total  = AUDIO_SAMPLE_RATE * ms / 1000;
+    const int attack = AUDIO_SAMPLE_RATE * 8  / 1000;
+    const int decay  = AUDIO_SAMPLE_RATE * 40 / 1000;
     static int16_t buf[GEN_CHUNK];
-    double phase = 0;
+    double phase1 = 0, phase2 = 0;
     int done = 0;
     while (done < total && !atomic_load(&s_abort)) {
         int n = total - done; if (n > GEN_CHUNK) n = GEN_CHUNK;
@@ -174,12 +176,16 @@ static void gen(double f0, double f1, int ms) {
             int pos = done + i;
             double frac = (double)pos / total;
             double f = f0 + (f1 - f0) * frac;
-            phase += 2.0 * M_PI * f / AUDIO_SAMPLE_RATE;
-            if (phase > 2.0 * M_PI) phase -= 2.0 * M_PI;
-            double env = 1.0;                                   // click-free edges
-            if (pos < fade)            env = (double)pos / fade;
-            else if (pos > total - fade) env = (double)(total - pos) / fade;
-            buf[i] = (int16_t)(0.6 * 32767.0 * env * sin(phase));
+            phase1 += 2.0 * M_PI * f       / AUDIO_SAMPLE_RATE;
+            phase2 += 2.0 * M_PI * (f*2.0) / AUDIO_SAMPLE_RATE;
+            if (phase1 > 2.0*M_PI) phase1 -= 2.0*M_PI;
+            if (phase2 > 2.0*M_PI) phase2 -= 2.0*M_PI;
+            double env;
+            if      (pos < attack)           env = (double)pos / attack;
+            else if (pos > total - decay)    env = (double)(total - pos) / decay;
+            else                             env = 1.0;
+            buf[i] = (int16_t)(0.62 * 32767.0 * env *
+                               (0.72*sin(phase1) + 0.22*sin(phase2)));
         }
         esp_codec_dev_write(s_codec, buf, n * sizeof(int16_t));
         done += n;
@@ -188,15 +194,17 @@ static void gen(double f0, double f1, int ms) {
 
 static void play_pattern(audio_alert_t kind) {
     switch (kind) {
-    case AUDIO_ALERT_WAITING:                 // urgent double-beep
-        gen(2500, 2500, 120);
-        if (!atomic_load(&s_abort)) { vTaskDelay(pdMS_TO_TICKS(70)); gen(2500, 2500, 120); }
+    case AUDIO_ALERT_WAITING:                 // urgent ascending ding-ding (A5→E6 perfect fifth)
+        gen(880, 880, 90);
+        if (!atomic_load(&s_abort)) { vTaskDelay(pdMS_TO_TICKS(55)); gen(1320, 1320, 125); }
         break;
-    case AUDIO_ALERT_ASKING:                  // single mid tone
-        gen(1800, 1800, 250);
+    case AUDIO_ALERT_ASKING:                  // rising question glide (A5→D6)
+        gen(880, 1175, 310);
         break;
-    case AUDIO_ALERT_DONE:                     // soft descending tone
-        gen(1800, 1150, 320);
+    case AUDIO_ALERT_DONE:                    // satisfying major-chord build (C5→E5→A5)
+        gen(523, 523, 75);
+        if (!atomic_load(&s_abort)) { vTaskDelay(pdMS_TO_TICKS(25)); gen(659, 659, 75); }
+        if (!atomic_load(&s_abort)) { vTaskDelay(pdMS_TO_TICKS(25)); gen(880, 880, 130); }
         break;
     }
 }
