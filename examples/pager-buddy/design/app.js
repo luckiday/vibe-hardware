@@ -84,57 +84,91 @@ function backToList() {
   render();
 }
 
+// ---------- line-art icon kit (TE/OP-1: 1px neon stroke, no fill, inherits color) ----------
+function svg(body, w, vb = 24) {
+  return `<svg class="ico" viewBox="0 0 ${vb} ${vb}" width="${w}" height="${w}" fill="none" ` +
+    `stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+}
+const IC = {
+  bt:    (w = 9)  => svg(`<path d="M7 8l10 8-5 4V4l5 4L7 16"/>`, w),                          // bluetooth rune
+  btoff: (w = 9)  => svg(`<path d="M7 8l10 8-5 4V4l5 4L7 16"/><path d="M4 4l16 16"/>`, w),    // + slash = offline
+  bolt:  (w = 8)  => svg(`<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="currentColor" stroke="none"/>`, w),
+  check: (w = 10) => svg(`<path d="M4 13l5 5L20 6"/>`, w),
+  warn:  (w = 11) => svg(`<path d="M12 3l10 17H2L12 3z"/><path d="M12 10v4"/><path d="M12 17v.4"/>`, w),
+  ask:   (w = 11) => svg(`<rect x="3" y="4" width="18" height="13"/><path d="M3 17v4l5-4"/>`, w),  // speech box
+  chev:  (w = 9)  => svg(`<path d="M5 9l7 7 7-7"/>`, w),                                       // SIDE = scroll/next
+  back:  (w = 10) => svg(`<path d="M11 6l-5 5 5 5"/><path d="M6 11h13"/>`, w),
+  front: (w = 11) => svg(`<rect x="3" y="8" width="18" height="8"/>`, w),                      // the FRONT pill = OK
+};
+
 // ---------- renderers ----------
 function batteryHTML() {
   const lvl = Math.max(0, Math.min(100, D.battery));
   const chg = D.charging || D.usb;
   const cls = lvl <= 20 ? "b-low" : chg ? "b-chg" : "b-ok"; // ≤20% red wins over charging
+  const fw = Math.max(2, Math.round((lvl / 100) * 16));     // proportional fill width (in the 26-wide viewBox)
+  const bat =
+    `<svg class="ico" viewBox="0 0 26 12" width="19" height="9" fill="none" stroke="currentColor" stroke-width="1.4">` +
+      `<rect x="1" y="1.6" width="20" height="8.8"/>` +
+      `<rect x="22.4" y="4" width="2.2" height="4" fill="currentColor" stroke="none"/>` +
+      `<rect x="2.8" y="3.4" width="${fw}" height="5.2" fill="currentColor" stroke="none"/>` +
+    `</svg>`;
   return `<span class="batt ${cls}">` +
-    (chg ? `<span class="bolt">⚡</span>` : "") +
-    `<span class="batt-icon"><span class="batt-fill" style="width:${Math.max(12, lvl)}%"></span></span>` +
-    `<span class="batt-pct">${lvl}%</span></span>`;
+    (chg ? `<span class="bolt">${IC.bolt()}</span>` : "") +
+    bat + `<span class="batt-pct">${lvl}%</span></span>`;
 }
-function statusBar() {
-  return `<div class="statusbar"><span>${esc(D.clock)}</span>${batteryHTML()}</div>`;
+function statusBar(view) {
+  const on = D.online !== false;
+  const bt = `<span class="bt ${on ? "on" : ""}" title="${on ? "linked" : "offline"}">` +
+    `${on ? IC.bt() : IC.btoff()}</span>`;
+  const clk = view !== "idle" ? `<span class="clk">${esc(D.clock)}</span>` : ""; // idle owns the big clock
+  return `<div class="statusbar"><span class="left">${bt}${clk}</span>${batteryHTML()}</div>`;
+}
+// footer hints as framed tags — l/r are pre-built tag() HTML (or "")
+function tag(icon, label, cls = "") {
+  return `<span class="tag ${cls}">${icon || ""}<span>${esc(label)}</span></span>`;
 }
 function footer(l, r) {
   return `<div class="footer"><span>${l || ""}</span><span>${r || ""}</span></div>`;
 }
 function dot(state) { return `<span class="dot s-${state}"></span>`; }
 
+// breathing-rings hero: color = status (green all-clear / amber needs-you), `agi` = faster pulse
+function rings(need) {
+  const cls = need ? "c-waiting agi" : "c-done";
+  return `<div class="rings ${cls}"><span></span><span></span><span></span></div>`;
+}
+
 function viewIdle() {
   const { total, need } = counts();
-  const face = need > 0 ? "•_•" : "•‿•";
-  const faceC = need > 0 ? "c-waiting" : "c-done";
-  const sum = need > 0
-    ? `${total} sessions · <b class="need">${need} need you</b>`
-    : `${total} sessions · all clear`;
+  const line1 = `${total} sessions`;
+  const line2 = need > 0 ? `${need} need you` : `all clear`;
   return `<div class="content"><div class="idle">` +
-    `<div class="face ${faceC}">${face}</div>` +
+    rings(need > 0) +
     `<div class="clock-big">${esc(D.clock)}</div>` +
     `<div class="date">${esc(D.date)}</div>` +
-    `<div class="summary">${sum}</div>` +
-    `</div></div>` + footer("— open", "▼ menu");
+    `<div class="tag summary ${need > 0 ? "need" : ""}">${esc(line1)}<br>${esc(line2)}</div>` +
+    `</div></div>` + footer(tag(IC.front(), "open"), tag(IC.chev(), "menu"));
 }
 
 function viewList() {
   if (!D.sessions.length) {
     return `<div class="content"><div class="idle">` +
-      `<div class="face c-done">•‿•</div>` +
-      `<div class="summary">No active tasks</div>` +
-      `</div></div>` + footer("", "▼ back");
+      rings(false) +
+      `<div class="tag summary">no active tasks</div>` +
+      `</div></div>` + footer("", tag(IC.back(), "back"));
   }
   const rows = D.sessions.map((s, i) => {
     const sel = i === S.sel ? " sel" : "";
-    return `<div class="row${sel}">` +
+    const accent = i === S.sel ? ` style="color:var(--${s.state})"` : ""; // selected row's edge bar = state color
+    return `<div class="row${sel}"${accent}>` +
       `<div class="l1">${dot(s.state)}<span class="name">${esc(s.name)}</span>` +
       `<span class="age">${esc(s.age)}</span></div>` +
       `<div class="l2"><span class="chip">${esc(s.agent)}</span>` +
-      `<span class="chip">${esc(s.term)}</span>` +
-      `<span class="c-${s.state}" style="font-size:7px">${STATE_LABEL[s.state]}</span></div>` +
+      `<span class="lstate c-${s.state}">${STATE_LABEL[s.state]}</span></div>` +  // term shown on the session screen
       `</div>`;
   }).join("");
-  return `<div class="content">${rows}</div>` + footer("— open", "▼ next");
+  return `<div class="content">${rows}</div>` + footer(tag(IC.front(), "open"), tag(IC.chev(), "next"));
 }
 
 function viewSession() {
@@ -151,9 +185,10 @@ function scrWorking(s) {
     `<div class="act"><span class="tool">${esc(a.tool)}(</span>${esc(a.detail)}<span class="tool">)</span>` +
     (a.sub ? `<div class="sub">└ ${esc(a.sub)}</div>` : "") + `</div>`).join("");
   const sub = s.task ? `<div class="subtitle">${esc(s.task)}</div>` : "";
-  return `<div class="content"><div class="head">${dot("working")}<b>${esc(s.name)}</b></div>` +
-    sub + acts + `<div class="act spin" style="margin-top:4px">▌ working…</div></div>` +
-    footer("— back", "");
+  return `<div class="content"><div class="head">${dot("working")}<b class="c-working">${esc(s.name)}</b></div>` +
+    sub + acts +
+    `<div class="act run"><span class="bars"><i></i><i></i><i></i><i></i></span>working</div></div>` +
+    footer(tag(IC.back(), "back"), "");
 }
 
 function scrApprove(s) {
@@ -161,20 +196,20 @@ function scrApprove(s) {
   const deny = `<div class="choice danger${S.sel === 0 ? " sel" : ""}">Deny</div>`;
   const allow = `<div class="choice${S.sel === 1 ? " sel" : ""}">Allow</div>`;
   const delta = (a.add ? "+" + a.add : "") + (a.del ? " -" + a.del : "");
-  return `<div class="content"><div class="head c-waiting">⚠ Permission</div>` +
+  return `<div class="content"><div class="head c-waiting">${IC.warn()}<span class="tag c-waiting">permission</span></div>` +
     `<div class="big">${esc(a.tool)}</div>` +
     `<div class="path">${esc(a.file)}</div>` +
     (delta ? `<div class="delta">${delta} change</div>` : "") +
     `<div class="choices">${deny}${allow}</div></div>` +
-    footer("— confirm", "▼ switch");
+    footer(tag(IC.front(), "confirm"), tag(IC.chev(), "switch"));
 }
 
 function scrAsk(s) {
   const opts = s.ask.opts.map((o, i) =>
-    `<div class="opt${i === S.sel ? " sel" : ""}"><span class="k">${i + 1}</span>${esc(o)}</div>`).join("");
-  return `<div class="content"><div class="head c-asking">▣ ${esc(s.agent)} asks</div>` +
+    `<div class="opt${i === S.sel ? " sel" : ""}"><span class="k">${i + 1}</span><span>${esc(o)}</span></div>`).join("");
+  return `<div class="content"><div class="head c-asking">${IC.ask()}<span class="tag c-asking">${esc(s.agent)} asks</span></div>` +
     `<div class="q">${esc(s.ask.q)}</div>${opts}</div>` +
-    footer("— select", "▼ next");
+    footer(tag(IC.front(), "select"), tag(IC.chev(), "next"));
 }
 
 function scrDone(s) {
@@ -183,11 +218,11 @@ function scrDone(s) {
   const meta = [];                        // files/tests are optional on the wire
   if (d.files != null) meta.push(`${d.files} files`);
   if (d.tests) meta.push(esc(d.tests));
-  return `<div class="content"><div class="head c-done">✓ ${esc(s.name)}</div>` +
+  return `<div class="content"><div class="head c-done">${IC.check()}<b class="c-done">${esc(s.name)}</b></div>` +
     `<div class="q">${esc(d.summary)}</div>` +
     (meta.length ? `<div class="delta">${meta.join(" · ")}</div>` : "") +
     `<div class="choices">${dis}</div></div>` +
-    footer("— Dismiss", "");
+    footer(tag(IC.front(), "dismiss"), "");
 }
 
 function render() {
@@ -195,7 +230,7 @@ function render() {
   if (S.view === "idle") body = viewIdle();
   else if (S.view === "list") body = viewList();
   else body = viewSession();
-  el("screen").innerHTML = statusBar() + body + (toastHTML || "");
+  el("screen").innerHTML = statusBar(S.view) + body + (toastHTML || "");
 }
 
 // ---------- toast + flash ----------
@@ -278,6 +313,7 @@ window.addEventListener("DOMContentLoaded", () => {
     else if (e.key === "Enter" || e.key === " ") { stopPlay(); onOk(); e.preventDefault(); }
     else if (e.key === "Backspace" || e.key === "Escape") { stopPlay(); onBack(); e.preventDefault(); }
     else if (e.key === "p") { play(); }
+    else if (e.key === "b") { D.online = !D.online; render(); }   // toggle the status-bar Bluetooth glyph
   });
 
   // deep-link for demos / sharing: ?view=list  |  ?id=<session>[&state=waiting|asking|done]
@@ -285,6 +321,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (p.get("zoom")) setZoom(p.get("zoom"));
   if (p.get("batt")) D.battery = parseInt(p.get("batt"), 10);
   if (p.get("chg") === "1") { D.charging = true; el("pChg").classList.add("on"); }
+  if (p.get("online") === "0") D.online = false;   // ?online=0 → show the offline Bluetooth glyph
   const id = p.get("id"), st = p.get("state"), view = p.get("view");
   if (id) {
     const s = D.sessions.find((x) => x.id === id);

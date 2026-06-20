@@ -68,7 +68,7 @@ static session_t stub_sessions[] = {
 #define STUB_N ((int)(sizeof(stub_sessions) / sizeof(stub_sessions[0])))
 
 static app_model_t M = {
-    .clock = "--:--", .date = "", .battery = 78, .charging = false, .usb = false,
+    .clock = "--:--", .date = "", .battery = 78, .charging = false, .usb = false, .online = false,
     .sessions = stub_sessions, .n = STUB_N, .view = VIEW_IDLE, .open = -1, .sel = 0,
 };
 
@@ -93,7 +93,7 @@ static int item_count(void) {
         switch (M.sessions[M.open].state) {
             case ST_WAITING: return 2;
             case ST_ASKING:  return M.sessions[M.open].ask_n;
-            case ST_DONE:    return 1;   // just Dismiss (Jump removed — device can't focus the Mac)
+            case ST_DONE:    return 0;   // no action bar — back returns to the list, leaves it done
             default:         return 0;
         }
     }
@@ -122,8 +122,8 @@ static void do_ok(void) {
     }
     if (M.view == VIEW_SESSION && M.open >= 0 && M.open < M.n) {
         sess_state_t st = M.sessions[M.open].state;
-        if (st == ST_WAITING || st == ST_ASKING || st == ST_DONE) {
-            M.sessions[M.open].state = ST_WORKING;  // optimistic; the Mac's next snapshot corrects it
+        if (st == ST_WAITING || st == ST_ASKING) {  // optimistic ACK; the Mac's next snapshot corrects it
+            M.sessions[M.open].state = ST_WORKING;   // (DONE just goes back — it stays done, not blue)
         }
         M.open = -1; M.view = VIEW_LIST;
     }
@@ -293,6 +293,11 @@ void app_main(void) {
         uint32_t seq = bridge_seq();
         bool new_snap = (seq != last_seq);
         if (new_snap) { last_seq = seq; dirty = true; }
+
+        // BLE link state for the status-bar Bluetooth glyph — flips without a snapshot
+        // when the central connects/drops, so poll it and repaint on change.
+        bool online = bridge_online();
+        if (online != M.online) { M.online = online; dirty = true; }
 
         // audio settings the Mac pushed over the control characteristic. Done OUTSIDE
         // the bridge lock (bridge_take_settings takes it itself — calling it between

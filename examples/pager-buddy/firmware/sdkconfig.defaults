@@ -51,6 +51,7 @@ CONFIG_LV_FONT_MONTSERRAT_12=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_40=y
 # CJK text via 78/xiaozhi-fonts (PuHui): the large fonts overflow the default txt format,
 # and the component also compiles emoji fonts built on imgfont — both must be enabled or
 # the component won't compile (even the sizes we GC away). LV_USE_IMAGE is already on.

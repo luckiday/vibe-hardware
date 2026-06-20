@@ -11,6 +11,7 @@ window.PAGER = {
   battery: 78,
   charging: false, // charging / on USB → battery fill turns blue (≤20% stays red)
   usb: false,
+  online: true,    // BLE link to the Mac bridge (drives the status-bar Bluetooth glyph; toggle with `b`)
 
   sessions: [
     {
