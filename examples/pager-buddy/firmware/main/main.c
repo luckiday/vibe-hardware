@@ -103,12 +103,18 @@ static int item_count(void) {
 }
 
 static void do_scroll(void) {
-    if (M.view == VIEW_IDLE) { M.view = VIEW_LIST; M.sel = 0; return; }  // SIDE opens the menu
+    if (M.view == VIEW_IDLE) {
+        if (M.n == 0) return;           // nothing to list; stay on idle / all-clear screen
+        M.view = VIEW_LIST; M.sel = 0; return;
+    }
     int n = item_count();
     if (n) M.sel = (M.sel + 1) % n;
 }
 static void do_ok(void) {
-    if (M.view == VIEW_IDLE) { M.view = VIEW_LIST; M.sel = 0; return; }
+    if (M.view == VIEW_IDLE) {
+        if (M.n == 0) return;           // nothing to list; stay on idle / all-clear screen
+        M.view = VIEW_LIST; M.sel = 0; return;
+    }
     if (M.view == VIEW_LIST) {
         if (M.n == 0) return;
         M.open = M.sel;

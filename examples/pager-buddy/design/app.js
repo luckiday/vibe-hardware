@@ -48,7 +48,10 @@ function onScroll() {
   render();
 }
 function onOk() {
-  if (S.view === "idle") { S.view = "list"; S.sel = 0; return render(); }
+  if (S.view === "idle") {
+    if (!D.sessions.length) return;
+    S.view = "list"; S.sel = 0; return render();
+  }
   if (S.view === "list") {
     if (!D.sessions.length) return;
     return openSession(D.sessions[S.sel].id);
@@ -115,6 +118,12 @@ function viewIdle() {
 }
 
 function viewList() {
+  if (!D.sessions.length) {
+    return `<div class="content"><div class="idle">` +
+      `<div class="face c-done">•‿•</div>` +
+      `<div class="summary">暂无任务</div>` +
+      `</div></div>` + footer("", "▼ 返回");
+  }
   const rows = D.sessions.map((s, i) => {
     const sel = i === S.sel ? " sel" : "";
     return `<div class="row${sel}">` +

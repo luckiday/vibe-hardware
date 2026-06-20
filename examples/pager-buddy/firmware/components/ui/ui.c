@@ -370,6 +370,10 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
         }
     }
     s_age_n = m->n < UI_MAX_ROWS ? m->n : UI_MAX_ROWS;
+    if (m->n == 0) {
+        lv_obj_t *ph = mk_label(c, LV_SYMBOL_OK "  暂无任务", FONT_BODY, C_DIM);
+        lv_obj_align(ph, LV_ALIGN_CENTER, 0, 0);
+    }
     if (sel_row) {                          // flex sizes aren't computed until layout runs
         lv_obj_update_layout(c);            // so update first, then scroll the row into view
         lv_obj_scroll_to_view(sel_row, LV_ANIM_OFF);
