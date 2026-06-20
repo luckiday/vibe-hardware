@@ -31,6 +31,7 @@ import time
 import unicodedata
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
 
 WIDTH = 46  # inner width of the faux screen
 # Hide sessions idle past this (renderer-side freshness; matches the hook default).
@@ -63,6 +64,12 @@ STATE_LABEL = {
 }
 
 _latest = {"snapshot": None, "resolution": None}
+
+# Pending device decisions, keyed by session_id. The device (via ble_push.py) POSTs a
+# resolution here when the user picks Allow/Deny on the pager; the blocking Claude hook
+# (claude_pager_hook.py) GETs + consumes it to answer the permission prompt. One-shot:
+# a GET pops it, so a decision is delivered exactly once.
+_resolutions: dict = {}
 
 # ── audio settings (device-bound; relayed to the pager over BLE) ──────────────────
 # The pager plays an alert tone on needs-you/done; these control it. The CLI
@@ -348,6 +355,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if self.path.startswith("/v1/settings"):
             return self._send(200, _settings)
+        if self.path.startswith("/v1/resolution"):
+            # The blocking hook polls here for the device's decision. Consume (pop) it
+            # so each decision is answered once; no session_id → nothing pending.
+            sid = (parse_qs(urlparse(self.path).query).get("session_id") or [None])[0]
+            res = _resolutions.pop(sid, None) if sid else None
+            return self._send(200, {"resolution": res})
         if self.path.startswith("/v1/snapshot"):
             snap = _latest["snapshot"]
             if snap:
@@ -415,6 +428,8 @@ class Handler(BaseHTTPRequestHandler):
         _latest["resolution"] = body
         session_id = body.get("session_id", "?")
         action = body.get("action", "?")
+        if session_id and session_id != "?":
+            _resolutions[session_id] = body   # park it for the hook's next GET
         sys.stdout.write(color("35", f"  ⚡ resolution: session {session_id} → {action}\n"))
         sys.stdout.flush()
         self._send(200, {"ok": True})
