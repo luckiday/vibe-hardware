@@ -13,14 +13,19 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PAGER_BUDDY_PORT:-8787}"
 BLE="${PAGER_BUDDY_BLE:-1}"
-# Pick python: an explicit PAGER_BUDDY_PY wins; else prefer one that can import bleak
-# (the BLE relay needs it), falling back to any python3 (hub still runs, relay skips).
+# Pick python: an explicit PAGER_BUDDY_PY wins; else the install.sh venv (has bleak);
+# else any python3 that can import bleak, falling back to any python3 (hub still runs,
+# relay skips). Run ./install.sh once to create the venv.
 PY="${PAGER_BUDDY_PY:-}"
 if [ -z "$PY" ]; then
-  for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
-    command -v "$c" >/dev/null 2>&1 || continue
-    PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
-  done
+  if [ -x "$DIR/.venv/bin/python" ]; then
+    PY="$DIR/.venv/bin/python"
+  else
+    for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+      command -v "$c" >/dev/null 2>&1 || continue
+      PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
+    done
+  fi
 fi
 
 # free the port if a previous bridge is lingering
