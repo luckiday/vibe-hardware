@@ -30,6 +30,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from urllib import request as urlrequest
+from urllib.parse import quote
 
 DEFAULT_URL = "http://127.0.0.1:8787/v1/snapshot"
 DEFAULT_STATE = "~/.pager-buddy/state.json"
@@ -38,6 +39,23 @@ MAX_ACTIVITY = 3            # tool steps kept per session
 # closed/crashed/idle CLI often never fires it). Drop sessions idle past this.
 IDLE_TTL = int(os.environ.get("PAGER_BUDDY_IDLE_TTL", "600"))  # seconds (default 10 min)
 POST_TIMEOUT = 1.5         # seconds — keep small; we fail open
+
+# ── two-way approval gate (device answers permission prompts) ────────────────────
+# For tools in the gate set, a PreToolUse hook BLOCKS: it shows an approval prompt on
+# the pager, waits for the user to press Allow/Deny there, and returns that decision to
+# Claude Code (permissionDecision allow|deny) — so the device drives the VS Code session.
+# Set PAGER_BUDDY_GATE="" (or "off"/"none") to disable; it then behaves push-only.
+# A blocking hook must finish under Claude's hook timeout (~60 s), so keep GATE_TIMEOUT
+# below that; on timeout we stay silent and Claude falls back to its own prompt.
+def _gate_tools() -> set:
+    raw = os.environ.get("PAGER_BUDDY_GATE", "Bash,Edit,Write,MultiEdit,NotebookEdit")
+    if raw.strip().lower() in ("", "off", "none", "0"):
+        return set()
+    return {t.strip() for t in raw.split(",") if t.strip()}
+
+GATE_TOOLS = _gate_tools()
+GATE_TIMEOUT = float(os.environ.get("PAGER_BUDDY_GATE_TIMEOUT", "30"))  # seconds to wait for a press
+GATE_POLL = 0.4            # seconds between hub polls while waiting
 
 
 # ── logging (stderr only, opt-in) ──────────────────────────────────────────────
@@ -398,9 +416,17 @@ def post_snapshot(url: str, snapshot: dict) -> None:
         resp.read()
 
 
-def emit(payload: dict, url: str, state_path: str) -> None:
-    """Apply one event and push the resulting snapshot. Fails open."""
+def emit(payload: dict, url: str, state_path: str, override_event: str | None = None) -> bool:
+    """Apply one event and push the resulting snapshot. Fails open.
+
+    Returns True iff the snapshot POST succeeded — the gate uses this to bail fast when
+    the hub is unreachable (so a globally-installed hook never blocks on a dead hub).
+    override_event lets the gate reuse the same mapping to synthesize a state the raw
+    event wouldn't produce — e.g. driving a PreToolUse through the PermissionRequest
+    branch to render the device's Allow/Deny screen."""
     now = time.time()
+    if override_event:
+        payload = {**payload, "hook_event_name": override_event}
     try:
         with locked(state_path):
             registry = load_registry(state_path)
@@ -409,11 +435,56 @@ def emit(payload: dict, url: str, state_path: str) -> None:
             snapshot = build_snapshot(registry, now)
     except Exception as exc:  # noqa: BLE001
         debug(f"registry error: {exc}")
-        return
+        return False
     try:
         post_snapshot(url, snapshot)
+        return True
     except Exception as exc:  # noqa: BLE001
         debug(f"post failed (device offline?): {exc}")
+        return False
+
+
+# ── gate: block on a permission prompt until the device answers ──────────────────
+def fetch_resolution(res_url: str, sid: str):
+    """Return (and consume) the pending device decision for this session, or None."""
+    try:
+        url = f"{res_url}?session_id={quote(sid)}"
+        with urlrequest.urlopen(url, timeout=POST_TIMEOUT) as resp:
+            data = json.loads(resp.read())
+        return (data or {}).get("resolution")
+    except Exception as exc:  # noqa: BLE001 — fail open
+        debug(f"resolution fetch failed: {exc}")
+        return None
+
+
+def gated_approval(payload: dict, url: str, state_path: str) -> str | None:
+    """Show an Allow/Deny prompt on the pager and block until the user presses one.
+
+    Returns "allow"/"deny" from the device, or None if the device/hub is unreachable
+    or nobody answers within GATE_TIMEOUT (caller then lets Claude prompt normally)."""
+    sid = payload.get("session_id") or "unknown"
+    res_url = url.replace("/v1/snapshot", "/v1/resolution")
+    # 1. render the approval screen on the device (waiting + approve{tool,file}). If the
+    #    hub is unreachable, bail at once — no prompt can reach the device, so blocking
+    #    would just stall Claude. (This is what keeps a globally-installed hook fast when
+    #    the bridge isn't running.)
+    if not emit(payload, url, state_path, override_event="PermissionRequest"):
+        debug("hub unreachable; skipping gate")
+        return None
+    # 2. clear any stale decision left over from a previous prompt in this session.
+    fetch_resolution(res_url, sid)
+    # 3. wait for a fresh press.
+    deadline = time.time() + GATE_TIMEOUT
+    while time.time() < deadline:
+        res = fetch_resolution(res_url, sid)
+        if res:
+            action = str(res.get("action") or "").lower()
+            if action in ("allow", "deny"):
+                debug(f"device decided: {action}")
+                return action
+        time.sleep(GATE_POLL)
+    debug("gate timed out; falling back to Claude's own prompt")
+    return None
 
 
 # ── demo: drive the design scenario through the real mapping code ────────────────
@@ -497,6 +568,27 @@ def main() -> int:
         term = infer_terminal(os.environ)
         if term:
             payload["terminal_app"] = term
+
+    # Two-way gate: for a gated tool, block on the device for an Allow/Deny and return
+    # it to Claude as a permission decision. Anything else (incl. timeout / device
+    # offline) falls through to the normal push so we always fail open.
+    event = payload.get("hook_event_name") or ""
+    tool = payload.get("tool_name") or ""
+    if event == "PreToolUse" and tool in GATE_TOOLS:
+        decision = gated_approval(payload, url, state_path)
+        if decision in ("allow", "deny"):
+            if decision == "allow":     # let the device's screen return to "running"
+                emit(payload, url, state_path)        # normal PreToolUse → working + activity
+            sys.stdout.write(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": decision,
+                    "permissionDecisionReason": f"pager-buddy: {decision} from device",
+                }
+            }))
+            return 0
+        # timeout/offline: the approval screen (if any) stays up; Claude prompts as usual
+        return 0
 
     emit(payload, url, state_path)
     return 0

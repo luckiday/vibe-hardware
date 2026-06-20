@@ -52,16 +52,16 @@ static const char *act_opt[]     = {"Analyzing the slow queries", "Read(schema.p
 
 static session_t stub_sessions[] = {
     // two "vibe hardware" entries on purpose — the task line is what tells them apart
-    {.name = "vibe hardware", .agent = "Claude", .term = "VS Code", .age = "27m", .state = ST_WORKING,
+    {.id = "stub-001", .name = "vibe hardware", .agent = "Claude", .term = "VS Code", .age = "27m", .state = ST_WORKING,
      .task = "fix the auth bug in the login middleware",
      .appr_tool = "Edit", .appr_file = "src/auth/middleware.ts", .add = 3, .del = 1,
      .ask_q = "Choose deploy target?", .ask_opts = deploy_opts, .ask_n = 3,
      .done_summary = "Fixed the auth bug in the login middleware.", .files = 3, .tests = "8 passed",
      .act = act_fix, .act_n = 1},
-    {.name = "vibe hardware", .agent = "Codex", .term = "Terminal", .age = "1h", .state = ST_WORKING,
+    {.id = "stub-002", .name = "vibe hardware", .agent = "Codex", .term = "Terminal", .age = "1h", .state = ST_WORKING,
      .task = "build the users REST endpoint with pagination",
      .act = act_backend, .act_n = 1},
-    {.name = "db optimization", .agent = "Gemini", .term = "Ghostty", .age = "5h", .state = ST_WORKING,
+    {.id = "stub-003", .name = "db optimization", .agent = "Gemini", .term = "Ghostty", .age = "5h", .state = ST_WORKING,
      .task = "speed up the slow dashboard queries",
      .act = act_opt, .act_n = 3},
 };
@@ -121,9 +121,18 @@ static void do_ok(void) {
         return;
     }
     if (M.view == VIEW_SESSION && M.open >= 0 && M.open < M.n) {
-        sess_state_t st = M.sessions[M.open].state;
-        if (st == ST_WAITING || st == ST_ASKING) {  // optimistic ACK; the Mac's next snapshot corrects it
-            M.sessions[M.open].state = ST_WORKING;   // (DONE just goes back — it stays done, not blue)
+        session_t *s = &M.sessions[M.open];
+        const char *action = NULL;
+        if (s->state == ST_WAITING) {
+            action = (M.sel == 1) ? "allow" : "deny";  // M.sel=1 is Allow (line 120: default Allow)
+        } else if (s->state == ST_ASKING && M.sel >= 0 && M.sel < s->ask_n) {
+            action = s->ask_opts[M.sel];
+        }
+        if (action && s->id) {                         // drive Claude Code: send the decision to the Mac
+            bridge_send_resolution(s->id, action);
+        }
+        if (s->state == ST_WAITING || s->state == ST_ASKING) {  // optimistic ACK; Mac's next snapshot corrects it
+            s->state = ST_WORKING;                     // (DONE just goes back — it stays done, not blue)
         }
         M.open = -1; M.view = VIEW_LIST;
     }

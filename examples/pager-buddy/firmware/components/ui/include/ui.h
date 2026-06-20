@@ -11,6 +11,7 @@ typedef enum { ST_WORKING, ST_WAITING, ST_ASKING, ST_DONE, ST_ERROR } sess_state
 typedef enum { VIEW_IDLE, VIEW_LIST, VIEW_SESSION } view_t;
 
 typedef struct {
+    const char *id;                                            // stable session id (from Claude session_id)
     const char *name, *agent, *term, *age;
     const char *task;                                          // the user's ask (one line) — disambiguates same-name sessions
     sess_state_t state;

@@ -72,6 +72,27 @@ The design's `live.js` polls `GET /v1/snapshot` and renders it with the same
 screens. (Responses send `Access-Control-Allow-Origin: *`, so a UI served
 elsewhere can poll too — but `--ui` keeps it same-origin and CORS-free.)
 
+## Install (one command)
+
+```bash
+./install.sh                  # venv + bleak, register Claude Code hooks, print next steps
+```
+
+That is the whole setup: it creates a self-contained `.venv` with `bleak` (so the BLE
+relay works even on a PEP 668 / externally-managed system python), registers the Claude
+Code hooks in `~/.claude/settings.json`, and tells you what to do next. Options:
+
+```bash
+./install.sh --gate Bash      # scope the device approval gate (default: Bash,Edit,Write,…)
+./install.sh --service        # also auto-start the bridge on login (LaunchAgent)
+./install.sh --no-hooks       # relay only; don't touch ~/.claude/settings.json
+./install.sh --port 8788      # non-default hub port
+./install.sh uninstall        # reverse everything: hooks + LaunchAgent + venv
+```
+
+Then: flash the device, run `./run.sh` (unless you used `--service`), and restart
+Claude Code so it loads the hooks. The steps below are the manual equivalents.
+
 ## Running the bridge
 
 The bridge must be up to receive hook events. Two ways:
@@ -119,9 +140,10 @@ Config via env (read by the hook): `PAGER_BUDDY_URL`, `PAGER_BUDDY_STATE`,
 | [protocol.yaml](protocol.yaml) | **The contract.** Wire format + the two transports (HTTP hub, BLE device). Versioned. |
 | [claude_pager_hook.py](claude_pager_hook.py) | Hook command: stdin event → registry → POST snapshot. `--demo` to self-drive. |
 | [pager_stub.py](pager_stub.py) | The hub: `POST/GET /v1/snapshot`, ASCII screen, serves the web mock (`--ui`). |
-| [ble_push.py](ble_push.py) | BLE central: polls the hub, writes framed snapshots **and audio settings** to the device. `pip install bleak`. |
+| [ble_push.py](ble_push.py) | BLE central: polls the hub, writes framed snapshots **and audio settings** to the device. Writes are change-gated (idle = zero BLE traffic) and the hub poll **backs off** when nothing changes (`--idle-interval`, default 10 s; snaps back to `--interval` on the next change). `pip install bleak`. |
 | [pager_settings.py](pager_settings.py) | The **audio settings session**: enable/disable alert audio + set volume (interactive, or `--audio on/off --volume N`). Talks to the hub; the relay forwards to the device. |
-| [install_hooks.py](install_hooks.py) | Idempotent install / uninstall / status for `~/.claude/settings.json`. |
+| [install.sh](install.sh) | **One-command setup**: venv + `bleak`, register hooks, optional LaunchAgent. `uninstall` reverses it. |
+| [install_hooks.py](install_hooks.py) | Idempotent install / uninstall / status for `~/.claude/settings.json` (called by `install.sh`). |
 
 ## What the device gets
 

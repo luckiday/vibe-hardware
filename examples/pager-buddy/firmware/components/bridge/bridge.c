@@ -120,6 +120,7 @@ static sess_state_t parse_state(const char *s) {
 static void parse_session(store_t *m, int i, const cJSON *js) {
     session_t *s = &m->s[i];
     m->ts[i] = J_double(js, "ts");                 // last-update epoch (for re-age + prune)
+    s->id    = dup_arena(m, J_str(js, "id"));
     s->name  = dup_arena(m, J_str(js, "name"));
     s->agent = dup_arena(m, J_str(js, "agent"));
     s->term  = dup_arena(m, J_str(js, "term"));

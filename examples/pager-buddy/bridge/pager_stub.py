@@ -6,6 +6,7 @@ Implements the device side of the pager-buddy status protocol (protocol.yaml):
   POST /v1/snapshot   ← the Mac pushes the latest snapshot; we render it as an
                         ASCII "screen" (simulating the 135×240 display)
   GET  /v1/snapshot   → returns the last snapshot      (for a polling renderer)
+  POST /v1/resolution ← the device (via Mac bridge) sends user selections back
   GET  /healthz       → 200 OK
 
 With --ui it ALSO serves the design web mock (examples/pager-buddy/design) so you
@@ -30,6 +31,7 @@ import time
 import unicodedata
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
 
 WIDTH = 46  # inner width of the faux screen
 # Hide sessions idle past this (renderer-side freshness; matches the hook default).
@@ -61,7 +63,13 @@ STATE_LABEL = {
     "asking": "asks", "done": "done", "error": "error",
 }
 
-_latest = {"snapshot": None}
+_latest = {"snapshot": None, "resolution": None}
+
+# Pending device decisions, keyed by session_id. The device (via ble_push.py) POSTs a
+# resolution here when the user picks Allow/Deny on the pager; the blocking Claude hook
+# (claude_pager_hook.py) GETs + consumes it to answer the permission prompt. One-shot:
+# a GET pops it, so a decision is delivered exactly once.
+_resolutions: dict = {}
 
 # ── audio settings (device-bound; relayed to the pager over BLE) ──────────────────
 # The pager plays an alert tone on needs-you/done; these control it. The CLI
@@ -347,6 +355,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if self.path.startswith("/v1/settings"):
             return self._send(200, _settings)
+        if self.path.startswith("/v1/resolution"):
+            # The blocking hook polls here for the device's decision. Consume (pop) it
+            # so each decision is answered once; no session_id → nothing pending.
+            sid = (parse_qs(urlparse(self.path).query).get("session_id") or [None])[0]
+            res = _resolutions.pop(sid, None) if sid else None
+            return self._send(200, {"resolution": res})
         if self.path.startswith("/v1/snapshot"):
             snap = _latest["snapshot"]
             if snap:
@@ -370,6 +384,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("/v1/settings"):
             return self._post_settings()
+        if self.path.startswith("/v1/resolution"):
+            return self._post_resolution()
         if not self.path.startswith("/v1/snapshot"):
             return self._send(404, {"error": "not found"})
         length = int(self.headers.get("Content-Length", 0))
@@ -400,6 +416,23 @@ class Handler(BaseHTTPRequestHandler):
                                      f"· vol {_settings['volume']}\n"))
         sys.stdout.flush()
         self._send(200, _settings)
+
+    def _post_resolution(self):
+        """Device resolution: user made a selection (approve/deny/ask option)."""
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b""
+        try:
+            body = json.loads(raw) if raw else {}
+        except Exception:
+            return self._send(400, {"error": "invalid json"})
+        _latest["resolution"] = body
+        session_id = body.get("session_id", "?")
+        action = body.get("action", "?")
+        if session_id and session_id != "?":
+            _resolutions[session_id] = body   # park it for the hook's next GET
+        sys.stdout.write(color("35", f"  ⚡ resolution: session {session_id} → {action}\n"))
+        sys.stdout.flush()
+        self._send(200, {"ok": True})
 
 
 def main() -> int:

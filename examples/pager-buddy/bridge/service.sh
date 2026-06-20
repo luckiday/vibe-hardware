@@ -15,14 +15,18 @@ LABEL="com.pagerbuddy.bridge"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/$LABEL.log"
 PORT="${PAGER_BUDDY_PORT:-8787}"
-# Pick a python that can import bleak (the BLE relay needs it); PAGER_BUDDY_PY wins.
-# Resolve to an ABSOLUTE path — launchd runs with a minimal PATH.
+# Pick a python that can import bleak (the BLE relay needs it); PAGER_BUDDY_PY wins,
+# else the install.sh venv. Resolve to an ABSOLUTE path — launchd runs a minimal PATH.
 PY="${PAGER_BUDDY_PY:-}"
 if [ -z "$PY" ]; then
-  for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
-    command -v "$c" >/dev/null 2>&1 || continue
-    PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
-  done
+  if [ -x "$DIR/.venv/bin/python" ]; then
+    PY="$DIR/.venv/bin/python"
+  else
+    for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+      command -v "$c" >/dev/null 2>&1 || continue
+      PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
+    done
+  fi
 fi
 PY="$(command -v "$PY" 2>/dev/null || echo "$PY")"
 
