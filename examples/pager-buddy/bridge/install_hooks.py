@@ -52,10 +52,12 @@ def hook_python() -> str:
     return sys.executable or "python3"
 
 
-def hook_command(url: str) -> str:
+def hook_command(url: str, gate: str | None = None) -> str:
+    env = f"PAGER_BUDDY_URL={shlex.quote(url)} "
+    if gate is not None:   # bake the two-way approval gate scope into the command
+        env += f"PAGER_BUDDY_GATE={shlex.quote(gate)} "
     return (
-        f"PAGER_BUDDY_URL={shlex.quote(url)} "
-        f"{shlex.quote(hook_python())} {shlex.quote(HOOK_PATH)} --source claude"
+        f"{env}{shlex.quote(hook_python())} {shlex.quote(HOOK_PATH)} --source claude"
     )
 
 
@@ -102,14 +104,14 @@ def strip_ours(groups):
     return cleaned
 
 
-def cmd_install(path: str, url: str) -> int:
+def cmd_install(path: str, url: str, gate: str | None = None) -> int:
     if not os.path.isfile(HOOK_PATH):
         print(f"✗ hook script not found next to installer: {HOOK_PATH}")
         return 1
 
     settings = load_settings(path)
     hooks = settings.setdefault("hooks", {})
-    command = hook_command(url)
+    command = hook_command(url, gate)
 
     for event in EVENTS:
         groups = strip_ours(hooks.get(event, []))
@@ -174,11 +176,15 @@ def main() -> int:
     parser.add_argument("action", choices=["install", "uninstall", "status"])
     parser.add_argument("--url", default=DEFAULT_URL, help="device endpoint baked into the hook command")
     parser.add_argument("--settings", default=DEFAULT_SETTINGS, help="path to settings.json")
+    parser.add_argument("--gate", default=None,
+                        help="two-way approval gate scope baked as PAGER_BUDDY_GATE "
+                             "(e.g. 'Bash' or 'Bash,Edit,Write'; '' or 'off' to disable). "
+                             "Omit to use the hook default (Bash,Edit,Write,MultiEdit,NotebookEdit).")
     args = parser.parse_args()
 
     path = os.path.expanduser(args.settings)
     if args.action == "install":
-        return cmd_install(path, args.url)
+        return cmd_install(path, args.url, args.gate)
     if args.action == "uninstall":
         return cmd_uninstall(path)
     return cmd_status(path)
