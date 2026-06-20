@@ -56,3 +56,8 @@ bool board_btn_side(void);
 esp_err_t board_battery_level(int *percent);     // 0..100
 esp_err_t board_battery_charging(bool *charging);
 esp_err_t board_usb_powered(bool *usb_powered);
+
+// Cut the LCD power rail (M5PM1 GPIO2 low) before deep sleep so the panel draws
+// nothing while the chip is off. Pair with ui_prepare_deep_sleep() + the ext1
+// front-button wake set up in main. (Mirrors voicestick's prepare_deep_sleep.)
+void board_prepare_deep_sleep(void);

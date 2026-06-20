@@ -29,6 +29,38 @@ That overflows when LVGL builds a deeper screen (wrapped text, several widgets).
   `xTaskCreate`'d task with a generous stack). Cheap in internal RAM; size for the
   deepest render path, not the idle one.
 
+## A full LVGL rebuild on every tick flickers (and resets animations)
+
+A 1 Hz heartbeat that updates the clock/ages by **rebuilding the whole screen**
+(`lv_obj_clean` + recreate) flickers visibly and restarts any marquee/scroll animation
+every second — it looks like the screen is "flashing."
+
+- **Fix:** split *structural* redraws from *time* ticks. Full `ui_render()` only when the
+  content/view actually changes (new data, navigation); for the per-second clock/age tick,
+  update the existing labels in place (`lv_label_set_text` on cached handles), no rebuild.
+- **Watch the other periodic redraw:** a battery/sensor read that flips a displayed value
+  on ±1 LSB jitter triggers a full rebuild on its own timer. Add hysteresis (only redraw on
+  a ≥2-unit change) so noise doesn't repaint the screen.
+
+## LVGL's built-in fonts are ASCII-only — CJK/Unicode needs a real glyph set
+
+`lv_font_montserrat_*` (the `CONFIG_LV_FONT_MONTSERRAT_*` built-ins) carry only ASCII +
+the `LV_SYMBOL_*` icon range. Any other codepoint — Chinese, `•`, `▼`, `—` — renders as a
+"tofu" box. Don't try to subset Montserrat; pull in a font that actually has the glyphs.
+
+- **Fix:** add a CJK font *component* and assign it per label — `78/xiaozhi-fonts` (from
+  xiaozhi-esp32, MIT) ships `font_puhui_basic_<size>_<bpp>` covering common CJK *and* Latin,
+  so one label renders English or Chinese. Declare with `LV_FONT_DECLARE(font_puhui_basic_20_4)`
+  and pass `&font_puhui_basic_20_4`; list `78/xiaozhi-fonts` in the component's
+  `idf_component.yml`. The linker (`--gc-sections`) drops every size you don't reference, so
+  a 20 px title + 14 px body font is ~1–2 MB — fine in a 3 MB app slot. Pick by display size
+  (≈16 px for 240², 20 px for 240×320). It's a font *binary*, not a Kconfig flag — no
+  `sdkconfig` change.
+- **Keep `LV_SYMBOL_*` in a Montserrat label.** The CJK fonts don't carry the icon range, so
+  an inline `"✓ name"` in a PuHui label loses the check mark. Split it: symbol in a
+  Montserrat label, text in the CJK one (a flex row). xiaozhi does the same — a separate
+  `font_awesome_*` for icons alongside the text font.
+
 ## Native USB-Serial/JTAG: never toggle DTR/RTS by hand
 
 On an S3 whose USB-C goes straight to the chip, a **raw `pyserial` open with DTR/RTS**
@@ -68,6 +100,31 @@ h, m)` fails the build even when *you* know `h,m < 60`.
 - **Code-only iteration:** flash just the app at `0x10000` — faster. Hash-verify is
   printed either way; "Hash of data verified" + a clean `rst:0x...SPI_FAST_FLASH_BOOT` boot
   is your confirmation.
+
+## Deep-sleep `ext1` wake: three ways to self-wake instantly
+
+You arm the front button as an `ext1` wake source, call `esp_deep_sleep_start()`, and the
+device **wakes immediately** (or loops sleep→wake→sleep) instead of staying down. Three
+distinct causes, all seen on the StickC S3 (front button = GPIO11, an RTC-capable pad):
+
+- **Stale wake sources.** Light sleep / `esp_pm` may have left other wakeup bits armed (e.g.
+  a PMIC-IRQ `gpio_wakeup`). Clear them first: `esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL)`.
+- **The wake pin floats low.** An active-low button idles high *only* while its pull-up is
+  powered — but the digital pull-up dies in deep sleep, the pad floats low, and `ANY_LOW`
+  fires. Keep the RTC pull-up alive: `esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON)`
+  then `rtc_gpio_pulldown_dis()` + `rtc_gpio_pullup_en()` on the wake pin. (Costs a little
+  deep-sleep current to keep the RTC domain on — a deliberate trade for a reliable wake.)
+- **The button is still held/bouncing at sleep time.** If the pin is low when you sleep, you
+  wake on it instantly. Poll it high (with a short timeout) before sleeping; if it won't
+  settle, abort and retry on the next idle window. Also bail if it's held at entry.
+
+Verify the pin with `esp_sleep_is_valid_wakeup_gpio()` and arm with the IDF-5 API
+`esp_sleep_enable_ext1_wakeup_io(1ULL << pin, ESP_EXT1_WAKEUP_ANY_LOW)`. On wake the chip
+**resets** (it does not resume) — `esp_reset_reason()` / `esp_sleep_get_wakeup_cause()` /
+`esp_sleep_get_ext1_wakeup_status()` logged at the top of `app_main` tell you why you booted.
+Design consequence: deep sleep **drops the BLE link** — the host sees a disconnect and can't
+reconnect until the user wakes the device. If the host must be able to wake it, use light
+sleep, not deep sleep (see `esp-idf-structure.md` → Power management).
 
 ## A piped build hides failures
 

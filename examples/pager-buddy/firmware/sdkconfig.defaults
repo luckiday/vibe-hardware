@@ -29,6 +29,17 @@ CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
 CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
 CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=32
 
+# Low-power auto sleep (tiered, like voicestick — see main.c).
+#  PM + tickless idle  → automatic light sleep parks the CPU between events.
+#  BT modem sleep + XTAL-PU → the BLE controller survives light sleep, so the Mac
+#  can still reach the pager (and wake the screen) while it's idle. Deep sleep
+#  (button wake) is initiated explicitly in main.c via esp_deep_sleep_start().
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+CONFIG_BT_CTRL_MODEM_SLEEP=y
+CONFIG_BT_CTRL_MAIN_XTAL_PU_DURING_LIGHT_SLEEP=y
+
 # Dual-slot OTA partition table
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_ota.csv"
@@ -40,3 +51,8 @@ CONFIG_LV_FONT_MONTSERRAT_12=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
+# CJK text via 78/xiaozhi-fonts (PuHui): the large fonts overflow the default txt format,
+# and the component also compiles emoji fonts built on imgfont — both must be enabled or
+# the component won't compile (even the sizes we GC away). LV_USE_IMAGE is already on.
+CONFIG_LV_FONT_FMT_TXT_LARGE=y
+CONFIG_LV_USE_IMGFONT=y

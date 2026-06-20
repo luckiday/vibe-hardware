@@ -128,6 +128,10 @@ in `platformio.ini`) · `arduino-cli compile --fqbn <board>`.
 - [x] pager-buddy bring-up so far: display (ST7789 + LVGL) and the **BLE status link**
       (NimBLE peripheral, hardware-tested) — see `references/esp-idf-structure.md`
       (connectivity) + the hard-won `references/bringup-gotchas.md`.
+- [x] **Low-power auto sleep** (tiered light + deep, `ext1` button wake) — builds clean,
+      needs a hardware test. Method + the BLE-can't-wake-from-deep-sleep fact in
+      `references/esp-idf-structure.md` (Power management); the `ext1` self-wake traps in
+      `references/bringup-gotchas.md`.
 - [ ] Remaining pager-buddy bring-up: audio → OTA — one peripheral at a time.
 - [ ] A `scripts/` build wrapper (mirrors `vibe-pcb`'s `pcb_check.sh`: one command →
       reproducible build + size report).

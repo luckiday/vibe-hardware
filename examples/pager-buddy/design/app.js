@@ -35,7 +35,7 @@ function itemCount() {
     if (!s) return 0;
     if (s.state === "waiting") return 2;       // Deny | Allow
     if (s.state === "asking") return s.ask.opts.length;
-    if (s.state === "done") return 2;          // Jump | Dismiss
+    if (s.state === "done") return 1;          // Dismiss (Jump removed — device can't focus the Mac)
   }
   return 0;
 }
@@ -64,8 +64,7 @@ function onOk() {
       toast("→ " + s.ask.opts[S.sel]);
       s.state = "working";
     } else if (s.state === "done") {
-      if (S.sel === 0) toast("⤴ Jumped to " + s.term);
-      else { D.sessions = D.sessions.filter((x) => x.id !== s.id); toast("Dismissed"); }
+      D.sessions = D.sessions.filter((x) => x.id !== s.id); toast("Dismissed");
     }
     backToList();
   }
@@ -171,16 +170,15 @@ function scrAsk(s) {
 
 function scrDone(s) {
   const d = s.done;
-  const jump = `<div class="choice${S.sel === 0 ? " sel" : ""}">⤴ Jump</div>`;
-  const dis = `<div class="choice${S.sel === 1 ? " sel" : ""}">Dismiss</div>`;
+  const dis = `<div class="choice sel">Dismiss</div>`;   // Jump removed — the device can't focus the Mac
   const meta = [];                        // files/tests are optional on the wire
   if (d.files != null) meta.push(`${d.files} files`);
   if (d.tests) meta.push(esc(d.tests));
   return `<div class="content"><div class="head c-done">✓ ${esc(s.name)}</div>` +
     `<div class="q">${esc(d.summary)}</div>` +
     (meta.length ? `<div class="delta">${meta.join(" · ")}</div>` : "") +
-    `<div class="choices">${jump}${dis}</div></div>` +
-    footer("— Jump", "▼ switch");
+    `<div class="choices">${dis}</div></div>` +
+    footer("— Dismiss", "");
 }
 
 function render() {

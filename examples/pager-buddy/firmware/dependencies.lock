@@ -1,4 +1,26 @@
 dependencies:
+  78/xiaozhi-fonts:
+    component_hash: 
+      19ee829a7439702e18084a313b7b86017d3b8d17a094684575edc76bb6d11023
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.6.0
+  espressif/esp_codec_dev:
+    component_hash: 
+      896c67360ae1f8dedaf8a53dfe48c015317fa455f061a5165307892296990028
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.5.10
   idf:
     source:
       type: idf
@@ -12,7 +34,9 @@ dependencies:
       type: service
     version: 9.5.0
 direct_dependencies:
+- 78/xiaozhi-fonts
+- espressif/esp_codec_dev
 - lvgl/lvgl
-manifest_hash: 39e77f23a8d983d8a251b1cf40f714c55528ec966e08decfff9470bb6466dbf0
+manifest_hash: 2b1fa9e4292acf3f781e321e9527694d93bb4b048b7ed45a68d9b7da4f640d73
 target: esp32s3
 version: 2.0.0

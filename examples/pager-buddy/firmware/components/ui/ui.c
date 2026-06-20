@@ -28,6 +28,9 @@ static const char *TAG = "ui";
 // palette (matches the web mock)
 // NOTE: the Montserrat fonts only carry ASCII + the LV_SYMBOL_* set. Any other Unicode
 // glyph (•, ▼, —, ‿ …) renders as a "tofu" box — use ASCII or an LV_SYMBOL_* instead.
+// For CJK text (session names, tasks, questions coming from the bridge) use the PuHui
+// fonts below instead of Montserrat — but keep LV_SYMBOL_* glyphs in a Montserrat label,
+// the PuHui fonts don't carry them (so an inline "✓ name" must split the two).
 #define C_BG     0x0a0a0a   // neutral near-black (was 0x0a0c10, read blue on the panel)
 #define C_FG     0xe6e9ef
 #define C_DIM    0x8a93a0
@@ -41,8 +44,25 @@ static const char *TAG = "ui";
 #define C_DONE   0x46d369
 #define C_ERR    0xff5d5d
 
+// CJK-capable fonts (78/xiaozhi-fonts component). PuHui carries the common-CJK set *and*
+// Latin, so one label renders English or Chinese. Title = large, body = compact; the
+// linker GC keeps only these two of the component's many sizes.
+LV_FONT_DECLARE(font_puhui_basic_20_4);   // titles  (20 px, anti-aliased)
+LV_FONT_DECLARE(font_puhui_basic_14_1);   // body    (14 px)
+#define FONT_TITLE  (&font_puhui_basic_20_4)
+#define FONT_BODY   (&font_puhui_basic_14_1)
+
 static lv_display_t *s_disp;
 static esp_lcd_panel_handle_t s_panel;
+
+// Handles to time-varying labels, updated in place by ui_refresh_time() so the 1 Hz
+// clock/age tick doesn't force a full rebuild — which would restart marquee scrolls.
+#define UI_MAX_ROWS 12
+static lv_obj_t *s_clk_bar;            // status-bar clock (all views)
+static lv_obj_t *s_clk_big;            // idle big clock
+static lv_obj_t *s_age[UI_MAX_ROWS];   // per-list-row age label
+static int       s_age_n;
+static view_t    s_cur_view;
 
 // ---------- LVGL <-> esp_lcd glue ----------
 static bool on_flush_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *e, void *ctx) {
@@ -124,6 +144,15 @@ void ui_init(void) {
 
 uint32_t ui_tick(void) { return lv_timer_handler(); }
 
+void ui_set_backlight(bool on) {
+    gpio_set_level(BOARD_PIN_LCD_BL, on ? 1 : 0);
+}
+
+void ui_prepare_deep_sleep(void) {
+    gpio_set_level(BOARD_PIN_LCD_BL, 0);                 // backlight off
+    if (s_panel) esp_lcd_panel_disp_on_off(s_panel, false);  // panel sleep
+}
+
 // ---------- small helpers ----------
 static uint32_t state_color(sess_state_t s) {
     switch (s) {
@@ -150,6 +179,15 @@ static lv_obj_t *mk_label(lv_obj_t *p, const char *txt, const lv_font_t *f, uint
     lv_obj_set_style_text_color(l, lv_color_hex(c), 0);
     return l;
 }
+// Long text that scrolls horizontally (marquee) to reveal the rest when `on`; else
+// truncates with an ellipsis. Needs a fixed width to know when the text overflows.
+static lv_obj_t *mk_scroll(lv_obj_t *p, const char *txt, const lv_font_t *f, uint32_t c,
+                           int32_t w, bool on) {
+    lv_obj_t *l = mk_label(p, (txt && txt[0]) ? txt : "", f, c);
+    lv_obj_set_width(l, w);
+    lv_label_set_long_mode(l, on ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT);
+    return l;
+}
 static lv_obj_t *mk_box(lv_obj_t *p) {  // a styleless container
     lv_obj_t *o = lv_obj_create(p);
     lv_obj_remove_style_all(o);
@@ -167,6 +205,7 @@ static void rule(lv_obj_t *scr, int y) {
 static void status_bar(lv_obj_t *scr, const app_model_t *m) {
     lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_12, C_DIM);
     lv_obj_align(clk, LV_ALIGN_TOP_LEFT, 4, 2);
+    s_clk_bar = clk;   // ui_refresh_time() ticks this in place
 
     bool chg = m->charging || m->usb;
     uint32_t fillc = m->battery <= 20 ? C_ERR : chg ? 0x5ec4ff : C_DONE;
@@ -225,7 +264,8 @@ static void choices(lv_obj_t *scr, const char *a, const char *b, int sel, bool d
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(c, 6, 0);
     const char *txt[2] = {a, b};
-    for (int i = 0; i < 2; i++) {
+    int nbtn = (b && b[0]) ? 2 : 1;        // a single action (e.g. Dismiss) fills the bar
+    for (int i = 0; i < nbtn; i++) {
         lv_obj_t *bt = mk_box(c);
         lv_obj_set_flex_grow(bt, 1);
         lv_obj_set_height(bt, 22);
@@ -253,6 +293,7 @@ static void view_idle(lv_obj_t *scr, const app_model_t *m) {
     lv_obj_align(face, LV_ALIGN_CENTER, 0, -46);
     lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_28, C_FG);
     lv_obj_align(clk, LV_ALIGN_CENTER, 0, -16);
+    s_clk_big = clk;   // ui_refresh_time() ticks this in place
     lv_obj_t *date = mk_label(scr, m->date, &lv_font_montserrat_12, C_DIM);
     lv_obj_align(date, LV_ALIGN_CENTER, 0, 12);
 
@@ -268,8 +309,15 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
     lv_obj_t *c = content(scr);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 3, 0);
+    // The list can be taller than the content area. content() (a mk_box) starts with
+    // scrolling OFF; turn it back on so off-screen rows are reachable, and below we scroll
+    // the selected row into view ourselves — the UI is button-driven, there's no touch.
+    lv_obj_add_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(c, LV_DIR_VER);
+    lv_obj_t *sel_row = NULL;
     for (int i = 0; i < m->n; i++) {
         session_t *s = &m->sessions[i];
+        bool sel = (i == m->sel);
         lv_obj_t *row = mk_box(c);
         lv_obj_set_width(row, lv_pct(100));
         lv_obj_set_height(row, LV_SIZE_CONTENT);
@@ -277,9 +325,10 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
         lv_obj_set_style_radius(row, 4, 0);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(row, 1, 0);
-        if (i == m->sel) {
+        if (sel) {
             lv_obj_set_style_bg_color(row, lv_color_hex(C_SEL), 0);
             lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+            sel_row = row;
         }
         // line 1: dot + name + age
         lv_obj_t *l1 = mk_box(row);
@@ -293,20 +342,37 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
         lv_obj_set_style_radius(d, 3, 0);
         lv_obj_set_style_bg_color(d, lv_color_hex(state_color(s->state)), 0);
         lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
-        lv_obj_t *nm = mk_label(l1, s->name, &lv_font_montserrat_12, C_FG);
+        lv_obj_t *nm = mk_label(l1, s->name, FONT_BODY, C_FG);
         lv_obj_set_flex_grow(nm, 1);
         lv_label_set_long_mode(nm, LV_LABEL_LONG_DOT);
         lv_obj_set_width(nm, lv_pct(60));
-        mk_label(l1, s->age, &lv_font_montserrat_10, C_DIM);
-        // line 2: agent + state
-        lv_obj_t *l2 = mk_box(row);
-        lv_obj_set_width(l2, lv_pct(100));
-        lv_obj_set_height(l2, LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(l2, LV_FLEX_FLOW_ROW);
-        lv_obj_set_style_pad_column(l2, 6, 0);
-        lv_obj_set_style_pad_left(l2, 11, 0);
-        mk_label(l2, s->agent, &lv_font_montserrat_10, C_CHIPTX);
-        mk_label(l2, state_label(s->state), &lv_font_montserrat_10, state_color(s->state));
+        lv_obj_t *ag = mk_label(l1, s->age, &lv_font_montserrat_10, C_DIM);
+        if (i < UI_MAX_ROWS) s_age[i] = ag;   // ui_refresh_time() ticks the age in place
+        // line 2: the user's task — the disambiguator, shown on every row in the same spot.
+        // Collapsed rows truncate it to one line ("xxxxx…"); the selected row marquee-scrolls
+        // the full text. Keeping it here (not under the meta) is what keeps rows compact.
+        if (s->task && s->task[0]) {
+            lv_obj_t *tk = mk_scroll(row, s->task, FONT_BODY, C_DIM, lv_pct(100), sel);
+            lv_obj_set_style_pad_left(tk, 11, 0);
+        }
+        // line 3: agent + terminal + state — detail only the *selected* row expands to show
+        // (collapsed rows already convey state via the dot colour, so they stay two lines).
+        if (sel) {
+            lv_obj_t *l2 = mk_box(row);
+            lv_obj_set_width(l2, lv_pct(100));
+            lv_obj_set_height(l2, LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(l2, LV_FLEX_FLOW_ROW);
+            lv_obj_set_style_pad_column(l2, 6, 0);
+            lv_obj_set_style_pad_left(l2, 11, 0);
+            mk_label(l2, s->agent, &lv_font_montserrat_10, C_CHIPTX);
+            if (s->term && s->term[0]) mk_label(l2, s->term, &lv_font_montserrat_10, C_CHIPTX);
+            mk_label(l2, state_label(s->state), &lv_font_montserrat_10, state_color(s->state));
+        }
+    }
+    s_age_n = m->n < UI_MAX_ROWS ? m->n : UI_MAX_ROWS;
+    if (sel_row) {                          // flex sizes aren't computed until layout runs
+        lv_obj_update_layout(c);            // so update first, then scroll the row into view
+        lv_obj_scroll_to_view(sel_row, LV_ANIM_OFF);
     }
     footer(scr, LV_SYMBOL_OK " open", LV_SYMBOL_DOWN " next");
 }
@@ -315,13 +381,13 @@ static void scr_working(lv_obj_t *scr, session_t *s) {
     lv_obj_t *c = content(scr);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 3, 0);
-    lv_obj_t *h = mk_label(c, s->name, &lv_font_montserrat_14, C_WORK);
-    (void)h;
-    for (int i = 0; i < s->act_n; i++) {
-        lv_obj_t *a = mk_label(c, s->act[i], &lv_font_montserrat_10, C_DIM);
-        lv_obj_set_width(a, lv_pct(100));
-        lv_label_set_long_mode(a, LV_LABEL_LONG_DOT);
-    }
+    lv_obj_t *nm = mk_label(c, s->name, FONT_TITLE, C_WORK);    // title (CJK-capable)
+    lv_obj_set_width(nm, lv_pct(100));
+    lv_label_set_long_mode(nm, LV_LABEL_LONG_DOT);              // a long name can't overflow at 20 px
+    if (s->task && s->task[0])                                  // the user's ask (scrolls)
+        mk_scroll(c, s->task, FONT_BODY, C_FG, lv_pct(100), true);
+    for (int i = 0; i < s->act_n; i++)                          // recent tool steps (scroll long paths)
+        mk_scroll(c, s->act[i], &lv_font_montserrat_10, C_DIM, lv_pct(100), true);
     mk_label(c, "working...", &lv_font_montserrat_12, C_WORK);
     footer(scr, LV_SYMBOL_LEFT " back", "");
 }
@@ -331,8 +397,8 @@ static void scr_approve(lv_obj_t *scr, session_t *s) {
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 2, 0);
     mk_label(c, LV_SYMBOL_WARNING " Permission", &lv_font_montserrat_12, C_WAIT);
-    mk_label(c, s->appr_tool, &lv_font_montserrat_16, C_FG);
-    lv_obj_t *f = mk_label(c, s->appr_file, &lv_font_montserrat_10, C_FG);
+    mk_label(c, s->appr_tool, FONT_TITLE, C_FG);               // title (CJK-capable)
+    lv_obj_t *f = mk_label(c, s->appr_file, FONT_BODY, C_FG);
     lv_obj_set_width(f, lv_pct(100));
     lv_label_set_long_mode(f, LV_LABEL_LONG_WRAP);
     char d[24];
@@ -345,8 +411,11 @@ static void scr_ask(lv_obj_t *scr, session_t *s, int sel) {
     lv_obj_t *c = content(scr);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 3, 0);
+    lv_obj_add_flag(c, LV_OBJ_FLAG_SCROLLABLE);   // many options can overflow — scroll to the selected one
+    lv_obj_set_scroll_dir(c, LV_DIR_VER);
+    lv_obj_t *sel_opt = NULL;
     mk_label(c, "Claude asks", &lv_font_montserrat_12, C_ASK);
-    lv_obj_t *q = mk_label(c, s->ask_q, &lv_font_montserrat_12, C_FG);
+    lv_obj_t *q = mk_label(c, s->ask_q, FONT_BODY, C_FG);
     lv_obj_set_width(q, lv_pct(100));
     lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
     for (int i = 0; i < s->ask_n; i++) {
@@ -357,11 +426,13 @@ static void scr_ask(lv_obj_t *scr, session_t *s, int sel) {
         lv_obj_set_style_radius(o, 4, 0);
         lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
         bool on = i == sel;
+        if (on) sel_opt = o;
         lv_obj_set_style_bg_color(o, lv_color_hex(on ? 0x0e2d33 : 0x12161d), 0);
         lv_obj_set_style_border_width(o, 1, 0);
         lv_obj_set_style_border_color(o, lv_color_hex(on ? C_ASK : 0x20262f), 0);
-        mk_label(o, s->ask_opts[i], &lv_font_montserrat_12, on ? 0xc9fbff : C_FG);
+        mk_label(o, s->ask_opts[i], FONT_BODY, on ? 0xc9fbff : C_FG);
     }
+    if (sel_opt) { lv_obj_update_layout(c); lv_obj_scroll_to_view(sel_opt, LV_ANIM_OFF); }
     footer(scr, LV_SYMBOL_OK " select", LV_SYMBOL_DOWN " next");
 }
 
@@ -369,21 +440,43 @@ static void scr_done(lv_obj_t *scr, session_t *s) {
     lv_obj_t *c = content(scr);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 3, 0);
-    char h[40];
-    snprintf(h, sizeof h, LV_SYMBOL_OK " %s", s->name);
-    mk_label(c, h, &lv_font_montserrat_14, C_DONE);
-    lv_obj_t *sm = mk_label(c, s->done_summary, &lv_font_montserrat_12, C_FG);
+    // title row: keep the ✓ in Montserrat (PuHui has no LV_SYMBOL_* glyphs), name in the CJK font
+    lv_obj_t *hdr = mk_box(c);
+    lv_obj_set_width(hdr, lv_pct(100));
+    lv_obj_set_height(hdr, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(hdr, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(hdr, 4, 0);
+    mk_label(hdr, LV_SYMBOL_OK, &lv_font_montserrat_16, C_DONE);
+    lv_obj_t *nm = mk_label(hdr, s->name, FONT_TITLE, C_DONE);
+    lv_obj_set_flex_grow(nm, 1);
+    lv_label_set_long_mode(nm, LV_LABEL_LONG_DOT);
+    lv_obj_t *sm = mk_label(c, s->done_summary, FONT_BODY, C_FG);
     lv_obj_set_width(sm, lv_pct(100));
     lv_label_set_long_mode(sm, LV_LABEL_LONG_WRAP);
     char d[32];
     snprintf(d, sizeof d, "%d files - %s", s->files, s->tests ? s->tests : "");
     mk_label(c, d, &lv_font_montserrat_10, C_DIM);
-    footer(scr, LV_SYMBOL_OK " Jump", LV_SYMBOL_DOWN " switch");
+    footer(scr, LV_SYMBOL_OK " dismiss", "");
+}
+
+// Update only the time-varying labels (clock + per-row age) in place — no rebuild, so
+// marquee scroll animations keep running. main calls this on the 1 Hz tick when nothing
+// structural changed; the handles were captured by the last ui_render.
+void ui_refresh_time(const app_model_t *m) {
+    if (s_clk_bar) lv_label_set_text(s_clk_bar, m->clock);
+    if (s_cur_view == VIEW_IDLE && s_clk_big) lv_label_set_text(s_clk_big, m->clock);
+    if (s_cur_view == VIEW_LIST) {
+        int n = s_age_n < m->n ? s_age_n : m->n;
+        for (int i = 0; i < n; i++)
+            if (s_age[i]) lv_label_set_text(s_age[i], m->sessions[i].age);
+    }
 }
 
 void ui_render(const app_model_t *m) {
     lv_obj_t *scr = lv_screen_active();
     lv_obj_clean(scr);
+    s_clk_bar = NULL; s_clk_big = NULL; s_age_n = 0; s_cur_view = m->view;  // labels are recreated below
     status_bar(scr, m);
 
     if (m->view == VIEW_IDLE) {
@@ -401,7 +494,7 @@ void ui_render(const app_model_t *m) {
             case ST_ASKING: scr_ask(scr, s, m->sel); break;
             case ST_DONE:
                 scr_done(scr, s);
-                choices(scr, LV_SYMBOL_UP " Jump", "Dismiss", m->sel, false);
+                choices(scr, "Dismiss", NULL, 0, false);   // device can't focus the Mac → no "Jump"
                 break;
             default: scr_working(scr, s); break;
         }

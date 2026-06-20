@@ -228,14 +228,53 @@ dependencies:
 <a name="pm"></a>
 ## Power management (battery devices)
 
+Two independent savings tiers — use **both**. The dividing fact: **light sleep keeps the
+radio alive; deep sleep powers it off.**
+
 ```
-CONFIG_PM_ENABLE=y
+CONFIG_PM_ENABLE=y                                 # DFS + automatic light sleep
 CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
 CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+CONFIG_BT_CTRL_MODEM_SLEEP=y                        # BLE controller sleeps between events…
+CONFIG_BT_CTRL_MAIN_XTAL_PU_DURING_LIGHT_SLEEP=y   # …and survives light sleep (link stays up)
 ```
+
+**Tier 1 — automatic light sleep (stay reachable).** With `PM_ENABLE` + tickless idle the
+scheduler parks the CPU whenever every task is blocked, and
+`esp_pm_configure(.light_sleep_enable = true)` lets it drop into light sleep. Add the two
+`BT_CTRL_*` keys and the **BLE link survives** — the controller wakes the CPU on each
+connection event — so a connected host can still push data / light the screen while the
+device idles at a few mA instead of tens. Configure PM *after* the BLE stack is up. Don't
+busy-spin a render/poll loop: leave idle time to sleep into (`vTaskDelay` / block on a
+queue). A periodic LVGL tick timer caps each light-sleep to one tick — fine, but slow or
+stop the render loop when the screen is blanked to sleep longer.
+
+> **Light sleep visibly flickers an in-use SPI LCD.** With the panel lit, automatic light
+> sleep glitches the display (the SPI/refresh path stutters on each sleep/wake). Don't run
+> it while the screen is on: hold an `ESP_PM_NO_LIGHT_SLEEP` lock whenever the screen is on
+> and **release it only when you blank** (so light sleep — and its win — engages exactly in
+> the screen-off tier). DFS still scales the CPU down while the screen is on, so you keep
+> that saving with no flicker.
+
+**Tier 2 — deep sleep (best battery, but the host can't wake you).** After a longer idle,
+power down to ~10–20 µA and wake on a button via `ext1`. **In deep sleep the radio is off**
+— on the ESP32-S3 only the RTC timer / RTC-GPIO (ext0/ext1) / touch can wake the chip, *not*
+BLE or Wi-Fi. A host therefore **cannot** push a message to wake a deep-sleeping device: the
+user presses the button, the chip **reboots** (deep-sleep wake = reset → `app_main` re-runs),
+re-advertises, and the host reconnects. That asymmetry is why Tier 1 exists — light sleep is
+the only state in which a host can wake the screen. Choose the deep-sleep trigger from *real*
+state (e.g. "nothing needs attention AND unplugged"), never the stub / pre-pairing data.
+
+**Who owns what.** `main` owns the *policy* — inactivity timers (or idle computed in its
+loop), what blocks sleep, which tier to enter. The **BSP owns the hardware**:
+`board_prepare_deep_sleep()` quiesces peripherals (e.g. cut the display rail via the PMIC);
+`main` arms the wake pin. Arming `ext1` has three ways to self-wake instantly — see
+[`bringup-gotchas.md`](bringup-gotchas.md). Worked end-to-end in
+[`examples/pager-buddy/firmware/main/main.c`](../../../examples/pager-buddy/firmware/main/main.c)
+(`enter_deep_sleep`) + its BSP/UI `*_prepare_deep_sleep()`.
 
 - Hold an `esp_pm_lock` (`ESP_PM_NO_LIGHT_SLEEP` / `ESP_PM_CPU_FREQ_MAX`) **only across
   latency- or throughput-critical phases** (recording, an OTA transfer); release it
   after, so the device idles cheaply the rest of the time.
-- Drive display-dim and deep-sleep off inactivity timers; let the BSP own
-  `board_prepare_deep_sleep()` (configure wake pins, quiesce peripherals).
+- Never deep-sleep while externally powered (re-read charging/USB just before sleeping) or
+  while the wake button is still held — either way you'd wake again immediately.

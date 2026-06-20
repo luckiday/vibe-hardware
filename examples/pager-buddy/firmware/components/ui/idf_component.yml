@@ -1,2 +1,6 @@
 dependencies:
   lvgl/lvgl: "^9"
+  # CJK glyphs for the title/body labels (Montserrat is ASCII-only). Provides the
+  # font_puhui_basic_* LVGL fonts used in ui.c; the linker keeps only the ones we
+  # reference. From 78/xiaozhi-esp32 — see docs/references/xiaozhi-esp32.md.
+  78/xiaozhi-fonts: "~1.6.0"

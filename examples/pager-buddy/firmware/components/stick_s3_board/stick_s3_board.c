@@ -160,3 +160,13 @@ esp_err_t board_usb_powered(bool *usb_powered) {
     *usb_powered = mv > 4500;
     return ESP_OK;
 }
+
+// Drive M5PM1 GPIO2 low to power down the LCD rail (the inverse of power_on_lcd_rail).
+// Called right before esp_deep_sleep_start() so the panel + backlight rail draws
+// nothing while the chip sleeps. Best-effort: if the PMIC is absent, do nothing.
+void board_prepare_deep_sleep(void) {
+    if (!s_pmic) return;
+    reg_upd(R_GPIO_OUT, PA_EN_GPIO, 0);      // GPIO3 low → speaker amp off
+    reg_upd(R_GPIO_OUT, LCD_RAIL_GPIO, 0);   // GPIO2 low → rail off
+    reg_upd(R_GPIO_DRV, LCD_RAIL_GPIO, 0);   // release the push-pull driver too
+}

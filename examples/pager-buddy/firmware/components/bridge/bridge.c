@@ -1,6 +1,7 @@
 // bridge — BLE peripheral that receives Claude Code status snapshots.
 //
-// NimBLE GATT server (modeled on parts/.../voicestick/firmware/components/voice_ble).
+// NimBLE GATT server (modeled on voicestick's firmware/components/voice_ble — see
+// docs/awesome-firmware.md; clone under docs/references/_clones/voicestick).
 // The Mac (central) writes snapshot JSON to the SNAPSHOT characteristic; because a
 // snapshot is larger than one BLE write, the host frames it as chunks with a 2-byte
 // header [ver, flags] where flags carry START/END. We reassemble, parse with cJSON
