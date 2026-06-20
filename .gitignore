@@ -30,6 +30,7 @@ skills-lock.json
 *.kicad_*-bak
 fp-info-cache
 .history/
+.vscode/
 
 # Firmware build trees (set per platform)
 build/
