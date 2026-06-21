@@ -51,14 +51,15 @@ backlight GPIO alone is not enough on this hardware.
 On the Mac (see [`../bridge/`](../bridge/)):
 
 ```bash
-pip install bleak
-python3 ../bridge/pager_stub.py        # the hub (Claude hooks POST here; --ui for the web mock)
-python3 ../bridge/ble_push.py          # scans for "pg-XXXX", connects, writes snapshots over BLE
-python3 ../bridge/install_hooks.py install   # register the Claude Code hooks (then restart Claude)
+../bridge/pager install     # venv + bleak + register Claude hooks (then restart Claude)
+../bridge/pager up          # hub + BLE relay in the background (scans for "pg-XXXX")
+../bridge/pager status      # is it up? what's the device doing?
 ```
 
-The device shows stub sessions until the first snapshot lands, then switches to live
-data. The wire format is [`../bridge/protocol.yaml`](../bridge/protocol.yaml).
+(`pager` is the tailscale-style CLI over the hub + relay + hooks; see
+[`../bridge/`](../bridge/) for the underlying scripts.) The device shows stub
+sessions until the first snapshot lands, then switches to live data. The wire format
+is [`../bridge/protocol.yaml`](../bridge/protocol.yaml).
 
 ## Build — reproducible (Docker, authoritative)
 

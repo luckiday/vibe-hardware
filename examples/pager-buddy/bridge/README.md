@@ -43,6 +43,43 @@ snapshot), and POSTs the snapshot to the device. The device is a dumb renderer.
 **Hooks fail open**: if the device/stub is down, the hook exits 0 silently and
 Claude is unaffected. Nothing is ever written to stdout.
 
+## The `pager` command
+
+One command runs the whole bridge — modeled on `tailscale`: one brings it up, one
+takes it down, one shows status. It's a thin stdlib-Python orchestrator over the
+pieces below (no extra deps); background runs always go through a macOS LaunchAgent,
+so "is it running?" has one honest answer (plus crash-restart + a log file).
+
+```bash
+pager up [--boot]       # start hub + BLE relay in the background (--boot = also at login)
+pager status [--watch]  # colored status block (hub · relay · device · boot · hooks · audio)
+pager down              # stop now
+pager run               # foreground instead — live [ble] lines, Ctrl-C to stop
+
+pager install [--gate …] [--port N]   # venv + bleak + register Claude hooks
+pager boot on|off                     # toggle auto-start at login
+pager hooks on|off|status             # Claude Code hooks
+pager audio [on|off] [--volume N]     # alert audio
+pager logs [-f]                       # tail the bridge log
+pager doctor                          # diagnose the whole chain
+```
+
+`pager status` at a glance:
+
+```
+pager-buddy
+  hub      ● running    http://127.0.0.1:8787   (pid 12345)
+  relay    ● connected  pg-3A7F   MTU 185
+  device   2 session(s) ▸ fix auth bug · working 3s
+  boot     ○ off        → pager boot on
+  hooks    ● 9 event(s) PreToolUse, Stop, …
+  audio    ● on  · vol 60
+```
+
+The sections below document the scripts `pager` wraps (`install.sh`, `run.sh`,
+`install_hooks.py`, …) — reach for them directly if you like, or just use `pager`.
+Hardware-free CLI checks: `./smoke.sh`.
+
 ## Quickstart (no Claude, no hardware)
 
 Two terminals:
@@ -95,25 +132,23 @@ Claude Code so it loads the hooks. The steps below are the manual equivalents.
 
 ## Running the bridge
 
-The bridge must be up to receive hook events. Two ways:
+The bridge must be up to receive hook events. The simplest path is `pager`:
 
 ```bash
-./run.sh                      # foreground in a terminal tab (Ctrl-C to stop)
-                              #   → http://127.0.0.1:8787/ — open it, click Connect
-                              #   → also starts the BLE relay (ble_push.py) to the pager
-
-./service.sh install          # auto-start on login + restart on crash (macOS LaunchAgent)
-./service.sh status           # is it running?
-./service.sh logs             # tail the log
-./service.sh uninstall        # remove the agent
+pager up          # background (LaunchAgent): hub + BLE relay, restarts on crash
+pager status      # is it up? what's the device doing?
+pager down        # stop
+pager run         # or foreground in a terminal tab (Ctrl-C to stop)
 ```
 
-`run.sh` is best while iterating; `service.sh install` is the "always-on desk
-pager" setup. Both free port 8787 first and serve the design UI via `--ui`.
-`run.sh` also brings up the **BLE relay** to the device — best-effort: it's skipped
-with a note if `bleak` isn't installed (`pip install bleak`), and `PAGER_BUDDY_BLE=0`
-disables it (hub only). Override the port with `PAGER_BUDDY_PORT` (and re-point the
-hook with `install_hooks.py install --url http://127.0.0.1:<port>/v1/snapshot`).
+`pager up` is the always-on desk-pager setup; `pager run` is best while iterating
+(live `[ble]` lines). Under the hood `run.sh` is the runtime both use — it frees the
+port, serves the design UI (`--ui`), and brings up the **BLE relay** best-effort
+(skipped with a note if `bleak` is missing; `PAGER_BUDDY_BLE=0` = hub only). Override
+the port with `pager up --port N` (or `PAGER_BUDDY_PORT`).
+
+`service.sh` is now a deprecated shim to `pager boot` (kept so older docs / muscle
+memory keep working); prefer `pager boot on|off` to toggle auto-start at login.
 
 ## Use it for real (with your Claude Code)
 
@@ -137,6 +172,7 @@ Config via env (read by the hook): `PAGER_BUDDY_URL`, `PAGER_BUDDY_STATE`,
 
 | File | Role |
 |---|---|
+| [pager](pager) | **The entry point.** tailscale-style CLI wrapping everything below: `up`/`down`/`status`/`run`/`install`/`boot`/`hooks`/`audio`/`logs`/`doctor`. Stdlib only. |
 | [protocol.yaml](protocol.yaml) | **The contract.** Wire format + the two transports (HTTP hub, BLE device). Versioned. |
 | [claude_pager_hook.py](claude_pager_hook.py) | Hook command: stdin event → registry → POST snapshot. `--demo` to self-drive. |
 | [pager_stub.py](pager_stub.py) | The hub: `POST/GET /v1/snapshot`, ASCII screen, serves the web mock (`--ui`). |
@@ -144,6 +180,8 @@ Config via env (read by the hook): `PAGER_BUDDY_URL`, `PAGER_BUDDY_STATE`,
 | [pager_settings.py](pager_settings.py) | The **audio settings session**: enable/disable alert audio + set volume (interactive, or `--audio on/off --volume N`). Talks to the hub; the relay forwards to the device. |
 | [install.sh](install.sh) | **One-command setup**: venv + `bleak`, register hooks, optional LaunchAgent. `uninstall` reverses it. |
 | [install_hooks.py](install_hooks.py) | Idempotent install / uninstall / status for `~/.claude/settings.json` (called by `install.sh`). |
+| [run.sh](run.sh) · [lib.sh](lib.sh) · [service.sh](service.sh) | Runtime (hub + relay, launchd-friendly), shared shell helpers, and a deprecated `pager boot` shim. |
+| [smoke.sh](smoke.sh) | Hardware-free CLI checks (argparse wiring, status/doctor/hooks, plist round-trip) under an isolated `$HOME`. |
 
 ## What the device gets
 

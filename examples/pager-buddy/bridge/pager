@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""pager — one command to run the pager-buddy Mac bridge.
+
+Modeled on `tailscale`: one command brings the bridge up, one takes it down, one shows
+status. Boot-at-login is a flag, not a separate concept. This is a thin stdlib-Python
+orchestrator (no new pip deps) over the existing pieces — it does not replace them:
+
+    pager_stub.py   the hub (Claude hooks POST here; serves the web mock)
+    ble_push.py     the BLE relay (hub → device)
+    run.sh          the runtime: hub + relay in the foreground (what launchd execs)
+    install.sh      venv + bleak + Claude hooks
+    install_hooks.py / pager_settings.py   hooks + audio settings
+
+Background runs always go through a macOS LaunchAgent, so "is it running?" has one honest
+answer (plus crash-restart + a log file). `pager run` is the foreground escape hatch.
+
+    pager up [--boot]        start in background (hub + relay); --boot also at login
+    pager down               stop now
+    pager status [--watch]    colored status block
+    pager logs [-f]          tail the bridge log
+    pager run                foreground (run.sh) — live [ble] lines, Ctrl-C to stop
+    pager install …          venv + bleak + Claude hooks
+    pager uninstall          reverse everything
+    pager boot on|off        toggle auto-start at login
+    pager hooks on|off|status   Claude Code hooks
+    pager audio [on|off] [--volume N]   alert audio
+    pager doctor             diagnose the whole chain
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+DIR = Path(__file__).resolve().parent
+VENV_PY = DIR / ".venv" / "bin" / "python"
+LABEL = "com.pagerbuddy.bridge"
+PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+LOG = Path.home() / "Library" / "Logs" / f"{LABEL}.log"
+DEFAULT_PORT = int(os.environ.get("PAGER_BUDDY_PORT", "8787"))
+SERVICE_UUID = "00010000-7265-6761-702d-796464756200"  # matches bridge.c / ble_push.py
+
+# ── tiny ANSI helpers (no rich/colorama) ─────────────────────────────────────────
+_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+def _c(code: str, s: str) -> str:
+    return f"\033[{code}m{s}\033[0m" if _COLOR else s
+BOLD, DIM = "1", "2"
+DOT_OK  = _c("32", "●")   # green  — healthy
+DOT_OFF = _c("2",  "○")   # dim    — not running / off
+DOT_BAD = _c("31", "●")   # red    — problem
+DOT_WARN = _c("33", "◐")  # yellow — in progress / unknown
+
+def ok(msg: str)   -> None: print(f"{_c('32', '✓')} {msg}")
+def warn(msg: str) -> None: print(f"{_c('33', '!')} {msg}")
+def row(label: str, dot: str, text: str) -> None:
+    print(f"  {label:<8} {dot}  {text}")
+
+# ── python / bleak ───────────────────────────────────────────────────────────────
+def runtime_python() -> str:
+    """The python that runs the relay (needs bleak): PAGER_BUDDY_PY, else the venv,
+    else the first python3 that can import bleak, else any python3."""
+    env = os.environ.get("PAGER_BUDDY_PY")
+    if env:
+        return env
+    if VENV_PY.exists():
+        return str(VENV_PY)
+    for cand in ("python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"):
+        p = shutil.which(cand)
+        if p and _imports_bleak(p):
+            return p
+    return shutil.which("python3") or "python3"
+
+def _imports_bleak(py: str) -> bool:
+    try:
+        return subprocess.run([py, "-c", "import bleak"],
+                              capture_output=True).returncode == 0
+    except Exception:
+        return False
+
+def has_bleak() -> bool:
+    return _imports_bleak(runtime_python())
+
+# ── hub (HTTP) ───────────────────────────────────────────────────────────────────
+def hub_base(port: int) -> str:
+    return f"http://127.0.0.1:{port}"
+
+def _get_json(url: str, timeout: float = 2.0):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+def hub_up(port: int) -> bool:
+    return _get_json(hub_base(port) + "/healthz") is not None
+
+def port_pid(port: int):
+    try:
+        out = subprocess.run(["lsof", "-ti", f":{port}"],
+                             capture_output=True, text=True).stdout.strip()
+        return int(out.splitlines()[0]) if out else None
+    except Exception:
+        return None
+
+def proc_running(pattern: str) -> list[int]:
+    r = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True)
+    return [int(p) for p in r.stdout.split()] if r.returncode == 0 else []
+
+# ── launchd (the background runtime) ─────────────────────────────────────────────
+def _domain() -> str:
+    return f"gui/{os.getuid()}"
+
+def _target() -> str:
+    return f"{_domain()}/{LABEL}"
+
+def _launchctl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["launchctl", *args], capture_output=True, text=True)
+
+def launchd_loaded() -> bool:
+    return _launchctl("print", _target()).returncode == 0
+
+def launchd_pid():
+    r = _launchctl("print", _target())
+    if r.returncode != 0:
+        return None
+    m = re.search(r"^\s*pid = (\d+)", r.stdout, re.M)
+    return int(m.group(1)) if m else None
+
+def write_plist(port: int, boot: bool) -> None:
+    PLIST.parent.mkdir(parents=True, exist_ok=True)
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    plist = {
+        "Label": LABEL,
+        "ProgramArguments": ["/bin/bash", str(DIR / "run.sh")],
+        "EnvironmentVariables": {
+            "PAGER_BUDDY_PORT": str(port),
+            "PAGER_BUDDY_PY": runtime_python(),
+            "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        },
+        "RunAtLoad": bool(boot),                  # → start at login
+        "KeepAlive": {"SuccessfulExit": False},   # restart on crash, NOT on a clean stop
+        "StandardOutPath": str(LOG),
+        "StandardErrorPath": str(LOG),
+    }
+    with open(PLIST, "wb") as f:
+        plistlib.dump(plist, f)
+
+def _read_plist() -> dict:
+    try:
+        with open(PLIST, "rb") as f:
+            return plistlib.load(f)
+    except Exception:
+        return {}
+
+def boot_enabled() -> bool:
+    return bool(PLIST.exists() and _read_plist().get("RunAtLoad"))
+
+def plist_port():
+    try:
+        return int(_read_plist()["EnvironmentVariables"]["PAGER_BUDDY_PORT"])
+    except Exception:
+        return None
+
+def launchd_bootstrap() -> None:
+    if launchd_loaded():
+        _launchctl("bootout", _target())            # idempotent reload
+    if _launchctl("bootstrap", _domain(), str(PLIST)).returncode != 0:
+        _launchctl("load", str(PLIST))              # legacy fallback
+
+def launchd_bootout() -> None:
+    if _launchctl("bootout", _target()).returncode != 0:
+        _launchctl("unload", str(PLIST))
+
+def launchd_kickstart() -> None:
+    _launchctl("kickstart", "-k", _target())
+
+def launchd_stop() -> None:
+    # Clean SIGTERM → run.sh exits 0 → KeepAlive(SuccessfulExit:false) won't restart it.
+    if _launchctl("kill", "SIGTERM", _target()).returncode != 0:
+        _launchctl("stop", LABEL)
+
+# ── Claude hooks (read settings.json directly for status) ────────────────────────
+def hooks_status() -> tuple[int, list[str]]:
+    sp = Path.home() / ".claude" / "settings.json"
+    if not sp.exists():
+        return 0, []
+    try:
+        data = json.loads(sp.read_text())
+    except Exception:
+        return 0, []
+    events: list[str] = []
+    for event, groups in (data.get("hooks") or {}).items():
+        for g in groups:
+            if any("claude_pager_hook.py" in (h.get("command", "")) for h in g.get("hooks", [])):
+                if event not in events:
+                    events.append(event)
+                break
+    return len(events), events
+
+# ── relay link state, read from the log tail ─────────────────────────────────────
+def relay_link_state() -> tuple[str | None, str]:
+    """(state, detail) from the newest [ble] line: connected / searching / down / None."""
+    if not LOG.exists():
+        return None, ""
+    try:
+        lines = LOG.read_text(errors="replace").splitlines()[-300:]
+    except Exception:
+        return None, ""
+    state, detail = None, ""
+    for ln in lines:
+        if "[ble] connected" in ln:
+            state, detail = "connected", ln.split("connected", 1)[1].strip(" .")
+        elif "[ble] disconnected" in ln:
+            state, detail = "down", ln.split("disconnected", 1)[1].strip(" .")
+        elif "scanning for the pager" in ln or "[ble] none yet" in ln:
+            if state != "connected":
+                state = "searching"
+    return state, detail
+
+def resolve_port(args) -> int:
+    p = getattr(args, "port", None)
+    if p:
+        return int(p)
+    return plist_port() or DEFAULT_PORT
+
+# ── commands ─────────────────────────────────────────────────────────────────────
+def cmd_up(args) -> int:
+    port = resolve_port(args)
+    if not has_bleak():
+        warn("bleak isn't installed — the BLE relay can't run. Fix:  pager install")
+    boot = bool(args.boot) or boot_enabled()   # a plain `up` never silently disables boot
+    write_plist(port, boot)
+    launchd_bootstrap()
+    launchd_kickstart()
+    time.sleep(0.5)
+    ok(f"bridge up → {hub_base(port)}" + ("   · starts at login" if boot else ""))
+    print(f"  watch:  pager status --watch      logs:  pager logs -f")
+    if not boot:
+        print(f"  start at login:  pager boot on")
+    return 0
+
+def cmd_down(args) -> int:
+    if not launchd_loaded() and not proc_running("pager_stub.py"):
+        print("already stopped.")
+        return 0
+    launchd_stop()
+    # also reap a stray foreground/legacy run, if any
+    subprocess.run(["pkill", "-f", "ble_push.py"], capture_output=True)
+    time.sleep(0.3)
+    tail = "   (still set to start at login — pager boot off to disable)" if boot_enabled() else ""
+    ok("bridge stopped." + tail)
+    return 0
+
+def _status_block(port: int) -> None:
+    print(_c(BOLD, "pager-buddy"))
+
+    up = hub_up(port)
+    hpid = port_pid(port)
+    if up:
+        row("hub", DOT_OK, f"running    {hub_base(port)}" + (f"   (pid {hpid})" if hpid else ""))
+    else:
+        row("hub", DOT_OFF, "stopped    → pager up")
+
+    rpids = proc_running("ble_push.py")
+    lstate, ldetail = relay_link_state()
+    if rpids and lstate == "connected":
+        row("relay", DOT_OK, f"connected  {ldetail}".rstrip())
+    elif rpids:
+        row("relay", DOT_WARN, "searching  (scanning for pg-XXXX)")
+    elif lstate == "down":
+        row("relay", DOT_BAD, f"down       {ldetail}".rstrip())
+    else:
+        row("relay", DOT_OFF, "stopped")
+
+    snap = _get_json(hub_base(port) + "/v1/snapshot") if up else None
+    sessions = (snap or {}).get("sessions") or []
+    if sessions:
+        s = sessions[0]
+        more = f"   (+{len(sessions) - 1} more)" if len(sessions) > 1 else ""
+        head = f"{s.get('name', '?')} · {s.get('state', '?')} {s.get('age', '')}".rstrip()
+        row("device", DOT_OK, f"{len(sessions)} session(s)  ▸ {head}{more}")
+    elif up:
+        row("device", DOT_OFF, "no sessions yet")
+    else:
+        row("device", DOT_OFF, "—")
+
+    if boot_enabled():
+        row("boot", DOT_OK, "on    (starts at login)")
+    else:
+        row("boot", DOT_OFF, "off   → pager boot on")
+
+    n, events = hooks_status()
+    if n:
+        shown = ", ".join(events[:4]) + (" …" if len(events) > 4 else "")
+        row("hooks", DOT_OK, f"{n} event(s)  {shown}")
+    else:
+        row("hooks", DOT_OFF, "not registered  → pager hooks on")
+
+    st = _get_json(hub_base(port) + "/v1/settings") if up else None
+    if st is not None:
+        en = st.get("audio_enabled", True)
+        row("audio", DOT_OK if en else DOT_OFF, f"{'on' if en else 'off'}  · vol {st.get('volume', 60)}")
+    else:
+        row("audio", DOT_OFF, "—")
+
+def cmd_status(args) -> int:
+    port = resolve_port(args)
+    if not args.watch:
+        _status_block(port)
+        return 0
+    try:
+        while True:
+            sys.stdout.write("\033[2J\033[H")  # clear + home
+            _status_block(port)
+            print(_c(DIM, "\n  (live — Ctrl-C to exit)"))
+            time.sleep(2)
+    except KeyboardInterrupt:
+        print()
+        return 0
+
+def cmd_logs(args) -> int:
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    LOG.touch(exist_ok=True)
+    cmd = ["tail", "-n", "40"] + (["-f"] if args.follow else []) + [str(LOG)]
+    try:
+        return subprocess.call(cmd)
+    except KeyboardInterrupt:
+        return 0
+
+def cmd_run(args) -> int:
+    env = os.environ.copy()
+    env["PAGER_BUDDY_PORT"] = str(resolve_port(args))
+    os.execvpe("/bin/bash", ["/bin/bash", str(DIR / "run.sh")], env)
+    return 0  # not reached
+
+def cmd_install(args) -> int:
+    cmd = ["/bin/bash", str(DIR / "install.sh")]
+    if args.port:
+        cmd += ["--port", str(args.port)]
+    if args.gate is not None:
+        cmd += ["--gate", args.gate]
+    if args.no_hooks:
+        cmd += ["--no-hooks"]
+    if args.boot:
+        cmd += ["--service"]
+    return subprocess.call(cmd)
+
+def cmd_uninstall(args) -> int:
+    launchd_bootout()
+    return subprocess.call(["/bin/bash", str(DIR / "install.sh"), "uninstall"])
+
+def cmd_boot(args) -> int:
+    if args.state == "on":
+        return cmd_up(argparse.Namespace(boot=True, port=getattr(args, "port", None)))
+    # off: rewrite the plist so the NEXT login won't auto-start; leave running state alone.
+    if not PLIST.exists():
+        print("already off (not installed).")
+        return 0
+    write_plist(plist_port() or DEFAULT_PORT, False)
+    tail = "   (still running now — pager down to stop)" if launchd_pid() else ""
+    ok("won't start at login." + tail)
+    return 0
+
+def cmd_hooks(args) -> int:
+    script = str(DIR / "install_hooks.py")
+    if args.state == "on":
+        url = f"{hub_base(resolve_port(args))}/v1/snapshot"
+        return subprocess.call([sys.executable, script, "install", "--url", url])
+    if args.state == "off":
+        return subprocess.call([sys.executable, script, "uninstall"])
+    return subprocess.call([sys.executable, script, "status"])
+
+def cmd_audio(args) -> int:
+    env = os.environ.copy()
+    env["PAGER_BUDDY_URL"] = f"{hub_base(resolve_port(args))}/v1/snapshot"
+    cmd = [sys.executable, str(DIR / "pager_settings.py")]
+    if args.state:
+        cmd += ["--audio", args.state]
+    if args.volume is not None:
+        cmd += ["--volume", str(args.volume)]
+    return subprocess.call(cmd, env=env)
+
+_SCAN = r'''
+import asyncio
+from bleak import BleakScanner
+SVC = "00010000-7265-6761-702d-796464756200"
+async def main():
+    out = []
+    for d, adv in (await BleakScanner.discover(timeout=5.0, return_adv=True)).values():
+        uuids = [u.lower() for u in (adv.service_uuids or [])]
+        name = d.name or (adv.local_name if adv else "") or ""
+        if SVC in uuids or name.startswith("pg-"):
+            out.append(f"{name or '?'} ({d.address})")
+    print("\n".join(out))
+asyncio.run(main())
+'''
+
+def _scan_for_device():
+    try:
+        r = subprocess.run([runtime_python(), "-c", _SCAN],
+                           capture_output=True, text=True, timeout=12)
+        return [l for l in r.stdout.splitlines() if l.strip()]
+    except Exception:
+        return None
+
+def cmd_doctor(args) -> int:
+    port = resolve_port(args)
+    print(_c(BOLD, "pager-buddy doctor"))
+
+    def check(state, label, detail="", hint=""):
+        mark = {True: _c("32", "✓"), False: _c("31", "✗"), None: _c("33", "⚠")}[state]
+        print(f"  {mark} {label}" + (f" — {detail}" if detail else ""))
+        if state is not True and hint:
+            print(f"      → {hint}")
+
+    blk = has_bleak()
+    check(blk, "BLE library (bleak)", runtime_python() if blk else "not importable", "pager install")
+    check(VENV_PY.exists(), "self-contained venv",
+          str(VENV_PY) if VENV_PY.exists() else "missing", "pager install")
+
+    up = hub_up(port)
+    check(up, "hub reachable", hub_base(port) if up else f"{hub_base(port)} not responding", "pager up")
+
+    n, _ = hooks_status()
+    check(bool(n), "Claude Code hooks", f"{n} event(s)" if n else "none registered", "pager hooks on")
+
+    loaded = launchd_loaded()
+    check(True if loaded else None, "login service",
+          ("on" if boot_enabled() else "loaded, boot off") if loaded else "not installed",
+          "pager boot on")
+
+    if blk:
+        found = _scan_for_device()
+        if found is None:
+            check(None, "device advertising", "scan failed — Bluetooth permission?")
+        elif found:
+            check(True, "device advertising", ", ".join(found))
+        else:
+            check(False, "device advertising", "no pg-XXXX in 5s",
+                  "power the device; confirm it's flashed + advertising")
+    else:
+        check(None, "device advertising", "skipped (bleak missing)")
+
+    lstate, ldetail = relay_link_state()
+    if lstate:
+        check(lstate == "connected", "last relay event", f"{lstate} {ldetail}".strip())
+
+    if loaded:
+        print(_c(DIM, "  note: a launchd-run relay may lack Bluetooth permission. If the device"))
+        print(_c(DIM, "        advertises but never connects, run `pager run` in a terminal."))
+    return 0
+
+# ── argparse ─────────────────────────────────────────────────────────────────────
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="pager", description="run the pager-buddy Mac bridge (tailscale-style).")
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>")
+
+    def add(name, fn, help):
+        sp = sub.add_parser(name, help=help)
+        sp.set_defaults(fn=fn)
+        return sp
+
+    s = add("up", cmd_up, "start in background (hub + BLE relay)")
+    s.add_argument("--boot", action="store_true", help="also start at login")
+    s.add_argument("--port", type=int, help=f"hub port (default {DEFAULT_PORT})")
+
+    add("down", cmd_down, "stop the bridge now")
+
+    s = add("status", cmd_status, "show the bridge status block")
+    s.add_argument("--watch", action="store_true", help="repaint every ~2s")
+    s.add_argument("--port", type=int)
+
+    s = add("logs", cmd_logs, "tail the bridge log")
+    s.add_argument("-f", "--follow", action="store_true", help="follow")
+
+    s = add("run", cmd_run, "foreground (run.sh) — live, Ctrl-C to stop")
+    s.add_argument("--port", type=int)
+
+    s = add("install", cmd_install, "venv + bleak + Claude hooks")
+    s.add_argument("--gate", help="scope the device approval gate")
+    s.add_argument("--no-hooks", action="store_true", help="relay only; don't touch settings.json")
+    s.add_argument("--boot", action="store_true", help="also install the login service")
+    s.add_argument("--port", type=int)
+
+    add("uninstall", cmd_uninstall, "reverse install (hooks + service + venv)")
+
+    s = add("boot", cmd_boot, "toggle auto-start at login")
+    s.add_argument("state", choices=["on", "off"])
+    s.add_argument("--port", type=int)
+
+    s = add("hooks", cmd_hooks, "Claude Code hooks: on | off | status")
+    s.add_argument("state", choices=["on", "off", "status"])
+    s.add_argument("--port", type=int)
+
+    s = add("audio", cmd_audio, "alert audio: on | off (and/or --volume N)")
+    s.add_argument("state", nargs="?", choices=["on", "off"])
+    s.add_argument("--volume", type=int, metavar="0-100")
+    s.add_argument("--port", type=int)
+
+    s = add("doctor", cmd_doctor, "diagnose the whole chain")
+    s.add_argument("--port", type=int)
+
+    return p
+
+def main() -> int:
+    args = build_parser().parse_args()
+    try:
+        return args.fn(args)
+    except KeyboardInterrupt:
+        print()
+        return 130
+
+if __name__ == "__main__":
+    raise SystemExit(main())

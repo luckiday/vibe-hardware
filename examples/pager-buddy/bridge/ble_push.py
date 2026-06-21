@@ -129,10 +129,17 @@ async def forward_resolution(hub_url: str, _sender, data: bytearray):
 
 async def run(args: argparse.Namespace) -> int:
     settings_url = args.hub.replace("/v1/snapshot", "/v1/settings")
-    while True:  # reconnect loop
-        dev = await find_device(args.adapter)
+    while True:  # reconnect loop — survives scan errors, link drops, and Mac sleep/wake
         try:
-            async with BleakClient(dev, adapter=args.adapter) as client:
+            dev = await find_device(args.adapter)
+            # Bleak fires this when the link drops (range, Mac sleep, device reset). We
+            # set an event so the poll loop wakes *immediately* and reconnects, instead
+            # of sitting in its sleep for up to --idle-interval seconds after a drop.
+            dropped = asyncio.Event()
+            async with BleakClient(
+                dev, adapter=args.adapter,
+                disconnected_callback=lambda _c: dropped.set(),
+            ) as client:
                 # ATT write payload = MTU − 3; reserve 2 for our frame header.
                 mtu = getattr(client, "mtu_size", 23) or 23
                 chunk = max(20, mtu - 3 - 2)
@@ -156,9 +163,11 @@ async def run(args: argparse.Namespace) -> int:
                 # write path is already change-gated, so idle = zero BLE traffic regardless.
                 interval = args.interval
                 idle = False
-                while client.is_connected:
+                while client.is_connected and not dropped.is_set():
                     changed = False
-                    snap = fetch_snapshot(args.hub)
+                    # Hub I/O is blocking urllib — run it off the event loop so a slow
+                    # or wedged hub can't stall BLE housekeeping / disconnect handling.
+                    snap = await asyncio.to_thread(fetch_snapshot, args.hub)
                     if snap is not None:
                         key = content_key(snap)
                         if key != last_key:
@@ -172,7 +181,7 @@ async def run(args: argparse.Namespace) -> int:
                             changed = True
 
                     # Audio settings → the control characteristic (compact {audio,vol}).
-                    st = fetch_json(settings_url)
+                    st = await asyncio.to_thread(fetch_json, settings_url)
                     if st is not None:
                         skey = json.dumps(st, sort_keys=True, separators=(",", ":"))
                         if skey != last_settings_key:
@@ -201,7 +210,14 @@ async def run(args: argparse.Namespace) -> int:
                         if interval >= args.idle_interval and not idle:
                             idle = True
                             print(f"[ble] idle — backing off to {args.idle_interval:g}s polls")
-                    await asyncio.sleep(interval)
+                    # Sleep until the next poll — but break out the instant the link
+                    # drops (the disconnected_callback set `dropped`), so reconnect
+                    # doesn't wait out a 10 s idle interval.
+                    try:
+                        await asyncio.wait_for(dropped.wait(), timeout=interval)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
         except Exception as e:
             print(f"[ble] disconnected ({e}); rescanning…")
         await asyncio.sleep(1.0)

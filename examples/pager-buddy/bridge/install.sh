@@ -13,6 +13,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/lib.sh"
 VENV="$DIR/.venv"
 
 PORT=8787
@@ -36,20 +37,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# Pick a base python3: PAGER_BUDDY_PY wins, else Homebrew, else system.
-pick_python() {
-  local c
-  for c in "${PAGER_BUDDY_PY:-}" /opt/homebrew/bin/python3 /usr/bin/python3 python3; do
-    [ -n "$c" ] || continue
-    command -v "$c" >/dev/null 2>&1 && { command -v "$c"; return 0; }
-  done
-  return 1
-}
-
 if [ "$ACTION" = uninstall ]; then
   echo "uninstalling the pager-buddy bridge…"
   "$DIR/service.sh" uninstall 2>/dev/null || true
-  if BASEPY="$(pick_python)"; then
+  if BASEPY="$(pb_base_python)"; then
     "$BASEPY" "$DIR/install_hooks.py" uninstall || true
   fi
   rm -rf "$VENV"
@@ -58,7 +49,7 @@ if [ "$ACTION" = uninstall ]; then
   exit 0
 fi
 
-BASEPY="$(pick_python)" || { echo "✗ no python3 found — install Python 3 first." >&2; exit 1; }
+BASEPY="$(pb_base_python)" || { echo "✗ no python3 found — install Python 3 first." >&2; exit 1; }
 echo "• python: $BASEPY"
 
 # 1. venv + bleak — robust against PEP 668 (externally-managed system/Homebrew python).

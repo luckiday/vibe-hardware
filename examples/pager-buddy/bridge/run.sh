@@ -11,34 +11,24 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/lib.sh"
 PORT="${PAGER_BUDDY_PORT:-8787}"
 BLE="${PAGER_BUDDY_BLE:-1}"
-# Pick python: an explicit PAGER_BUDDY_PY wins; else the install.sh venv (has bleak);
-# else any python3 that can import bleak, falling back to any python3 (hub still runs,
-# relay skips). Run ./install.sh once to create the venv.
-PY="${PAGER_BUDDY_PY:-}"
-if [ -z "$PY" ]; then
-  if [ -x "$DIR/.venv/bin/python" ]; then
-    PY="$DIR/.venv/bin/python"
-  else
-    for c in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
-      command -v "$c" >/dev/null 2>&1 || continue
-      PY="$c"; "$c" -c 'import bleak' 2>/dev/null && break
-    done
-  fi
-fi
+# Runtime python (prefers the install.sh venv that has bleak — see lib.sh).
+PY="$(pb_runtime_python)"
 
 # free the port if a previous bridge is lingering
 if lsof -ti ":$PORT" >/dev/null 2>&1; then
   echo "port $PORT busy — stopping the previous bridge…"
-  pkill -f pager_stub.py 2>/dev/null || true
-  pkill -f ble_push.py   2>/dev/null || true
-  lsof -ti ":$PORT" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  pb_free_port "$PORT"
 fi
 
 pids=()
-cleanup() { trap - INT TERM EXIT; echo; echo "stopping…"; kill "${pids[@]}" 2>/dev/null || true; }
-trap cleanup INT TERM EXIT
+stopping=0
+on_stop() { stopping=1; }                                  # Ctrl-C / launchctl SIGTERM
+cleanup() { kill "${pids[@]}" 2>/dev/null || true; }       # always reap children
+trap on_stop INT TERM
+trap cleanup EXIT
 
 # the hub (authoritative — keep this in the foreground via wait)
 echo "pager-buddy hub → http://127.0.0.1:$PORT/   (Ctrl-C to stop)"
@@ -57,4 +47,10 @@ if [ "$BLE" != "0" ]; then
   fi
 fi
 
-wait "$hub_pid"
+# Keep the hub in the foreground. A deliberate stop (Ctrl-C / launchctl SIGTERM) exits 0
+# so a KeepAlive LaunchAgent won't treat it as a crash; an unexpected hub exit propagates
+# its code so launchd restarts it (plist KeepAlive = SuccessfulExit:false).
+rc=0
+wait "$hub_pid" || rc=$?
+if [ "$stopping" = 1 ]; then echo; echo "stopping…"; exit 0; fi
+exit "$rc"
