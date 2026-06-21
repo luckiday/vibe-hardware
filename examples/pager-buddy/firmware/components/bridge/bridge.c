@@ -364,6 +364,41 @@ static const struct ble_gatt_svc_def s_gatt_services[] = {
     {0},
 };
 
+// Connection-parameter request — ask the central for a GENEROUS supervision timeout so the
+// link survives brief NimBLE-host starvation under LVGL load (else it can drop with reason
+// 0x208, BLE_ERR_CONN_SPVN_TMO). We DEFER it: macOS runs its own LL procedures (feature/
+// version exchange + its own param update) right after connecting, and firing ours in that
+// window collides ("Different Transaction Collision", status 0x22A=554) and is dropped. A
+// short delay lets that burst settle; on a failure we retry a few times. Params are within
+// Apple's accessory guidelines (15 ms-multiple intervals, ≤6 s timeout) so they're accepted.
+// Units: itvl × 1.25 ms, supervision_timeout × 10 ms.
+#define PB_CUP_DELAY_US   1500000
+#define PB_CUP_MAX_TRIES  3
+static esp_timer_handle_t s_cup_timer;
+static int                s_cup_tries;
+
+static void request_conn_params(void *arg) {
+    (void)arg;
+    if (!s_connected || s_conn_handle == BLE_HS_CONN_HANDLE_NONE) return;
+    struct ble_gap_upd_params cp = {
+        .itvl_min = 24,              // 30 ms
+        .itvl_max = 36,              // 45 ms
+        .latency = 0,
+        .supervision_timeout = 600,  // 6000 ms
+    };
+    int rc = ble_gap_update_params(s_conn_handle, &cp);
+    if (rc != 0) ESP_LOGW(TAG, "conn param update request rc=%d", rc);
+}
+
+static void arm_conn_param_request(void) {
+    if (!s_cup_timer) {
+        const esp_timer_create_args_t a = { .callback = request_conn_params, .name = "pb_cup" };
+        if (esp_timer_create(&a, &s_cup_timer) != ESP_OK) return;
+    }
+    esp_timer_stop(s_cup_timer);
+    esp_timer_start_once(s_cup_timer, PB_CUP_DELAY_US);
+}
+
 static int gap_event_cb(struct ble_gap_event *event, void *arg) {
     (void)arg;
     switch (event->type) {
@@ -375,6 +410,10 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
             // Initiate MTU exchange from our side — some centrals don't, and the
             // default 23-byte MTU would force tiny snapshot chunks. (voicestick gotcha)
             ble_gattc_exchange_mtu(s_conn_handle, NULL, NULL);
+            // Ask for a generous supervision timeout, but DEFERRED (see request_conn_params):
+            // doing it inline here collides with macOS's own post-connect LL procedures.
+            s_cup_tries = 0;
+            arm_conn_param_request();
         } else {
             ESP_LOGW(TAG, "connect failed status=%d", event->connect.status);
             start_advertising();
@@ -382,6 +421,7 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "central disconnected (reason=%d)", event->disconnect.reason);
+        if (s_cup_timer) esp_timer_stop(s_cup_timer);
         s_connected = false;
         s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
         s_rx_len = 0;
@@ -390,6 +430,25 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
         return 0;
     case BLE_GAP_EVENT_MTU:
         ESP_LOGI(TAG, "MTU = %u", event->mtu.value);
+        return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE:
+        // Result of a param update (ours or central-initiated). status 0 = applied: read
+        // back the live params (confirms the 6 s timeout landed). A failure is usually our
+        // request colliding with macOS's — retry a bounded number of times, then accept
+        // the central's params.
+        if (event->conn_update.status == 0) {
+            struct ble_gap_conn_desc d;
+            if (ble_gap_conn_find(s_conn_handle, &d) == 0)
+                ESP_LOGI(TAG, "conn params: itvl=%u latency=%u timeout=%ums",
+                         d.conn_itvl, d.conn_latency, d.supervision_timeout * 10);
+        } else if (++s_cup_tries < PB_CUP_MAX_TRIES) {
+            ESP_LOGW(TAG, "conn update status=%d; retry %d/%d",
+                     event->conn_update.status, s_cup_tries, PB_CUP_MAX_TRIES - 1);
+            arm_conn_param_request();
+        } else {
+            ESP_LOGW(TAG, "conn update status=%d; keeping central's params",
+                     event->conn_update.status);
+        }
         return 0;
     default:
         return 0;
