@@ -49,10 +49,15 @@ static const char *TAG = "ui";
 // CJK-capable fonts (78/xiaozhi-fonts component). PuHui carries the common-CJK set *and*
 // Latin, so one label renders English or Chinese. Title = large, body = compact; the
 // linker GC keeps only these two of the component's many sizes.
-LV_FONT_DECLARE(font_puhui_basic_20_4);   // titles  (20 px, anti-aliased)
-LV_FONT_DECLARE(font_puhui_basic_14_1);   // body    (14 px)
-#define FONT_TITLE  (&font_puhui_basic_20_4)
-#define FONT_BODY   (&font_puhui_basic_14_1)
+// We use the FULL puhui faces (not the *_basic_* subset): the basic subset is ~700 glyphs
+// and renders most common Chinese as "tofu" boxes (caught in sim/ shots). The full faces
+// cover the ~6k common-CJK set — at a flash cost (~1.2 MB for 20_4 + ~0.45 MB for 14_1)
+// that fits the 3 MB OTA slots. If flash gets tight, build a subset font from the actual
+// UI strings, or drop the title to font_puhui_16_4.
+LV_FONT_DECLARE(font_puhui_20_4);   // titles  (20 px, anti-aliased, full CJK)
+LV_FONT_DECLARE(font_puhui_14_1);   // body    (14 px, full CJK)
+#define FONT_TITLE  (&font_puhui_20_4)
+#define FONT_BODY   (&font_puhui_14_1)
 
 #ifndef UI_SIM
 static lv_display_t *s_disp;
@@ -180,6 +185,18 @@ static const char *state_label(sess_state_t s) {
         case ST_ASKING:  return "asks";
         case ST_DONE:    return "done";
         default:         return "error";
+    }
+}
+// TE-style 3-letter state code for the cramped list meta row (the dot colour already
+// carries the meaning; this is the terse text tag). Distinct at a glance: RUN/YOU/ASK/
+// FIN/ERR. The full word (state_label) stays on the roomy session screens.
+static const char *state_abbr(sess_state_t s) {
+    switch (s) {
+        case ST_WORKING: return "RUN";
+        case ST_WAITING: return "YOU";
+        case ST_ASKING:  return "ASK";
+        case ST_DONE:    return "FIN";
+        default:         return "ERR";
     }
 }
 // Abbreviate an app/terminal name so the list meta row fits one line next to the agent +
@@ -388,12 +405,19 @@ static void vu_bars(lv_obj_t *p, uint32_t color) {
     }
 }
 
+// The "home" / nothing-to-do screen: the idle view, AND an empty list (zero sessions is
+// the same "all clear" state, just reached by opening the list) — both render view_idle so
+// they're identical, not cousins. Everything keyed off this stays in one place.
+static bool is_home(const app_model_t *m) {
+    return m->view == VIEW_IDLE || (m->view == VIEW_LIST && m->n == 0);
+}
+
 static void status_bar(lv_obj_t *scr, const app_model_t *m) {
     lv_obj_t *bt = icon_bt(scr, m->online);            // top-left: BLE link glyph
     lv_obj_align(bt, LV_ALIGN_TOP_LEFT, 4, 1);
-    // The clock shows ONLY off the idle screen — idle owns the big center clock, so there's
-    // no longer a redundant second time. On list/session this keeps time-of-day visible.
-    if (m->view != VIEW_IDLE) {
+    // The clock shows ONLY off the home screen — home owns the big centre clock, so there's
+    // no redundant second time. On list/session this keeps time-of-day visible.
+    if (!is_home(m)) {
         lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_12, C_DIM);
         lv_obj_align_to(clk, bt, LV_ALIGN_OUT_RIGHT_MID, 5, 1);
         s_clk_bar = clk;   // ui_refresh_time() ticks this in place
@@ -467,6 +491,17 @@ static void choices(lv_obj_t *scr, const char *a, const char *b, int sel, bool d
 }
 
 // ---------- screens ----------
+// Centered white status band low on the screen — the calm "glance" line. Idle and the
+// empty list share this exact look (TE: one quiet line of white text, no box, no rule).
+static lv_obj_t *status_band(lv_obj_t *scr, const char *text) {
+    lv_obj_t *sl = mk_label(scr, text, &lv_font_montserrat_12, C_FG);
+    lv_obj_set_width(sl, HRES);
+    lv_obj_set_style_text_align(sl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_line_space(sl, 3, 0);
+    lv_obj_align(sl, LV_ALIGN_BOTTOM_MID, 0, -23);
+    return sl;
+}
+
 static void view_idle(lv_obj_t *scr, const app_model_t *m) {
     // Home glance color = the most action-needing state, consistent with the per-session
     // palette: error(red) > needs-you/asking(amber) > working(blue) > all done(green).
@@ -500,11 +535,7 @@ static void view_idle(lv_obj_t *scr, const app_model_t *m) {
     // footer's soft-white divider is the only line; the text gets some padding above it.
     char sum[40];
     snprintf(sum, sizeof sum, "%d sessions\n%s", m->n, l2);
-    lv_obj_t *sl = mk_label(scr, sum, &lv_font_montserrat_12, C_FG);
-    lv_obj_set_width(sl, HRES);
-    lv_obj_set_style_text_align(sl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_line_space(sl, 3, 0);
-    lv_obj_align(sl, LV_ALIGN_BOTTOM_MID, 0, -23);
+    status_band(scr, sum);
     footer(scr, FI_OK, "OPEN", FI_DOWN, "MENU");
 }
 
@@ -585,15 +616,13 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
                 char tb[8];
                 mk_chip(l2, term_short(s->term, tb, sizeof tb), &lv_font_montserrat_10, C_DIM);
             }
-            mk_label(l2, state_label(s->state), &lv_font_montserrat_10, state_color(s->state));
+            // state as a terse colour-coded chip (RUN/YOU/ASK/FIN/ERR) so the meta row
+            // never overflows 135 px; the full word lives on the session screen.
+            mk_chip(l2, state_abbr(s->state), &lv_font_montserrat_10, state_color(s->state));
         }
     }
     s_age_n = m->n < UI_MAX_ROWS ? m->n : UI_MAX_ROWS;
-    if (m->n == 0) {
-        hero_rings(scr, C_DONE, false, -26);   // same calm breathing mark as idle
-        lv_obj_t *ph = mk_chip(scr, "no active tasks", &lv_font_montserrat_10, C_DIM);
-        lv_obj_align(ph, LV_ALIGN_CENTER, 0, 32);
-    }
+    // n == 0 never reaches here: ui_render routes an empty list to view_idle (see is_home).
     if (sel_row) {                          // flex sizes aren't computed until layout runs
         lv_obj_update_layout(c);            // so update first, then scroll the row into view
         lv_obj_scroll_to_view(sel_row, LV_ANIM_OFF);
@@ -712,7 +741,7 @@ static void scr_done(lv_obj_t *scr, session_t *s) {
 // structural changed; the handles were captured by the last ui_render.
 void ui_refresh_time(const app_model_t *m) {
     if (s_clk_bar) lv_label_set_text(s_clk_bar, m->clock);
-    if (s_cur_view == VIEW_IDLE && s_clk_big) lv_label_set_text(s_clk_big, m->clock);
+    if (s_clk_big) lv_label_set_text(s_clk_big, m->clock);   // set only by the home/idle screen
     if (s_cur_view == VIEW_LIST) {
         int n = s_age_n < m->n ? s_age_n : m->n;
         for (int i = 0; i < n; i++)
@@ -726,7 +755,7 @@ void ui_render(const app_model_t *m) {
     s_clk_bar = NULL; s_clk_big = NULL; s_age_n = 0; s_cur_view = m->view;  // labels are recreated below
     status_bar(scr, m);
 
-    if (m->view == VIEW_IDLE) {
+    if (is_home(m)) {                       // idle, or an empty list — one "all clear" home
         view_idle(scr, m);
     } else if (m->view == VIEW_LIST) {
         view_list(scr, m);

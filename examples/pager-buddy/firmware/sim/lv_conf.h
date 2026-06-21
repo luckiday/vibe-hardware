@@ -25,6 +25,10 @@
 #define LV_FONT_MONTSERRAT_40 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
+// The full PuHui faces exceed the small-font bitmap offsets — same as the device
+// (CONFIG_LV_FONT_FMT_TXT_LARGE=y).
+#define LV_FONT_FMT_TXT_LARGE 1
+
 // Quiet, like the device (CONFIG_LV_USE_LOG is not set).
 #define LV_USE_LOG 0
 
