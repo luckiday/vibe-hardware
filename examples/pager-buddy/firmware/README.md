@@ -69,13 +69,22 @@ data. The wire format is [`../bridge/protocol.yaml`](../bridge/protocol.yaml).
 ## Flash + monitor — host (Docker can't reach USB on macOS)
 
 ```bash
-# with a host ESP-IDF (e.g. ~/esp/v5.5.1/esp-idf, source its export.sh first):
-idf.py -p /dev/cu.usbmodemXXXX flash monitor
+./flash.sh                      # flash the Docker-built build/ from the host (auto-detects port)
+./flash.sh /dev/cu.usbmodemXXXX # …or name the port explicitly
+./flash.sh --monitor            # …then open the serial console
 ```
 
+`flash.sh` flashes the **already-built** binaries with esptool (via
+`build/flasher_args.json`) — it does **not** re-run CMake, so it sidesteps the Docker→host
+`/project` cmake-cache conflict and works unchanged **from a git worktree**. It needs
+esptool on the host (`pip install esptool`, or `source $IDF_PATH/export.sh`). The standard
+cycle is just **`./idf.sh build && ./flash.sh`**.
+
 - No serial? The S3 may enumerate as **native USB Serial/JTAG** — try the other
-  `/dev/cu.*`, or set `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`.
+  `/dev/cu.*` (pass it to `flash.sh`), or set `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`.
 - Flashing won't start? Long-press the power button to enter **download mode**.
+- A raw host `idf.py flash` on a Docker-built `build/` aborts with "CMakeCache.txt directory
+  is different" — that's expected; use `flash.sh`, or `rm -rf build` for a host rebuild.
 
 ## Secrets
 
