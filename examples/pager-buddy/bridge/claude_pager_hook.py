@@ -484,6 +484,25 @@ def build_decision(payload: dict, action: str) -> dict:
     return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
 
 
+def clear_prompt(sid: str, url: str, state_path: str) -> None:
+    """After the device answers, set the session back to working and push, so the pager stops
+    showing the now-resolved question/approval at once — instead of lingering until Claude's
+    next event. Best-effort: a failure just means the screen clears a beat later."""
+    try:
+        with locked(state_path):
+            registry = load_registry(state_path)
+            session = registry.get("sessions", {}).get(sid)
+            if not session:
+                return
+            session["state"] = "working"
+            _clear_actions(session)
+            save_registry(state_path, registry)
+            snapshot = build_snapshot(registry, time.time())
+        post_snapshot(url, snapshot)
+    except Exception as exc:  # noqa: BLE001 — never block the agent on a cosmetic clear
+        debug(f"clear_prompt failed: {exc}")
+
+
 def gated_permission(payload: dict, url: str, state_path: str):
     """On a PermissionRequest, render the prompt/question on the pager and block until the
     device answers, then return the hookSpecificOutput dict to print. Returns None to fall
@@ -504,7 +523,9 @@ def gated_permission(payload: dict, url: str, state_path: str):
         res = fetch_resolution(res_url, sid)
         if res and res.get("action"):
             debug(f"device answered: {res['action']!r}")
-            return build_decision(payload, str(res["action"]))
+            decision = build_decision(payload, str(res["action"]))
+            clear_prompt(sid, url, state_path)   # stop showing the resolved prompt on the device now
+            return decision
         time.sleep(GATE_POLL)
     debug("gate timed out; Claude shows its own dialog")
     return None
