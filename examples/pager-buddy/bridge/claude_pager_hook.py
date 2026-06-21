@@ -618,6 +618,17 @@ def main() -> int:
         if term:
             payload["terminal_app"] = term
 
+    # Append this event to the local analytics DB (sessions/instruction-time/usage
+    # reports — see analytics.py + `pager report`). Best-effort and isolated: any
+    # failure (or a missing module) is swallowed so it can never affect the agent,
+    # same fail-open contract as the push below. Runs before the gate so a blocking
+    # PermissionRequest is still recorded.
+    try:
+        from analytics import record_event  # sibling module; sys.path[0] is this dir
+        record_event(payload, now=time.time())
+    except Exception as exc:  # noqa: BLE001 — analytics must never break the hook
+        debug(f"analytics skipped: {exc}")
+
     # Two-way gate via the PermissionRequest hook (Vibe Island's mechanism). PermissionRequest
     # fires ONLY when Claude actually shows a permission/question dialog — so it's inherently
     # bypass-safe (no event in bypassPermissions/acceptEdits → no spurious prompt on the device,

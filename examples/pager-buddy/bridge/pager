@@ -25,6 +25,7 @@ answer (plus crash-restart + a log file). `pager run` is the foreground escape h
     pager hooks on|off|status   Claude Code hooks
     pager audio [on|off] [--volume N]   alert audio
     pager doctor             diagnose the whole chain
+    pager report [--days N] [--json]    agent-usage report (SQLite-backed)
 """
 from __future__ import annotations
 
@@ -368,7 +369,7 @@ def cmd_status(args) -> int:
 def cmd_default(args) -> int:
     """Bare `pager` (no subcommand): a friendly status block + a one-line cheat sheet."""
     _status_block(plist_port() or DEFAULT_PORT)
-    print(_c(DIM, "\n  up · down · status --watch · logs -f · boot on|off · doctor · top · --help"))
+    print(_c(DIM, "\n  up · down · status --watch · logs -f · boot on|off · doctor · top · report · --help"))
     return 0
 
 def _log_tail(n: int) -> list[str]:
@@ -516,6 +517,24 @@ def cmd_audio(args) -> int:
         cmd += ["--volume", str(args.volume)]
     return subprocess.call(cmd, env=env)
 
+# ── analytics (local SQLite log of agent activity) ─────────────────────────────────
+def _analytics():
+    """Import the sibling analytics module (best-effort)."""
+    if str(DIR) not in sys.path:
+        sys.path.insert(0, str(DIR))
+    import analytics  # noqa: PLC0415 — lazy so a stdlib-only `pager` stays fast
+    return analytics
+
+def cmd_report(args) -> int:
+    try:
+        a = _analytics()
+    except Exception as e:                       # noqa: BLE001
+        warn(f"analytics unavailable: {e}")
+        return 1
+    rep = a.build_report(a.resolve_days(args.date, args.days), db=args.db)
+    print(a.render_json(rep) if args.json else a.render_text(rep))
+    return 0
+
 _SCAN = r'''
 import asyncio
 from bleak import BleakScanner
@@ -577,6 +596,16 @@ def cmd_doctor(args) -> int:
     else:
         check(None, "device advertising", "skipped (bleak missing)")
 
+    try:
+        cnt, ndays, last = _analytics().db_stats()
+        if cnt:
+            check(True, "analytics log", f"{cnt} events · {ndays} day(s)"
+                  + (f" · last {last}" if last else "") + "   (pager report)")
+        else:
+            check(None, "analytics log", "empty — no events recorded yet", "pager report")
+    except Exception:                            # noqa: BLE001
+        check(None, "analytics log", "module unavailable")
+
     lstate, ldetail = relay_link_state()
     if lstate:
         check(lstate == "connected", "last relay event", f"{lstate} {ldetail}".strip())
@@ -588,7 +617,7 @@ def cmd_doctor(args) -> int:
 
 # ── shell completion ─────────────────────────────────────────────────────────────
 _COMMANDS = ("up down status logs run install uninstall boot hooks "
-             "audio doctor top completion")
+             "audio doctor top report completion")
 
 _COMPLETION_BASH = r'''# pager bash completion.  Install:  pager completion bash > /usr/local/etc/bash_completion.d/pager
 # or, ad hoc:  eval "$(pager completion bash)"
@@ -606,6 +635,7 @@ _pager() {
     status|top) COMPREPLY=( $(compgen -W "--watch --port" -- "$cur") );;
     logs)       COMPREPLY=( $(compgen -W "-f --follow" -- "$cur") );;
     install)    COMPREPLY=( $(compgen -W "--gate --no-hooks --boot --port" -- "$cur") );;
+    report)     COMPREPLY=( $(compgen -W "--date --days --json --db" -- "$cur") );;
   esac
 }
 complete -F _pager pager
@@ -682,6 +712,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = add("doctor", cmd_doctor, "diagnose the whole chain")
     s.add_argument("--port", type=int)
+
+    s = add("report", cmd_report, "agent-usage report (sessions · instruction time · active hours)")
+    s.add_argument("--date", help="anchor date YYYY-MM-DD (default today)")
+    s.add_argument("--days", type=int, default=1, help="days back through --date (default 1)")
+    s.add_argument("--json", action="store_true", help="machine-readable output (for screen-time tooling)")
+    s.add_argument("--db", help="analytics database path")
 
     s = add("top", cmd_top, "live full-screen dashboard (curses)")
     s.add_argument("--port", type=int)

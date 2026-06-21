@@ -11,11 +11,12 @@ fail() { echo "✗ $1" >&2; exit 1; }
 
 echo "• syntax"
 python3 -c "import ast; ast.parse(open('pager').read())" || fail "pager parse"
+python3 -c "import ast; ast.parse(open('analytics.py').read())" || fail "analytics parse"
 for f in run.sh service.sh install.sh lib.sh smoke.sh; do bash -n "$f" || fail "$f"; done
 
 echo "• argparse wiring (every subcommand --help exits 0)"
 ./pager --help >/dev/null || fail "pager --help"
-for c in up down status logs run install uninstall boot hooks audio doctor top completion; do
+for c in up down status logs run install uninstall boot hooks audio doctor top report completion; do
   ./pager "$c" --help >/dev/null || fail "pager $c --help"
 done
 
@@ -47,6 +48,33 @@ assert m.boot_enabled() is True and m.plist_port() == port
 m.write_plist(port, False)
 assert m.boot_enabled() is False
 print("  ok: RunAtLoad / KeepAlive / port / run.sh all correct")
+PY
+
+echo "• analytics: record + report round-trip (temp DB, no real data touched)"
+python3 - <<'PY' || fail "analytics round-trip"
+import analytics as a
+import tempfile, time, datetime
+from pathlib import Path
+db = str(Path(tempfile.mkdtemp()) / "a.db")
+now = time.time()
+proj = "/Users/dev/demo-proj"
+a.record_event({"hook_event_name":"UserPromptSubmit","session_id":"s1","cwd":proj}, now=now,   path=db)
+a.record_event({"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"s1","cwd":proj}, now=now+1, path=db)
+a.record_event({"hook_event_name":"PreToolUse","tool_name":"Edit","session_id":"s1","cwd":proj}, now=now+2, path=db)
+a.record_event({"hook_event_name":"Stop","session_id":"s1","cwd":proj}, now=now+8, path=db)
+a.record_event({"hook_event_name":"UserPromptSubmit","session_id":"s2","cwd":proj}, now=now+9, path=db)
+days = [datetime.datetime.fromtimestamp(now).strftime("%Y-%m-%d")]
+rep = a.build_report(days, db=db)
+assert rep["sessions"] == 2, rep
+assert rep["prompts"] == 2, rep
+assert rep["turns"]["count"] == 1, rep            # one completed prompt→Stop
+assert 7.5 <= rep["turns"]["avg"] <= 8.5, rep     # ~8s
+assert rep["tool_calls"] == 2, rep
+assert "report" in a.render_text(rep)
+import json; json.loads(a.render_json(rep))        # --json is valid JSON
+cnt, ndays, last = a.db_stats(db=db)
+assert cnt == 5 and ndays == 1, (cnt, ndays, last)
+print("  ok: 2 sessions · 2 instructions · 1 turn ~8s · 2 tool calls")
 PY
 
 echo "• status against a live hub"
