@@ -62,6 +62,7 @@ pager hooks on|off|status             # Claude Code hooks
 pager audio [on|off] [--volume N]     # alert audio
 pager logs [-f]                       # tail the bridge log
 pager doctor                          # diagnose the whole chain
+pager report [--days N] [--json]      # agent-usage report (SQLite-backed)
 ```
 
 `pager status` at a glance:
@@ -168,13 +169,64 @@ hooks whose command contains `claude_pager_hook.py`. Point at a real device with
 Config via env (read by the hook): `PAGER_BUDDY_URL`, `PAGER_BUDDY_STATE`,
 `PAGER_BUDDY_DEBUG` (logs to stderr).
 
+## Usage analytics & reports
+
+The same hook that drives the screen also keeps a tiny **local SQLite log** of every
+Claude Code event (`~/.pager-buddy/analytics.db`), so you can see how you actually
+work with the agent — and feed it into your own screen-time tracking.
+
+```bash
+pager report                 # today: distinct sessions, instruction time, active hours
+pager report --days 7        # the last week (per-day + by-hour + by-project)
+pager report --date 2026-06-19
+pager report --json          # machine-readable — pipe into your screen-time tooling
+```
+
+```
+pager-buddy · report · Sun Jun 21 2026
+
+  sessions      4 distinct
+  instructions  14 prompts  ·  avg 1m 55s · median 1m 50s  (14 completed)
+  tool calls    61  (Write 12 · Grep 12 · Bash 10 · TodoWrite 10 · Read 10 · Edit 7)
+  active time   ≈1h 35m   09:27 → 20:37
+
+  by hour  (events)
+    09  █████████▎  16
+    14  ██████████████████████████████████  28
+    …
+  by project
+    vibe-hardware     3 sess · 9 prompts · ≈50m
+```
+
+What it answers:
+
+- **distinct agent sessions / day** — `sessions` (and per-day in `--days N`).
+- **average instruction time** — each *instruction* is one user turn
+  (`UserPromptSubmit` → `Stop`); the report shows mean + median + completed count.
+- **when you use the agent** — the by-hour histogram, the `active time` estimate
+  (5-min activity bins, so it lines up with macOS Screen Time), and first→last.
+- **per-project breakdown** — sessions / prompts / active time by repo (`basename(cwd)`).
+
+It's the **hook** that records (not the hub): the hook sees every event with its real
+timestamp, `session_id`, `tool_name` and `cwd`; the hub only sees aggregated snapshots.
+Recording is **best-effort and fails open** — exactly like the status push — so it never
+affects Claude even if the DB is busy or missing. Env: `PAGER_BUDDY_DB` (path),
+`PAGER_BUDDY_ANALYTICS=off` (disable). Trim old rows with
+`python3 analytics.py prune --keep-days 90`.
+
+The `--json` shape is stable and self-describing (`sessions`, `prompts`,
+`turns{count,avg,median,total}`, `tool_calls`, `tools{}`, `hours{0..23}`,
+`active_seconds`, `per_day{}`, `projects{}`, `first_ts`/`last_ts`) — the seam to join
+against your Screen Time export.
+
 ## Files
 
 | File | Role |
 |---|---|
 | [pager](pager) | **The entry point.** tailscale-style CLI wrapping everything below: `up`/`down`/`status`/`run`/`install`/`boot`/`hooks`/`audio`/`logs`/`doctor`. Stdlib only. |
 | [protocol.yaml](protocol.yaml) | **The contract.** Wire format + the two transports (HTTP hub, BLE device). Versioned. |
-| [claude_pager_hook.py](claude_pager_hook.py) | Hook command: stdin event → registry → POST snapshot. `--demo` to self-drive. |
+| [claude_pager_hook.py](claude_pager_hook.py) | Hook command: stdin event → registry → POST snapshot (+ append to the analytics DB). `--demo` to self-drive. |
+| [analytics.py](analytics.py) | Local **SQLite** event log + `report` (sessions · instruction time · active hours · per-project; `--json`). Stdlib only; fails open. Wrapped by `pager report`. |
 | [pager_stub.py](pager_stub.py) | The hub: `POST/GET /v1/snapshot`, ASCII screen, serves the web mock (`--ui`). |
 | [ble_push.py](ble_push.py) | BLE central: polls the hub, writes framed snapshots **and audio settings** to the device. Writes are change-gated (idle = zero BLE traffic) and the hub poll **backs off** when nothing changes (`--idle-interval`, default 10 s; snaps back to `--interval` on the next change). `pip install bleak`. |
 | [pager_settings.py](pager_settings.py) | The **audio settings session**: enable/disable alert audio + set volume (interactive, or `--audio on/off --volume N`). Talks to the hub; the relay forwards to the device. |
