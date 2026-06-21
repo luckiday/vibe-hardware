@@ -15,9 +15,13 @@ for f in run.sh service.sh install.sh lib.sh smoke.sh; do bash -n "$f" || fail "
 
 echo "• argparse wiring (every subcommand --help exits 0)"
 ./pager --help >/dev/null || fail "pager --help"
-for c in up down status logs run install uninstall boot hooks audio doctor; do
+for c in up down status logs run install uninstall boot hooks audio doctor top completion; do
   ./pager "$c" --help >/dev/null || fail "pager $c --help"
 done
+
+echo "• shell completion emits a usable script"
+./pager completion bash | grep -q "complete -F _pager pager" || fail "bash completion"
+./pager completion zsh  | grep -q "compdef _pager pager"     || fail "zsh completion"
 
 echo "• status (nothing running → all rows, no error)"
 ./pager status --port "$PORT" >/dev/null || fail "pager status"

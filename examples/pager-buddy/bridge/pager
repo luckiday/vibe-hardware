@@ -104,8 +104,10 @@ def hub_up(port: int) -> bool:
 
 def port_pid(port: int):
     try:
-        out = subprocess.run(["lsof", "-ti", f":{port}"],
-                             capture_output=True, text=True).stdout.strip()
+        # -nP: skip host/port-name resolution — plain `lsof` can stall for seconds on
+        # those lookups, which makes every `status`/`top` repaint sluggish.
+        out = subprocess.run(["lsof", "-nP", "-ti", f"tcp:{port}"],
+                             capture_output=True, text=True, timeout=3).stdout.strip()
         return int(out.splitlines()[0]) if out else None
     except Exception:
         return None
@@ -206,14 +208,7 @@ def hooks_status() -> tuple[int, list[str]]:
     return len(events), events
 
 # ── relay link state, read from the log tail ─────────────────────────────────────
-def relay_link_state() -> tuple[str | None, str]:
-    """(state, detail) from the newest [ble] line: connected / searching / down / None."""
-    if not LOG.exists():
-        return None, ""
-    try:
-        lines = LOG.read_text(errors="replace").splitlines()[-300:]
-    except Exception:
-        return None, ""
+def _link_state(lines: list[str]) -> tuple[str | None, str]:
     state, detail = None, ""
     for ln in lines:
         if "[ble] connected" in ln:
@@ -225,6 +220,21 @@ def relay_link_state() -> tuple[str | None, str]:
                 state = "searching"
     return state, detail
 
+def relay_link_state(since: int = 0) -> tuple[str | None, str]:
+    """(state, detail) from the newest [ble] line: connected / searching / down / None.
+    With `since` (a byte offset into the log), read only what was written after it — so
+    `pager up` can judge the *fresh* link, not a 'connected' left over from a prior run."""
+    if not LOG.exists():
+        return None, ""
+    try:
+        with open(LOG, "r", errors="replace") as f:
+            if since:
+                f.seek(since)
+            lines = f.read().splitlines()
+    except Exception:
+        return None, ""
+    return _link_state(lines if since else lines[-300:])
+
 def resolve_port(args) -> int:
     p = getattr(args, "port", None)
     if p:
@@ -232,19 +242,41 @@ def resolve_port(args) -> int:
     return plist_port() or DEFAULT_PORT
 
 # ── commands ─────────────────────────────────────────────────────────────────────
+def _await_up(port: int, since: int, timeout: float) -> tuple[bool, str | None, str]:
+    """After kickstart, wait briefly for the hub to answer and the relay to find the
+    device. Returns (hub_ok, link_state, detail). `since` keeps the link read fresh."""
+    deadline = time.time() + timeout
+    hub_ok = False
+    while time.time() < deadline:
+        hub_ok = hub_ok or hub_up(port)
+        state, detail = relay_link_state(since)
+        if state == "connected":
+            return hub_ok, state, detail
+        time.sleep(0.5)
+    return hub_ok, *relay_link_state(since)
+
 def cmd_up(args) -> int:
     port = resolve_port(args)
-    if not has_bleak():
+    bleak = has_bleak()
+    if not bleak:
         warn("bleak isn't installed — the BLE relay can't run. Fix:  pager install")
     boot = bool(args.boot) or boot_enabled()   # a plain `up` never silently disables boot
+    since = LOG.stat().st_size if LOG.exists() else 0
     write_plist(port, boot)
     launchd_bootstrap()
     launchd_kickstart()
-    time.sleep(0.5)
+    hub_ok, lstate, ldetail = _await_up(port, since, 8.0 if bleak else 3.0)
+
     ok(f"bridge up → {hub_base(port)}" + ("   · starts at login" if boot else ""))
-    print(f"  watch:  pager status --watch      logs:  pager logs -f")
+    if not hub_ok:
+        warn("hub didn't answer yet — check  pager logs -f")
+    if lstate == "connected":
+        print(f"  device  {DOT_OK}  connected {ldetail}".rstrip())
+    elif bleak:
+        print(f"  device  {DOT_WARN}  searching… (pager status --watch · pager doctor)")
+    print("  watch:  pager status --watch      logs:  pager logs -f")
     if not boot:
-        print(f"  start at login:  pager boot on")
+        print("  start at login:  pager boot on")
     return 0
 
 def cmd_down(args) -> int:
@@ -259,57 +291,64 @@ def cmd_down(args) -> int:
     ok("bridge stopped." + tail)
     return 0
 
-def _status_block(port: int) -> None:
-    print(_c(BOLD, "pager-buddy"))
+def _status_rows(port: int, timeout: float = 2.0) -> list[tuple[str, str, str]]:
+    """The status model, transport-agnostic: a list of (label, state, text) where
+    state ∈ ok|warn|bad|off. Both the text block and the `top` TUI render from this, so
+    there's one source of truth. `timeout` bounds the per-row HTTP probes (small for TUI)."""
+    rows: list[tuple[str, str, str]] = []
 
-    up = hub_up(port)
+    up = _get_json(hub_base(port) + "/healthz", timeout) is not None
     hpid = port_pid(port)
-    if up:
-        row("hub", DOT_OK, f"running    {hub_base(port)}" + (f"   (pid {hpid})" if hpid else ""))
-    else:
-        row("hub", DOT_OFF, "stopped    → pager up")
+    rows.append(("hub", "ok" if up else "off",
+                 (f"running    {hub_base(port)}" + (f"   (pid {hpid})" if hpid else ""))
+                 if up else "stopped    → pager up"))
 
     rpids = proc_running("ble_push.py")
     lstate, ldetail = relay_link_state()
     if rpids and lstate == "connected":
-        row("relay", DOT_OK, f"connected  {ldetail}".rstrip())
+        rows.append(("relay", "ok", f"connected  {ldetail}".rstrip()))
     elif rpids:
-        row("relay", DOT_WARN, "searching  (scanning for pg-XXXX)")
+        rows.append(("relay", "warn", "searching  (scanning for pg-XXXX)"))
     elif lstate == "down":
-        row("relay", DOT_BAD, f"down       {ldetail}".rstrip())
+        rows.append(("relay", "bad", f"down       {ldetail}".rstrip()))
     else:
-        row("relay", DOT_OFF, "stopped")
+        rows.append(("relay", "off", "stopped"))
 
-    snap = _get_json(hub_base(port) + "/v1/snapshot") if up else None
+    snap = _get_json(hub_base(port) + "/v1/snapshot", timeout) if up else None
     sessions = (snap or {}).get("sessions") or []
     if sessions:
         s = sessions[0]
         more = f"   (+{len(sessions) - 1} more)" if len(sessions) > 1 else ""
         head = f"{s.get('name', '?')} · {s.get('state', '?')} {s.get('age', '')}".rstrip()
-        row("device", DOT_OK, f"{len(sessions)} session(s)  ▸ {head}{more}")
-    elif up:
-        row("device", DOT_OFF, "no sessions yet")
+        rows.append(("device", "ok", f"{len(sessions)} session(s)  ▸ {head}{more}"))
     else:
-        row("device", DOT_OFF, "—")
+        rows.append(("device", "off", "no sessions yet" if up else "—"))
 
-    if boot_enabled():
-        row("boot", DOT_OK, "on    (starts at login)")
-    else:
-        row("boot", DOT_OFF, "off   → pager boot on")
+    rows.append(("boot", "ok" if boot_enabled() else "off",
+                 "on    (starts at login)" if boot_enabled() else "off   → pager boot on"))
 
     n, events = hooks_status()
     if n:
         shown = ", ".join(events[:4]) + (" …" if len(events) > 4 else "")
-        row("hooks", DOT_OK, f"{n} event(s)  {shown}")
+        rows.append(("hooks", "ok", f"{n} event(s)  {shown}"))
     else:
-        row("hooks", DOT_OFF, "not registered  → pager hooks on")
+        rows.append(("hooks", "off", "not registered  → pager hooks on"))
 
-    st = _get_json(hub_base(port) + "/v1/settings") if up else None
+    st = _get_json(hub_base(port) + "/v1/settings", timeout) if up else None
     if st is not None:
         en = st.get("audio_enabled", True)
-        row("audio", DOT_OK if en else DOT_OFF, f"{'on' if en else 'off'}  · vol {st.get('volume', 60)}")
+        rows.append(("audio", "ok" if en else "off",
+                     f"{'on' if en else 'off'}  · vol {st.get('volume', 60)}"))
     else:
-        row("audio", DOT_OFF, "—")
+        rows.append(("audio", "off", "—"))
+    return rows
+
+_DOTS = {"ok": DOT_OK, "warn": DOT_WARN, "bad": DOT_BAD, "off": DOT_OFF}
+
+def _status_block(port: int) -> None:
+    print(_c(BOLD, "pager-buddy"))
+    for label, state, text in _status_rows(port):
+        row(label, _DOTS[state], text)
 
 def cmd_status(args) -> int:
     port = resolve_port(args)
@@ -325,6 +364,95 @@ def cmd_status(args) -> int:
     except KeyboardInterrupt:
         print()
         return 0
+
+def cmd_default(args) -> int:
+    """Bare `pager` (no subcommand): a friendly status block + a one-line cheat sheet."""
+    _status_block(plist_port() or DEFAULT_PORT)
+    print(_c(DIM, "\n  up · down · status --watch · logs -f · boot on|off · doctor · top · --help"))
+    return 0
+
+def _log_tail(n: int) -> list[str]:
+    if n <= 0 or not LOG.exists():
+        return []
+    try:
+        return LOG.read_text(errors="replace").splitlines()[-n:]
+    except Exception:
+        return []
+
+def _top_loop(stdscr, port: int) -> int:
+    import curses
+    curses.curs_set(0)
+    stdscr.timeout(1500)                    # getch returns -1 after 1.5s → repaint
+    pairs = {}
+    if curses.has_colors():
+        curses.start_color()
+        curses.use_default_colors()
+        for i, fg in ((1, curses.COLOR_GREEN), (2, curses.COLOR_YELLOW), (3, curses.COLOR_RED)):
+            curses.init_pair(i, fg, -1)
+        pairs = {"ok": curses.color_pair(1), "warn": curses.color_pair(2),
+                 "bad": curses.color_pair(3), "off": curses.A_DIM}
+    glyph = {"ok": "●", "warn": "◐", "bad": "●", "off": "○"}
+    msg = ""
+
+    def put(y, x, s, attr=0):
+        h, w = stdscr.getmaxyx()
+        if 0 <= y < h and x < w:
+            try:
+                stdscr.addnstr(y, x, s, max(0, w - 1 - x), attr)
+            except curses.error:
+                pass
+
+    while True:
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+        put(0, 0, "pager-buddy", curses.A_BOLD)
+        y = 2
+        for label, state, text in _status_rows(port, timeout=0.6):
+            put(y, 2, f"{label:<8}")
+            put(y, 11, glyph.get(state, "·"), pairs.get(state, 0))
+            put(y, 13, text)
+            y += 1
+        y += 1
+        put(y, 0, "─" * (w - 1), curses.A_DIM); y += 1
+        for ln in _log_tail(max(0, h - 2 - y)):
+            put(y, 0, ln, curses.A_DIM); y += 1
+        foot = "  u up · x down · b boot · r refresh · q quit"
+        if msg:
+            foot = f"  {msg}" + foot
+        put(h - 1, 0, foot.ljust(w - 1), curses.A_REVERSE)
+        stdscr.refresh()
+
+        try:
+            ch = stdscr.getch()
+        except KeyboardInterrupt:
+            return 0
+        c = chr(ch).lower() if 0 <= ch < 256 else ""
+        msg = ""
+        if c == "q":
+            return 0
+        elif c == "u":
+            write_plist(port, boot_enabled()); launchd_bootstrap(); launchd_kickstart(); msg = "started"
+        elif c == "x":
+            launchd_stop(); subprocess.run(["pkill", "-f", "ble_push.py"], capture_output=True); msg = "stopped"
+        elif c == "b":
+            now_on = not boot_enabled()
+            write_plist(plist_port() or port, now_on)
+            if now_on:
+                launchd_bootstrap(); launchd_kickstart()
+            msg = f"boot {'on' if now_on else 'off'}"
+
+def cmd_top(args) -> int:
+    if not sys.stdout.isatty():            # piped/non-interactive → one-shot status
+        return cmd_status(argparse.Namespace(watch=False, port=getattr(args, "port", None)))
+    try:
+        import curses  # noqa: F401
+        import locale
+    except Exception:
+        warn("curses unavailable — use:  pager status --watch")
+        return 1
+    locale.setlocale(locale.LC_ALL, "")    # so the ●◐○ glyphs render
+    import curses
+    return curses.wrapper(_top_loop, resolve_port(args))
 
 def cmd_logs(args) -> int:
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -458,11 +586,57 @@ def cmd_doctor(args) -> int:
         print(_c(DIM, "        advertises but never connects, run `pager run` in a terminal."))
     return 0
 
+# ── shell completion ─────────────────────────────────────────────────────────────
+_COMMANDS = ("up down status logs run install uninstall boot hooks "
+             "audio doctor top completion")
+
+_COMPLETION_BASH = r'''# pager bash completion.  Install:  pager completion bash > /usr/local/etc/bash_completion.d/pager
+# or, ad hoc:  eval "$(pager completion bash)"
+_pager() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=( $(compgen -W "%(cmds)s" -- "$cur") ); return
+  fi
+  case "${COMP_WORDS[1]}" in
+    boot)       COMPREPLY=( $(compgen -W "on off" -- "$cur") );;
+    hooks)      COMPREPLY=( $(compgen -W "on off status" -- "$cur") );;
+    audio)      COMPREPLY=( $(compgen -W "on off --volume" -- "$cur") );;
+    completion) COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") );;
+    up)         COMPREPLY=( $(compgen -W "--boot --port" -- "$cur") );;
+    status|top) COMPREPLY=( $(compgen -W "--watch --port" -- "$cur") );;
+    logs)       COMPREPLY=( $(compgen -W "-f --follow" -- "$cur") );;
+    install)    COMPREPLY=( $(compgen -W "--gate --no-hooks --boot --port" -- "$cur") );;
+  esac
+}
+complete -F _pager pager
+'''
+
+_COMPLETION_ZSH = r'''# pager zsh completion.  Install:  pager completion zsh > "${fpath[1]}/_pager"
+# or, ad hoc (after `autoload -U compinit && compinit`):  eval "$(pager completion zsh)"
+_pager() {
+  local -a cmds; cmds=(%(cmds)s)
+  if (( CURRENT == 2 )); then compadd -- $cmds; return; fi
+  case $words[2] in
+    boot)       compadd -- on off;;
+    hooks)      compadd -- on off status;;
+    audio)      compadd -- on off --volume;;
+    completion) compadd -- bash zsh;;
+  esac
+}
+compdef _pager pager
+'''
+
+def cmd_completion(args) -> int:
+    tmpl = _COMPLETION_ZSH if args.shell == "zsh" else _COMPLETION_BASH
+    print(tmpl % {"cmds": _COMMANDS})
+    return 0
+
 # ── argparse ─────────────────────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="pager", description="run the pager-buddy Mac bridge (tailscale-style).")
-    sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>")
+    # not required: bare `pager` falls through to a friendly status block (see main()).
+    sub = p.add_subparsers(dest="cmd", required=False, metavar="<command>")
 
     def add(name, fn, help):
         sp = sub.add_parser(name, help=help)
@@ -509,12 +683,21 @@ def build_parser() -> argparse.ArgumentParser:
     s = add("doctor", cmd_doctor, "diagnose the whole chain")
     s.add_argument("--port", type=int)
 
+    s = add("top", cmd_top, "live full-screen dashboard (curses)")
+    s.add_argument("--port", type=int)
+
+    s = add("completion", cmd_completion, "print a shell completion script (bash|zsh)")
+    s.add_argument("shell", nargs="?", choices=["bash", "zsh"], default="bash")
+
     return p
 
 def main() -> int:
     args = build_parser().parse_args()
+    fn = getattr(args, "fn", None)
+    if fn is None:                      # bare `pager` → friendly status + cheat sheet
+        return cmd_default(args)
     try:
-        return args.fn(args)
+        return fn(args)
     except KeyboardInterrupt:
         print()
         return 130
