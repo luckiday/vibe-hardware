@@ -36,8 +36,8 @@ find_package(ZLIB REQUIRED)   # PNG writer in sim_main.c
 add_executable(pager_sim
   sim_main.c
   ${FW}/components/ui/ui.c                  # the real renderer, shared verbatim with the device
-  ${FONTS_DIR}/font_puhui_basic_20_4.c      # FONT_TITLE
-  ${FONTS_DIR}/font_puhui_basic_14_1.c)     # FONT_BODY
+  ${FONTS_DIR}/font_puhui_20_4.c            # FONT_TITLE (full CJK)
+  ${FONTS_DIR}/font_puhui_14_1.c)           # FONT_BODY  (full CJK)
 target_compile_definitions(pager_sim PRIVATE UI_SIM)
 target_include_directories(pager_sim PRIVATE ${FW}/components/ui/include)
 target_link_libraries(pager_sim PRIVATE lvgl ZLIB::ZLIB)
