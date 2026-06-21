@@ -54,8 +54,8 @@ the `LV_SYMBOL_*` icon range. Any other codepoint — Chinese, `•`, `▼`, `�
   `LV_FONT_DECLARE(font_puhui_20_4)`, and pass `&font_puhui_20_4`. Pick by display size
   (≈16 px for 240², 20 px for 240×320). It's a font *binary*, not a Kconfig flag.
 - **Use the FULL face, not the `*_basic_*` subset.** `font_puhui_basic_*` is only ~700 glyphs
-  and still tofus most everyday Chinese (迁/移/数/据/库, 合/并/建…) — a trap, because it looks
-  CJK-capable until real text arrives from the link. The full `font_puhui_<size>` faces carry
+  and still renders most everyday Chinese as tofu boxes — a trap, because it looks CJK-capable
+  until real text arrives from the link. The full `font_puhui_<size>` faces carry
   the ~6 k common set. They need **`CONFIG_LV_FONT_FMT_TXT_LARGE=y`** (the small-font bitmap
   offsets overflow otherwise — the build errors with exactly that hint). Cost: the full 20 px
   + 14 px faces are ~1.6 MB; a measured app went 1.24 MB → 2.59 MB (still 18 % free in a 3 MB
