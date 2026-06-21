@@ -40,15 +40,19 @@ MAX_ACTIVITY = 3            # tool steps kept per session
 IDLE_TTL = int(os.environ.get("PAGER_BUDDY_IDLE_TTL", "600"))  # seconds (default 10 min)
 POST_TIMEOUT = 1.5         # seconds — keep small; we fail open
 
-# ── two-way approval gate (device answers permission prompts) ────────────────────
-# For tools in the gate set, a PreToolUse hook BLOCKS: it shows an approval prompt on
-# the pager, waits for the user to press Allow/Deny there, and returns that decision to
-# Claude Code (permissionDecision allow|deny) — so the device drives the VS Code session.
-# Set PAGER_BUDDY_GATE="" (or "off"/"none") to disable; it then behaves push-only.
-# Only active in "default" permission mode — bypassPermissions/acceptEdits/plan never
-# prompt, so the gate stays out of the way there (no spurious Allow on the device).
-# A blocking hook must finish under Claude's hook timeout (~60 s), so keep GATE_TIMEOUT
-# below that; on timeout we stay silent and Claude falls back to its own prompt.
+# ── two-way gate: the device answers Claude's permission / question dialogs ──────
+# On a PermissionRequest hook (which fires only when Claude actually prompts the user) we
+# BLOCK: render the prompt on the pager, wait for the press, and return the decision —
+#   * a normal tool   → decision.behavior = allow | deny
+#   * AskUserQuestion → decision.behavior = allow + decision.updatedInput.answers = [[label]]
+#     (injects the chosen option — how Vibe Island answers questions from a remote)
+# so the device drives the VS Code session. Because PermissionRequest fires only on a real
+# prompt, the gate is inherently bypass-safe (no event in bypassPermissions/acceptEdits, so
+# no spurious Allow on the device — no permission_mode check needed).
+# Set PAGER_BUDDY_GATE="" (or "off"/"none") to disable → push-only; otherwise it scopes which
+# non-ask tools gate (AskUserQuestion always gates when on). A blocking hook must finish under
+# Claude's hook timeout (~60 s), so keep GATE_TIMEOUT below that; on timeout we stay silent and
+# Claude falls back to its own dialog.
 def _gate_tools() -> set:
     raw = os.environ.get("PAGER_BUDDY_GATE", "Bash,Edit,Write,MultiEdit,NotebookEdit")
     if raw.strip().lower() in ("", "off", "none", "0"):
@@ -459,33 +463,50 @@ def fetch_resolution(res_url: str, sid: str):
         return None
 
 
-def gated_approval(payload: dict, url: str, state_path: str) -> str | None:
-    """Show an Allow/Deny prompt on the pager and block until the user presses one.
+def build_decision(payload: dict, action: str) -> dict:
+    """Map the device's pick to a PermissionRequest hook decision (Claude Code schema):
+      - AskUserQuestion → behavior "allow" + updatedInput.answers = [[chosen label]], which
+        injects the answer (decision.updatedInput replaces the tool input). This is exactly
+        how Vibe Island answers questions from a remote.
+      - any other tool      → behavior "allow" / "deny".
+    See https://code.claude.com/docs/en/hooks (PermissionRequest output)."""
+    tool = payload.get("tool_name") or ""
+    tool_input = payload.get("tool_input") or {}
+    decision: dict = {}
+    if tool == "AskUserQuestion":
+        # answers is one array of selected label(s) per question; the pager is single-select
+        # and shows the first question, so → [[label]]. The label round-trips verbatim from
+        # the snapshot's ask.opts, so it matches the AskUserQuestion option exactly.
+        decision["behavior"] = "allow"
+        decision["updatedInput"] = {**tool_input, "answers": [[action]]}
+    else:
+        decision["behavior"] = "allow" if action.lower() == "allow" else "deny"
+    return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
 
-    Returns "allow"/"deny" from the device, or None if the device/hub is unreachable
-    or nobody answers within GATE_TIMEOUT (caller then lets Claude prompt normally)."""
+
+def gated_permission(payload: dict, url: str, state_path: str):
+    """On a PermissionRequest, render the prompt/question on the pager and block until the
+    device answers, then return the hookSpecificOutput dict to print. Returns None to fall
+    through (hub/device unreachable or nobody answered → Claude shows its own dialog)."""
     sid = payload.get("session_id") or "unknown"
     res_url = url.replace("/v1/snapshot", "/v1/resolution")
-    # 1. render the approval screen on the device (waiting + approve{tool,file}). If the
-    #    hub is unreachable, bail at once — no prompt can reach the device, so blocking
-    #    would just stall Claude. (This is what keeps a globally-installed hook fast when
-    #    the bridge isn't running.)
-    if not emit(payload, url, state_path, override_event="PermissionRequest"):
+    # 1. render the right screen — apply_event maps PermissionRequest → asking (AskUserQuestion,
+    #    with options) or waiting (other tools, Allow/Deny). If the hub is unreachable, bail at
+    #    once: no prompt can reach the device, so blocking would just stall Claude.
+    if not emit(payload, url, state_path):
         debug("hub unreachable; skipping gate")
         return None
     # 2. clear any stale decision left over from a previous prompt in this session.
     fetch_resolution(res_url, sid)
-    # 3. wait for a fresh press.
+    # 3. wait for a fresh press, then map it to a decision.
     deadline = time.time() + GATE_TIMEOUT
     while time.time() < deadline:
         res = fetch_resolution(res_url, sid)
-        if res:
-            action = str(res.get("action") or "").lower()
-            if action in ("allow", "deny"):
-                debug(f"device decided: {action}")
-                return action
+        if res and res.get("action"):
+            debug(f"device answered: {res['action']!r}")
+            return build_decision(payload, str(res["action"]))
         time.sleep(GATE_POLL)
-    debug("gate timed out; falling back to Claude's own prompt")
+    debug("gate timed out; Claude shows its own dialog")
     return None
 
 
@@ -571,33 +592,21 @@ def main() -> int:
         if term:
             payload["terminal_app"] = term
 
-    # Two-way gate: for a gated tool, block on the device for an Allow/Deny and return
-    # it to Claude as a permission decision. Anything else (incl. timeout / device
-    # offline) falls through to the normal push so we always fail open.
-    #
-    # Only gate in "default" permission mode — the one mode where Claude would otherwise
-    # prompt the user. In bypassPermissions / acceptEdits / plan it auto-allows or defers
-    # and never prompts, so gating there would pop a spurious Allow on the device for a
-    # tool that's already been auto-approved. Treat a missing field as "default" (older
-    # Claude builds that don't send it still get the gate).
+    # Two-way gate via the PermissionRequest hook (Vibe Island's mechanism). PermissionRequest
+    # fires ONLY when Claude actually shows a permission/question dialog — so it's inherently
+    # bypass-safe (no event in bypassPermissions/acceptEdits → no spurious prompt on the device,
+    # and no permission_mode check needed). We render it on the pager, block for the press, and
+    # return the decision: Allow/Deny for a normal tool, or the chosen option for an
+    # AskUserQuestion (decision.updatedInput.answers). Timeout / device offline falls through so
+    # Claude shows its own dialog — we always fail open.
     event = payload.get("hook_event_name") or ""
     tool = payload.get("tool_name") or ""
-    mode = payload.get("permission_mode") or "default"
-    if event == "PreToolUse" and tool in GATE_TOOLS and mode == "default":
-        decision = gated_approval(payload, url, state_path)
-        if decision in ("allow", "deny"):
-            if decision == "allow":     # let the device's screen return to "running"
-                emit(payload, url, state_path)        # normal PreToolUse → working + activity
-            sys.stdout.write(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": decision,
-                    "permissionDecisionReason": f"pager-buddy: {decision} from device",
-                }
-            }))
+    if event == "PermissionRequest" and GATE_TOOLS and (tool == "AskUserQuestion" or tool in GATE_TOOLS):
+        out = gated_permission(payload, url, state_path)
+        if out is not None:
+            sys.stdout.write(json.dumps(out))
             return 0
-        # timeout/offline: the approval screen (if any) stays up; Claude prompts as usual
-        return 0
+        # fall through: render once more + let Claude show its own dialog
 
     emit(payload, url, state_path)
     return 0

@@ -3,6 +3,9 @@
 // facts. Screens mirror examples/pager-buddy/design/ (the web mock).
 
 #include <stdio.h>
+#include "lvgl.h"
+#include "ui.h"
+#ifndef UI_SIM   // hardware bring-up — excluded from the desktop simulator build (see sim/)
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
@@ -10,11 +13,10 @@
 #include "esp_lcd_panel_st7789.h"
 #include "esp_timer.h"
 #include "esp_log.h"
-#include "lvgl.h"
 #include "stick_s3_board.h"
-#include "ui.h"
 
 static const char *TAG = "ui";
+#endif
 
 #define LCD_HOST       SPI2_HOST
 #define HRES           135
@@ -52,8 +54,10 @@ LV_FONT_DECLARE(font_puhui_basic_14_1);   // body    (14 px)
 #define FONT_TITLE  (&font_puhui_basic_20_4)
 #define FONT_BODY   (&font_puhui_basic_14_1)
 
+#ifndef UI_SIM
 static lv_display_t *s_disp;
 static esp_lcd_panel_handle_t s_panel;
+#endif
 
 // Handles to time-varying labels, updated in place by ui_refresh_time() so the 1 Hz
 // clock/age tick doesn't force a full rebuild — which would restart marquee scrolls.
@@ -65,6 +69,9 @@ static int       s_age_n;
 static view_t    s_cur_view;
 
 // ---------- LVGL <-> esp_lcd glue ----------
+#ifndef UI_SIM   // device-only: SPI/ST7789 panel bring-up. The simulator (sim/sim_main.c)
+                 // supplies its own ui_init() + a memory-backed display; everything below
+                 // ui_init() (helpers + screens + ui_render) is portable and shared verbatim.
 static bool on_flush_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *e, void *ctx) {
     lv_display_flush_ready((lv_display_t *)ctx);
     return false;
@@ -141,9 +148,11 @@ void ui_init(void) {
     lv_obj_set_style_text_font(scr, &lv_font_montserrat_12, 0);
     ESP_LOGI(TAG, "display + LVGL ready");
 }
+#endif  // !UI_SIM (panel bring-up)
 
-uint32_t ui_tick(void) { return lv_timer_handler(); }
+uint32_t ui_tick(void) { return lv_timer_handler(); }   // portable: pumps LVGL on device + sim
 
+#ifndef UI_SIM
 void ui_set_backlight(bool on) {
     gpio_set_level(BOARD_PIN_LCD_BL, on ? 1 : 0);
 }
@@ -152,6 +161,7 @@ void ui_prepare_deep_sleep(void) {
     gpio_set_level(BOARD_PIN_LCD_BL, 0);                 // backlight off
     if (s_panel) esp_lcd_panel_disp_on_off(s_panel, false);  // panel sleep
 }
+#endif
 
 // ---------- small helpers ----------
 static uint32_t state_color(sess_state_t s) {
