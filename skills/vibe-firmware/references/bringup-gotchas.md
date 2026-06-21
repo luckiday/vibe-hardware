@@ -49,13 +49,19 @@ the `LV_SYMBOL_*` icon range. Any other codepoint — Chinese, `•`, `▼`, `�
 "tofu" box. Don't try to subset Montserrat; pull in a font that actually has the glyphs.
 
 - **Fix:** add a CJK font *component* and assign it per label — `78/xiaozhi-fonts` (from
-  xiaozhi-esp32, MIT) ships `font_puhui_basic_<size>_<bpp>` covering common CJK *and* Latin,
-  so one label renders English or Chinese. Declare with `LV_FONT_DECLARE(font_puhui_basic_20_4)`
-  and pass `&font_puhui_basic_20_4`; list `78/xiaozhi-fonts` in the component's
-  `idf_component.yml`. The linker (`--gc-sections`) drops every size you don't reference, so
-  a 20 px title + 14 px body font is ~1–2 MB — fine in a 3 MB app slot. Pick by display size
-  (≈16 px for 240², 20 px for 240×320). It's a font *binary*, not a Kconfig flag — no
-  `sdkconfig` change.
+  xiaozhi-esp32, MIT) covers common CJK *and* Latin, so one label renders English or Chinese.
+  List `78/xiaozhi-fonts` in the component's `idf_component.yml`, declare with
+  `LV_FONT_DECLARE(font_puhui_20_4)`, and pass `&font_puhui_20_4`. Pick by display size
+  (≈16 px for 240², 20 px for 240×320). It's a font *binary*, not a Kconfig flag.
+- **Use the FULL face, not the `*_basic_*` subset.** `font_puhui_basic_*` is only ~700 glyphs
+  and still tofus most everyday Chinese (迁/移/数/据/库, 合/并/建…) — a trap, because it looks
+  CJK-capable until real text arrives from the link. The full `font_puhui_<size>` faces carry
+  the ~6 k common set. They need **`CONFIG_LV_FONT_FMT_TXT_LARGE=y`** (the small-font bitmap
+  offsets overflow otherwise — the build errors with exactly that hint). Cost: the full 20 px
+  + 14 px faces are ~1.6 MB; a measured app went 1.24 MB → 2.59 MB (still 18 % free in a 3 MB
+  slot). If flash gets tight, build a subset font from your actual strings or drop the title a
+  size. `--gc-sections` still drops every size you don't reference. (Caught in the host sim —
+  see [`host-ui-simulation.md`](host-ui-simulation.md).)
 - **Keep `LV_SYMBOL_*` in a Montserrat label.** The CJK fonts don't carry the icon range, so
   an inline `"✓ name"` in a PuHui label loses the check mark. Split it: symbol in a
   Montserrat label, text in the CJK one (a flex row). xiaozhi does the same — a separate
@@ -132,6 +138,24 @@ sleep, not deep sleep (see `esp-idf-structure.md` → Power management).
 passed. Redirect to a file and check the real status (`idf.sh build > log 2>&1; echo $?`),
 then grep the log for `error:` / `ninja: build stopped`. (Also seen: a wrapper script
 losing its `+x` bit → `permission denied: ./idf.sh`; `chmod +x` and commit it.)
+
+## Docker build + host flash: a Docker `build/` won't cross to the host
+
+The pinned build runs in Docker (`./idf.sh build`), which bakes container paths (`/project`)
+into `build/CMakeCache.txt`. A later host `idf.py flash`/`build` re-runs CMake, sees the path
+mismatch, and aborts: *"CMakeCache.txt directory is different … HINT: run idf.py fullclean."*
+`fullclean` itself runs CMake and hits the same wall, so it can't clean either.
+
+- **Flash without re-configuring.** Docker can't reach `/dev/cu.*` on macOS anyway, so flash
+  from the host straight from the built binaries with esptool, driven by
+  `build/flasher_args.json` — no CMake involved. `examples/pager-buddy/firmware/flash.sh` does
+  exactly this, so **`./idf.sh build` then `./flash.sh [PORT]`** is the standard cycle. Because
+  it never touches the cmake cache or `managed_components/`, it also works unchanged **from a
+  git worktree**.
+- **If you must host-build** (e.g. quick iteration, or the host sim), `rm -rf build` first —
+  *not* `idf.py fullclean`, which is wedged by the same mismatch — then `idf.py build`. A
+  Docker `build/` and a host `build/` can't share one directory; clean between, or keep them
+  in separate checkouts.
 
 ## ES8311 audio: playback ≠ capture, and the amp may need a kick
 

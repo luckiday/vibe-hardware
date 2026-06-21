@@ -60,6 +60,14 @@ spec + pin map ─► code ─► build (pinned) ─► flash + monitor ─► (
    only on hardware with a live peripheral). Gate the publish behind a deliberate,
    post-test trigger.
 
+**If it has a screen, close the UI loop on the host first.** Compile the firmware's *own*
+render code on your machine and screenshot each state, so you (or an agent) tune layout,
+typography and animation in a sub-second loop instead of a flash cycle — and an agent can
+*read* the PNGs and iterate itself. Carve the panel bring-up behind one `#ifdef` so the
+screens stay shared verbatim with the device. Method + gotchas:
+[`references/host-ui-simulation.md`](references/host-ui-simulation.md); worked in
+`examples/pager-buddy/firmware/sim/`.
+
 ## Structure: layered components, thin main
 
 Don't grow one `main.c`. Split the firmware into **three layers**, each touching a
@@ -111,12 +119,19 @@ partitions, PM, and the gotchas) are in
 ## Run it
 
 ESP-IDF, pinned in Docker (the authoritative build) — `examples/pager-buddy/firmware/`
-ships a working `idf.sh` wrapper around this:
+ships `idf.sh` (Docker build) + `flash.sh` (host flash) wrappers:
 
 ```bash
-docker run --rm -v "$PWD":/project -w /project espressif/idf:v5.5 idf.py build  # reproducible
-idf.py -p <PORT> flash monitor       # flash + serial (host toolchain; needs the cable)
+./idf.sh build            # reproducible build in the pinned Docker image
+./flash.sh [PORT]         # flash from the host straight off build/ (auto-detects the port)
+./flash.sh --monitor      # …and open the serial console
 ```
+
+**Build and flash are separate by design.** Docker gives a bit-for-bit artifact but can't
+reach `/dev/cu.*`, and a host `idf.py flash` would re-configure and choke on the Docker
+build's `/project` cmake cache. `flash.sh` flashes the built binaries directly (via
+`build/flasher_args.json`) — no host re-build, and it works the same from a git worktree.
+(See `references/bringup-gotchas.md` → "Docker build + host flash".)
 
 Other platforms — same shape, different command: `pio run` (PlatformIO pins the platform
 in `platformio.ini`) · `arduino-cli compile --fqbn <board>`.
@@ -133,8 +148,12 @@ in `platformio.ini`) · `arduino-cli compile --fqbn <board>`.
       `references/esp-idf-structure.md` (Power management); the `ext1` self-wake traps in
       `references/bringup-gotchas.md`.
 - [ ] Remaining pager-buddy bring-up: audio → OTA — one peripheral at a time.
-- [ ] A `scripts/` build wrapper (mirrors `vibe-pcb`'s `pcb_check.sh`: one command →
-      reproducible build + size report).
+- [x] **Host UI simulator + agent render-loop** — design/tune the screen on the host (render
+      the real `ui.c` to PNGs and iterate) before flashing; method in
+      `references/host-ui-simulation.md`, worked in `examples/pager-buddy/firmware/sim/`.
+- [x] Standard build/flash wrappers: `idf.sh` (pinned Docker build) + `flash.sh` (host flash
+      off `build/`, worktree-safe). The Docker↔host cmake-cache trap + the one-command cycle
+      are in `references/bringup-gotchas.md`.
 - [ ] Driver-pattern references for non-ESP platforms (Arduino / PlatformIO / Zephyr).
 
 ## Keeping this current (living doc)
