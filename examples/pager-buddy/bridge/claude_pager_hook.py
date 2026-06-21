@@ -474,11 +474,16 @@ def build_decision(payload: dict, action: str) -> dict:
     tool_input = payload.get("tool_input") or {}
     decision: dict = {}
     if tool == "AskUserQuestion":
-        # answers is one array of selected label(s) per question; the pager is single-select
-        # and shows the first question, so → [[label]]. The label round-trips verbatim from
-        # the snapshot's ask.opts, so it matches the AskUserQuestion option exactly.
+        # Claude Code expects updatedInput.answers as an OBJECT keyed by the question text →
+        # the selected option label (comma-joined for multi-select). The pager is
+        # single-select and answers the first question. NOTE: the array-of-arrays form
+        # ([[label]]) is OpenCode's schema, not Claude Code's — sending it makes CC drop the
+        # answer and report "did not answer". The label round-trips verbatim from the
+        # snapshot's ask.opts, so it matches the AskUserQuestion option exactly.
+        questions = tool_input.get("questions") or []
+        q_text = (questions[0] or {}).get("question", "") if questions else ""
         decision["behavior"] = "allow"
-        decision["updatedInput"] = {**tool_input, "answers": [[action]]}
+        decision["updatedInput"] = {**tool_input, "answers": {q_text: action}}
     else:
         decision["behavior"] = "allow" if action.lower() == "allow" else "deny"
     return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
