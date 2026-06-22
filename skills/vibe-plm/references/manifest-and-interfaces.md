@@ -76,7 +76,17 @@ windows, antenna keep-out. Change a number here and both sides move; that's the 
 point of keeping it in one file.
 
 Shape (see the stub): `board.outline`, `board.mount_holes`, `stack`, `ports`,
-`windows`, `keepouts`.
+`windows`, `keepouts`. A `frame_mapping` block (the PCB↔CAD coordinate transform) is
+worth adding when one side renders the other's geometry — e.g. the PCB 3D view loading
+the real `cad/tray.step`, or the cad fit-check importing `pcb/board.step`.
+
+> **Consumers include the PCB's own reference 3D models, not just the outline.** The
+> standoff / baseplate / enclosure `.step` you `add_model()` into the board's 3D view
+> are reference-only — and they must **read these numbers**, never hardcode a copy. A
+> magic `STANDOFF_H = 16` that disagrees with `stack.car_bot` makes the part poke
+> through the real shell in the codesign view (`tools/codesign-viewer`). That view is
+> the cross-check: a visual clash = a real number to reconcile *here*. See `vibe-pcb`
+> `references/fab-and-3d.md` → "Drive the reference models from the shared contract".
 
 ## Source vs artifact (how `plm_check` treats a contract)
 

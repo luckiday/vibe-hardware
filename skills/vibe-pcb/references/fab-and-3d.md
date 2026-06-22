@@ -24,6 +24,30 @@ disagreements in 3D before either is ordered/printed.
    feeds back the pocket / standoff / slot geometry. Keep a single set of numbers
    across both — when the stack height changes, both move.
 
+### Drive the reference models from the shared contract, not magic numbers
+
+The 3D parts you load into the board view (standoffs, a baseplate, the enclosure
+itself) are **reference-only** — they don't fab, they exist to catch fit problems.
+The trap: hardcoding their geometry (`STANDOFF_H = 16.0`) in `gen_*.py`. A copied
+number **silently diverges** from the shell as the design moves, and the board view
+then *looks* fine against its own wrong model.
+
+- **Make each reference model READ the cad↔pcb fit contract** (`cad/constraints.yaml`
+  in a `vibe-plm` product — the shared stack numbers). e.g. the carrier standoff/boss
+  height is `car_bot - plate` *read from that file*, never re-typed. (PyYAML-optional:
+  fall back to a stdlib line-scan, since the build123d venv often has no `yaml`.)
+- **Load the REAL shell, not a placeholder.** Instead of a hand-made baseplate, point
+  `add_model(...)` at the sibling `cad/.../tray.step` (transform via the contract's
+  frame map). Now the board is shown *in its actual enclosure*.
+- **Then the codesign view is the cross-check.** `tools/codesign-viewer` puts the PCB
+  (2D + 3D) and the CAD shell on one page. A reference model that visually **pokes
+  through** the real shell is not a render glitch — it's a genuine fit-number
+  disagreement to reconcile in `constraints.yaml`. Field example: a `gen_standoff.py`
+  hardcoded at 16 mm while the CAD seated the carrier at `car_bot=13.7` → the standoff
+  feet poked 2.3 mm through the tray window face. Driving the height from the contract
+  fixed it *and* kept the can↔plate gap equal to the CAD's `stack.gap_can` (not a
+  second, conflicting estimate). See `vibe-plm` `references/manifest-and-interfaces.md`.
+
 ## ⚠️ Do NOT round-trip KiCad → EasyEDA (LCEDA)
 
 The tempting wrong path (it cost a full debugging session): importing the KiCad
