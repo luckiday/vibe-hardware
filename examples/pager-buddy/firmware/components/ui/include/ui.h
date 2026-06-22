@@ -25,6 +25,8 @@ typedef struct {
     const char *clock, *date;
     int battery; bool charging, usb;
     bool online;                      // BLE link to the Mac bridge (drives the status-bar Bluetooth glyph)
+    bool connecting;                  // no live snapshot yet → show the "Connecting" screen (not sessions)
+    const char *device;               // BLE advertising name ("pg-XXXX") — pairing hint on the connecting screen
     session_t *sessions; int n;
     view_t view; int open; int sel;   // open = index of the open session (-1 if none)
 } app_model_t;

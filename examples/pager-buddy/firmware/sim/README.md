@@ -39,9 +39,9 @@ cmake -S . -B build && cmake --build build -j
 ./build/pager_sim all <out_dir> [tick_ms] [scale]
 ```
 
-States: `idle  idle-clear  list  working  approve  ask  done  offline  empty  cjk`.
-Edit the scenarios (and add your own) in `sim_main.c` → `build_model()`; they mirror the
-stub data in `../main/main.c`.
+States: `idle  idle-clear  list  working  approve  ask  done  offline  connecting  empty  cjk`.
+Edit the scenarios (and add your own) in `sim_main.c` → `build_model()`. (`connecting` is
+what the device shows until the first BLE snapshot arrives — see `../main/main.c`.)
 
 ## The agent loop
 

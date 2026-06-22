@@ -3,10 +3,11 @@
 // Layered per vibe-firmware: BSP (stick_s3_board) owns pins/PMIC/buttons; ui owns the
 // ST7789 + LVGL screens; bridge is a BLE peripheral that receives Claude Code status
 // snapshots from the Mac. This thin main holds the UI state machine, binds whatever
-// the bridge last received (falling back to stub data until the first snapshot), pumps
+// the bridge last received (showing "Connecting" until the first snapshot), pumps
 // LVGL, and polls the two buttons. Mirrors examples/pager-buddy/design/.
 //   SIDE (KEY2) = cycle highlight (wraps) · FRONT (KEY1) = OK · hold FRONT = back.
 
+#include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -43,46 +44,55 @@ static int64_t s_screen_off_us;      // when the screen blanked (starts the tier
 static bool    s_screen_off;         // tier-1 state: backlight blanked, BLE still up
 static esp_pm_lock_handle_t s_no_light_sleep;  // held while the screen is ON (no light sleep → no LCD flicker)
 
-// --- stub data (shown until the first BLE snapshot arrives; same sample as the mock) ---
-static const char *deploy_opts[] = {"Production", "Staging", "Local only"};
-static const char *act_fix[]     = {"Edit(src/auth/middleware.ts)"};
-static const char *act_backend[] = {"Write(src/routes/users.ts)"};
-static const char *act_opt[]     = {"Analyzing the slow queries", "Read(schema.prisma)",
-                                    "Edit(src/db/client.ts)"};
-
-static session_t stub_sessions[] = {
-    // two "vibe hardware" entries on purpose — the task line is what tells them apart
-    {.id = "stub-001", .name = "vibe hardware", .agent = "Claude", .term = "VS Code", .age = "27m", .state = ST_WORKING,
-     .task = "fix the auth bug in the login middleware",
-     .appr_tool = "Edit", .appr_file = "src/auth/middleware.ts", .add = 3, .del = 1,
-     .ask_q = "Choose deploy target?", .ask_opts = deploy_opts, .ask_n = 3,
-     .done_summary = "Fixed the auth bug in the login middleware.", .files = 3, .tests = "8 passed",
-     .act = act_fix, .act_n = 1},
-    {.id = "stub-002", .name = "vibe hardware", .agent = "Codex", .term = "Terminal", .age = "1h", .state = ST_WORKING,
-     .task = "build the users REST endpoint with pagination",
-     .act = act_backend, .act_n = 1},
-    {.id = "stub-003", .name = "db optimization", .agent = "Gemini", .term = "Ghostty", .age = "5h", .state = ST_WORKING,
-     .task = "speed up the slow dashboard queries",
-     .act = act_opt, .act_n = 3},
-};
-#define STUB_N ((int)(sizeof(stub_sessions) / sizeof(stub_sessions[0])))
-
 static app_model_t M = {
-    .clock = "--:--", .date = "", .battery = 78, .charging = false, .usb = false, .online = false,
-    .sessions = stub_sessions, .n = STUB_N, .view = VIEW_IDLE, .open = -1, .sel = 0,
+    .clock = "--:--", .date = "", .battery = 78, .charging = false, .usb = false,
+    .online = false, .connecting = true,
+    .sessions = NULL, .n = 0, .view = VIEW_IDLE, .open = -1, .sel = 0,
 };
 
-// Point M at live bridge data when a snapshot has arrived, else the stub. Call with
-// the bridge lock held (bridge_borrow). Clamps open/selection to the current count.
+// --- local clock (keeps the time correct between snapshots AND while unpaired) ---
+// The Mac only sends "HH:MM" on a snapshot, and once the link drops it sends nothing at
+// all. So we anchor the last received time to the local monotonic clock and extrapolate
+// each tick — the display keeps ticking off the previous value, no Mac required. Every
+// new snapshot re-anchors, correcting any drift. Minute resolution matches the display.
+static bool    s_clock_valid;        // a "HH:MM" has been received at least once
+static int     s_clock_anchor_min;   // minutes-since-midnight at the anchor
+static int64_t s_clock_anchor_us;    // esp_timer_get_time() at the anchor
+static char    s_clock_buf[16];      // "HH:MM" — what M.clock points at once valid (roomy: silences -Wformat-truncation)
+
+static void clock_anchor(const char *hhmm) {
+    if (!hhmm || !hhmm[0]) return;
+    int h, mm;
+    if (sscanf(hhmm, "%d:%d", &h, &mm) != 2) return;
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return;
+    s_clock_anchor_min = h * 60 + mm;
+    s_clock_anchor_us  = esp_timer_get_time();
+    s_clock_valid = true;
+}
+
+// Re-point M.clock at the extrapolated current time. No-op (leaves "--:--") until the
+// first snapshot has anchored the clock.
+static void clock_tick(void) {
+    if (!s_clock_valid) return;
+    int64_t mins = (esp_timer_get_time() - s_clock_anchor_us) / 60000000LL;
+    int64_t tod = ((int64_t)s_clock_anchor_min + mins) % 1440;
+    if (tod < 0) tod += 1440;                       // normalise to [0,1439]
+    snprintf(s_clock_buf, sizeof s_clock_buf, "%02d:%02d", (int)(tod / 60), (int)(tod % 60));
+    M.clock = s_clock_buf;
+}
+
+// Point M at live bridge data when a snapshot has arrived, else show "Connecting". Call
+// with the bridge lock held (bridge_borrow). Clamps open/selection to the current count.
 static void bind_model(const bridge_view_t *lv) {
     if (lv) {                       // a snapshot has been received (n may be 0 = all clear)
+        M.connecting = false;
         M.sessions = lv->sessions;
         M.n = lv->n;
-        if (lv->clock && lv->clock[0]) M.clock = lv->clock;
-        if (lv->date  && lv->date[0])  M.date  = lv->date;
-    } else {                        // no snapshot yet → stub sample
-        M.sessions = stub_sessions;
-        M.n = STUB_N;
+        if (lv->date && lv->date[0]) M.date = lv->date;
+    } else {                        // no snapshot yet → "Connecting" screen (clock keeps ticking)
+        M.connecting = true;
+        M.sessions = NULL;
+        M.n = 0;
     }
     if (M.open >= M.n) { M.open = -1; if (M.view == VIEW_SESSION) M.view = VIEW_LIST; }
 }
@@ -159,7 +169,7 @@ static bool note_activity(void) {
 
 // Eligible for deep sleep = nothing needs attention. A live snapshot with any
 // session WORKING/WAITING/ASKING blocks sleep (it will transition, or it needs the
-// user); DONE/ERROR are settled. No live snapshot (stub/unpaired) is also eligible.
+// user); DONE/ERROR are settled. No live snapshot (unpaired/connecting) is also eligible.
 static bool sleep_eligible(bool have_live) {
     if (!have_live) return true;
     for (int i = 0; i < M.n; i++) {
@@ -231,6 +241,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(board_init());
     ui_init();
     bridge_start();                       // BLE peripheral; advertises for the Mac bridge
+    M.device = bridge_device_name();      // "pg-XXXX" — pairing hint on the Connecting screen
     audio_init();                         // ES8311 speaker for alert tones (shares board I²C)
     ui_render(&M);
     ESP_LOGI(TAG, "ready — SIDE=scroll  FRONT=OK  hold FRONT=back");
@@ -335,6 +346,8 @@ void app_main(void) {
         const bridge_view_t *lv = bridge_borrow();
         bool have_live = (lv != NULL);
         bind_model(lv);
+        if (new_snap && lv) clock_anchor(lv->clock);   // re-sync the local clock to the Mac
+        clock_tick();                                  // extrapolate "HH:MM" so it ticks unpaired too
         if (M.n != last_n) { last_n = M.n; dirty = true; }   // a session appeared/pruned → rebuild
 
         // Alert tones: on a fresh snapshot, beep once when a needs-you/done state newly

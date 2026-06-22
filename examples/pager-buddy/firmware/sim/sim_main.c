@@ -117,6 +117,7 @@ static int build_model(const char *state, app_model_t *m) {
     memset(g_sess, 0, sizeof g_sess);
     m->clock = "14:32"; m->date = "Sat Jun 21";
     m->battery = 76; m->charging = false; m->usb = false; m->online = true;
+    m->connecting = false; m->device = "pg-1a2b";
     m->sessions = g_sess; m->open = -1; m->sel = 0;
 
     // a default set of four mixed sessions (used by idle/list)
@@ -156,6 +157,9 @@ static int build_model(const char *state, app_model_t *m) {
     } else if (!strcmp(state, "offline")) {
         m->online = false; m->battery = 12;        // dim BT + red battery
         m->view = VIEW_IDLE;
+    } else if (!strcmp(state, "connecting")) {
+        m->online = false; m->connecting = true;   // no snapshot yet → "Connecting" screen
+        m->n = 0; m->sessions = NULL; m->view = VIEW_IDLE;
     } else if (!strcmp(state, "empty")) {
         m->n = 0; m->view = VIEW_LIST;
     } else if (!strcmp(state, "cjk")) {
@@ -171,7 +175,7 @@ static int build_model(const char *state, app_model_t *m) {
 }
 
 static const char *ALL_STATES[] = {
-    "idle", "idle-clear", "list", "working", "approve", "ask", "done", "offline", "empty", "cjk",
+    "idle", "idle-clear", "list", "working", "approve", "ask", "done", "offline", "connecting", "empty", "cjk",
 };
 #define N_STATES ((int)(sizeof ALL_STATES / sizeof ALL_STATES[0]))
 
