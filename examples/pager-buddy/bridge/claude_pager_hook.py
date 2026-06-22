@@ -201,6 +201,15 @@ def infer_terminal(env):
         if tp == "windsurf":
             return "Windsurf"
 
+    # Claude's first-party desktop app hosts the agent with no terminal, so TERM_PROGRAM
+    # is unset. Identify it by entrypoint / macOS bundle id; otherwise the host field is
+    # left empty and the device used to fall back to an em-dash, which Montserrat can't
+    # render (renders as a "tofu" box). See build_snapshot.
+    entry = (env.get("CLAUDE_CODE_ENTRYPOINT") or "").lower()
+    bundle = (env.get("__CFBundleIdentifier") or "").lower()
+    if "claude-desktop" in entry or "claudefordesktop" in bundle:
+        return "Claude"
+
     # Claude Code running as an editor extension: the extension host has no shell,
     # so TERM_PROGRAM is unset. Use Claude's own entrypoint + the macOS app bundle.
     if "vscode" in (env.get("CLAUDE_CODE_ENTRYPOINT") or "").lower():
@@ -321,7 +330,9 @@ def apply_event(registry: dict, payload: dict, now: float) -> None:
             "id": sid,
             "name": prettify(os.path.basename(cwd.rstrip("/"))) or "session",
             "agent": "Claude",
-            "term": payload.get("terminal_app") or "—",
+            # empty (not an em-dash) when the host is unknown: the device skips the chip
+            # rather than rendering a glyph Montserrat lacks (a "tofu" box).
+            "term": payload.get("terminal_app") or "",
             "state": "working",
             "task": "",
             "activity": [],
@@ -389,7 +400,7 @@ def build_snapshot(registry: dict, now: float) -> dict:
             "id": session["id"],
             "name": session["name"],
             "agent": session.get("agent", "Claude"),
-            "term": session.get("term", "—"),
+            "term": session.get("term", ""),
             "age": humanize_age(touched, now),   # since last update (renderers re-age from ts)
             "ts": round(touched),   # last-update epoch — renderers re-age + prune from this
             "state": session.get("state", "working"),

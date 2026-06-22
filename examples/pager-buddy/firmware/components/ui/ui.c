@@ -3,6 +3,7 @@
 // facts. Screens mirror examples/pager-buddy/design/ (the web mock).
 
 #include <stdio.h>
+#include <strings.h>
 #include "lvgl.h"
 #include "ui.h"
 #ifndef UI_SIM   // hardware bring-up — excluded from the desktop simulator build (see sim/)
@@ -633,7 +634,9 @@ static void view_list(lv_obj_t *scr, const app_model_t *m) {
             lv_obj_set_style_pad_column(l2, 3, 0);
             lv_obj_set_style_pad_left(l2, 8, 0);
             mk_chip(l2, s->agent, &lv_font_montserrat_10, C_DIM);
-            if (s->term && s->term[0]) {
+            // Skip the host chip when it just repeats the agent (e.g. the first-party
+            // Claude desktop app, host "Claude" == agent "Claude") — no second redundant chip.
+            if (s->term && s->term[0] && !(s->agent && strcasecmp(s->term, s->agent) == 0)) {
                 char tb[8];
                 mk_chip(l2, term_short(s->term, tb, sizeof tb), &lv_font_montserrat_10, C_DIM);
             }
