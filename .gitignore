@@ -1,0 +1,45 @@
+# OS
+.DS_Store
+
+# Local scratch / experiments (never committed)
+_scratch/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Vendored agent-skill installs (per-clone: npx skills install …)
+.agents/
+.claude/
+skills-lock.json
+
+# Regenerated review artifacts (keep sources, not outputs)
+**/view/
+**/models/*.stl
+**/models/*.glb
+**/models/.*.glb
+*-pcb.glb
+
+# KiCad scratch / IDE noise
+*.lck
+~*.lck
+*.kicad_prl
+*-bak
+*.kicad_*-bak
+fp-info-cache
+.history/
+.vscode/
+
+# Firmware build trees (set per platform)
+build/
+.pio/
+.cache/
+
+# Reference clones (study material, not ours to commit)
+examples/*/reference/
+docs/references/_clones/

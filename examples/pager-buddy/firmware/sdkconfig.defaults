@@ -1,0 +1,59 @@
+# Reproducible defaults — checked in. The generated `sdkconfig` is gitignored.
+CONFIG_IDF_TARGET="esp32s3"
+
+# ESP32-S3-PICO-1-N8R8: 8 MB flash + 8 MB octal PSRAM
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_FREERTOS_HZ=1000
+
+# app_main runs the LVGL render loop (ui_tick + ui_render). The default 3584 B
+# stack overflows when building the deeper detail screens (Approve/Ask/Done), so
+# give it room — LVGL drawing + our screen builders need several KB.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Native-USB S3: console is USB Serial/JTAG (no UART bridge) — see vibe-firmware gotcha
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+
+# BLE link to the Mac bridge (NimBLE peripheral) — see components/bridge + voicestick.
+# The device is a GATT server; the Mac is the central that writes status snapshots.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=32
+
+# Low-power auto sleep (tiered, like voicestick — see main.c).
+#  PM + tickless idle  → automatic light sleep parks the CPU between events.
+#  BT modem sleep + XTAL-PU → the BLE controller survives light sleep, so the Mac
+#  can still reach the pager (and wake the screen) while it's idle. Deep sleep
+#  (button wake) is initiated explicitly in main.c via esp_deep_sleep_start().
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+CONFIG_BT_CTRL_MODEM_SLEEP=y
+CONFIG_BT_CTRL_MAIN_XTAL_PU_DURING_LIGHT_SLEEP=y
+
+# Dual-slot OTA partition table
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_ota.csv"
+
+# LVGL (managed component lvgl/lvgl ^9): 16-bit color + the fonts the UI uses
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_FONT_MONTSERRAT_10=y
+CONFIG_LV_FONT_MONTSERRAT_12=y
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_40=y
+# CJK text via 78/xiaozhi-fonts (PuHui): the large fonts overflow the default txt format,
+# and the component also compiles emoji fonts built on imgfont — both must be enabled or
+# the component won't compile (even the sizes we GC away). LV_USE_IMAGE is already on.
+CONFIG_LV_FONT_FMT_TXT_LARGE=y
+CONFIG_LV_USE_IMGFONT=y

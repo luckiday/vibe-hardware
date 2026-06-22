@@ -1,0 +1,324 @@
+/* StickC S3 display mock — device frame + 135x240 screen, dark theme. */
+:root {
+  --bg: #0a0a0a;          /* pure near-black (matches firmware C_BG) — the OP-1 canvas */
+  --fg: #e6e9ef;
+  --dim: #8a93a0;
+  --line: #2a2f38;        /* crisp 1px frames */
+  --sel: #1f6feb;
+  --working: #4aa3ff;
+  --waiting: #ffb020;
+  --asking: #35d0d8;
+  --done: #46d369;
+  --error: #ff5d5d;
+  --scale: 1; /* 1 = actual 135x240 px; zoom buttons bump it for inspection */
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #0d0e12;
+  color: var(--fg);
+  font: 14px ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+.stage {
+  display: flex;
+  gap: 48px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px 64px;
+  flex-wrap: wrap;
+}
+
+/* ---------- device body (chrome scales with --scale, so 1x = actual 135px) ---------- */
+.device {
+  position: relative;
+  padding: calc(10px * var(--scale)) calc(10px * var(--scale)) calc(9px * var(--scale));
+  background: linear-gradient(155deg, #3d4046, #2b2d32 55%, #232529); /* matte charcoal */
+  border: 2px solid #1c1e22;
+  border-radius: calc(12px * var(--scale));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55), inset 0 0 0 2px #15171b;
+}
+.bezel {
+  padding: calc(4px * var(--scale));
+  background: #050608;
+  border-radius: calc(4px * var(--scale));
+  border: 1px solid #0b0c0e; /* black LCD bezel */
+}
+.slot {
+  width: calc(135px * var(--scale));
+  height: calc(240px * var(--scale));
+  overflow: hidden;
+  border-radius: calc(2px * var(--scale));
+}
+.screen-scale {
+  transform: scale(var(--scale));
+  transform-origin: top left;
+}
+
+/* front (blue) button KEY1 = OK / hold = back — a blue pill, like the real device */
+.btn-front {
+  display: block;
+  margin: calc(7px * var(--scale)) auto calc(2px * var(--scale));
+  width: calc(30px * var(--scale));
+  height: calc(11px * var(--scale));
+  border-radius: calc(6px * var(--scale));
+  border: 1px solid #1a3a8a;
+  background: linear-gradient(#5b8cff, #2f6bff 55%, #1f54c8);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .45), inset 0 1px 2px rgba(255, 255, 255, .4);
+  cursor: pointer;
+}
+.btn-front:active { filter: brightness(1.15); }
+
+/* power button (left edge) — decorative: hold=boot · double=off · press=on */
+.btn-power {
+  position: absolute;
+  left: calc(-3px * var(--scale));
+  top: 30%;
+  width: calc(3px * var(--scale));
+  height: calc(13px * var(--scale));
+  border-radius: 3px;
+  background: linear-gradient(#3a3e47, #23262d);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+
+/* side button on the right edge = scroll */
+.btn-side {
+  position: absolute;
+  right: calc(-3px * var(--scale));
+  top: 72%; /* near the bottom of the right edge, like the real KEY2 */
+  width: calc(3px * var(--scale));
+  height: calc(22px * var(--scale));
+  border: none;
+  border-radius: 3px;
+  background: linear-gradient(#3a3e47, #23262d);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .5);
+  cursor: pointer;
+}
+.btn-side:active { filter: brightness(1.3); }
+
+.usb {
+  width: calc(15px * var(--scale));
+  height: calc(2.5px * var(--scale));
+  background: #000;
+  border-radius: 3px;
+  margin: calc(4px * var(--scale)) auto 0;
+}
+.label { text-align: center; color: var(--dim); font-size: 11px; margin-top: 8px; }
+
+/* ---------- the 135x240 screen — Teenage-Engineering line-art language ----------
+   Thin 1px neon strokes on pure black, framed (sharp-corner) labels, semantic color.
+   Mirrors firmware/components/ui/ui.c (procedural lv_line/lv_arc/lv_anim). */
+.screen {
+  width: 135px;
+  height: 240px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 10px ui-monospace, Menlo, Consolas, monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* line-art icon: 1px neon stroke, no fill, inherits color from its context */
+.ico { display: inline-block; vertical-align: middle; flex: none; }
+.ico * { vector-effect: non-scaling-stroke; }
+
+/* framed tag — the OP-1 boxed label (MAX EQ / CC1 / OPT). Border takes the text color. */
+.tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 7px; letter-spacing: .5px; text-transform: uppercase;
+  padding: 1px 4px; border: 1px solid currentColor; color: var(--dim);
+  white-space: nowrap; line-height: 1.5;
+}
+
+.statusbar {
+  height: 16px; flex: 0 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5px; font-size: 8px; color: var(--dim);
+  border-bottom: 1px solid var(--line);
+}
+.statusbar .left { display: inline-flex; align-items: center; gap: 5px; }
+.statusbar .bt { color: var(--dim); display: inline-flex; }     /* offline: dim + slash */
+.statusbar .bt.on { color: var(--working); }                    /* online: neon blue rune */
+.statusbar .clk { color: var(--dim); letter-spacing: 1px; }     /* only shown off the idle screen */
+
+/* battery — line-art shell + nub + proportional fill (SVG; color = state) */
+.batt { display: inline-flex; align-items: center; gap: 3px; color: var(--done); }
+.batt .bolt { display: inline-flex; color: var(--working); }
+.batt-pct { font-size: 8px; letter-spacing: .5px; }
+.b-ok  { color: var(--done); }
+.b-chg { color: var(--working); }
+.b-low { color: var(--error); }
+
+.content { flex: 1 1 auto; overflow: hidden; padding: 5px; }
+
+.footer {
+  height: 16px; flex: 0 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5px; border-top: 1px solid rgba(230, 233, 239, .5);   /* soft-white menu divider */
+}
+.footer .tag { border: 0; padding: 0; color: var(--fg); }   /* menu hints: no box, white text */
+
+/* ---------- idle / glance: breathing-rings hero + single clock ---------- */
+/* iPhone-style stack: date+time at top, icon in the middle, status at the bottom */
+.idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 8px 0 6px; }
+.ihead { display: flex; flex-direction: column; align-items: center; gap: 1px; }   /* date over time */
+/* ring/summary color follows status priority: error > needs-you > working > all done */
+.rings { position: relative; width: 88px; height: 82px; color: var(--done); }   /* big square; c-done = green */
+.rings.c-waiting { color: var(--waiting); }
+.rings.c-working { color: var(--working); }
+.rings.c-error   { color: var(--error); }
+.rings span {
+  position: absolute; inset: 0; margin: auto; width: 16px; height: 16px;
+  border: 1px solid currentColor; border-radius: 50%; opacity: 0;
+  animation: ring 2.6s ease-out infinite;
+}
+.rings span:nth-child(2) { animation-delay: .87s; }
+.rings span:nth-child(3) { animation-delay: 1.73s; }
+.rings.agi span { animation-duration: 1.4s; }   /* needs-you → pulse faster */
+.rings::after {                                  /* steady center dot */
+  content: ""; position: absolute; inset: 0; margin: auto;
+  width: 9px; height: 9px; border-radius: 50%; background: currentColor;
+}
+@keyframes ring {            /* grow to fill the square (base 16px → ~77px) */
+  0%   { transform: scale(.35); opacity: .85; }
+  80%  { opacity: .12; }
+  100% { transform: scale(4.8); opacity: 0; }
+}
+.clock-big { font-size: 40px; letter-spacing: 1px; color: var(--fg); font-weight: 300; }
+.date { font-size: 9px; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; }
+/* status band: white text (same as the clock + menu), no box — a hairline above it; the
+   footer's top border is the line below */
+.summary { display: block; width: 100%; text-align: center; color: var(--fg); font-size: 9.5px;
+  letter-spacing: .3px; line-height: 1.6; padding: 7px 4px 5px; }
+
+/* ---------- session list ---------- */
+.row { padding: 3px 4px; border: 1px solid transparent; }
+.row + .row { margin-top: 2px; }
+.row.sel { border-color: var(--line); background: #12161f; box-shadow: inset 2px 0 0 currentColor; }
+.row .l1 { display: flex; align-items: center; gap: 5px; }
+.row .name {
+  flex: 1 1 auto; font-size: 10px; color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .age { font-size: 8px; color: var(--dim); letter-spacing: .5px; }
+.row .l2 { display: flex; gap: 3px; margin: 2px 0 0 11px; align-items: center; overflow: hidden; }
+/* compact state word on a list row (no frame — the dot already carries the color) */
+.lstate { font-size: 7px; letter-spacing: .3px; text-transform: uppercase; white-space: nowrap; }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+.s-working { background: var(--working); }
+.s-waiting { background: var(--waiting); }
+.s-asking  { background: var(--asking); }
+.s-done    { background: var(--done); }
+.s-error   { background: var(--error); }
+.c-working { color: var(--working); }
+.c-waiting { color: var(--waiting); }
+.c-asking  { color: var(--asking); }
+.c-done    { color: var(--done); }
+.c-error   { color: var(--error); }
+
+/* framed meta chip (agent / terminal) — sharp corners, neutral frame */
+.chip {
+  font-size: 7px; letter-spacing: .3px; padding: 1px 2px; flex: none;
+  border: 1px solid var(--line); color: var(--dim); white-space: nowrap;
+}
+
+/* ---------- action screens ---------- */
+.head { font-size: 9px; margin-bottom: 4px; display: flex; gap: 4px; align-items: center; }
+.path { font-size: 8.5px; color: var(--fg); word-break: break-all; margin-bottom: 4px; }
+.q { font-size: 10px; color: var(--fg); margin-bottom: 6px; line-height: 1.35; }
+.big { font-size: 14px; color: var(--fg); margin: 4px 0 3px; letter-spacing: .5px; }
+.delta { font-size: 8px; color: var(--dim); margin-top: 3px; letter-spacing: .5px; }
+
+.opt {
+  font-size: 9.5px; padding: 4px 5px; margin-top: 3px;
+  border: 1px solid var(--line); color: var(--fg); display: flex; gap: 6px; align-items: center;
+}
+.opt.sel { border-color: var(--asking); background: var(--asking); color: #001316; }  /* inverted selection */
+.opt .k { color: var(--dim); }
+.opt.sel .k { color: #014; }
+
+.choices { display: flex; gap: 6px; position: absolute; left: 5px; right: 5px; bottom: 22px; }
+.choice {
+  flex: 1; text-align: center; font-size: 9.5px; padding: 5px 0; letter-spacing: 1px;
+  text-transform: uppercase; border: 1px solid var(--line); color: var(--fg);
+}
+.choice.sel { background: var(--fg); color: #000; border-color: var(--fg); }
+.choice.danger.sel { background: var(--error); color: #1a0306; border-color: var(--error); }
+
+/* working: subtitle + activity lines + an animated VU "running" indicator */
+.subtitle { font-size: 8.5px; color: var(--dim); margin: 1px 0 5px; line-height: 1.3; }
+.act { font-size: 9px; margin-top: 3px; }
+.act .tool { color: var(--working); }
+.act .sub { color: var(--dim); margin: 0 0 0 9px; font-size: 8px; }
+.act.run { color: var(--working); letter-spacing: 1px; display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+.act.run .bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 9px; }
+.act.run .bars i { width: 2px; background: currentColor; transform-origin: bottom; animation: vu .9s ease-in-out infinite; }
+.act.run .bars i:nth-child(1) { height: 5px; animation-delay: 0s; }
+.act.run .bars i:nth-child(2) { height: 9px; animation-delay: .15s; }
+.act.run .bars i:nth-child(3) { height: 6px; animation-delay: .3s; }
+.act.run .bars i:nth-child(4) { height: 8px; animation-delay: .45s; }
+@keyframes vu { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+
+.toast {
+  position: absolute; left: 8px; right: 8px; bottom: 40px;
+  background: #0d1016; border: 1px solid var(--line);
+  font-size: 8.5px; padding: 4px 6px; color: #cdd4de; text-align: center; letter-spacing: .5px;
+}
+
+/* page flash (stands in for the buzz) */
+.screen.flash::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--waiting); animation: flash .45s ease-out 3;
+}
+@keyframes flash { from { opacity: 1; } to { opacity: 0; } }
+
+/* ---------- side panel ---------- */
+.panel { width: 280px; max-width: 88vw; padding-top: 8px; }
+.panel h1 { font-size: 16px; margin: 0 0 2px; }
+.panel .sub { color: var(--dim); margin: 0 0 18px; font-size: 12.5px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.controls button {
+  font: 13px ui-sans-serif, sans-serif; padding: 9px 10px; border-radius: 8px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.controls button:hover { background: #222632; }
+.controls #cPlay { grid-column: 1 / -1; background: #15233f; border-color: #25406e; }
+.zoom { display: flex; align-items: center; gap: 6px; margin: -6px 0 16px; font-size: 12px; color: var(--dim); }
+.zoom button {
+  font: 12px ui-sans-serif, sans-serif; padding: 4px 9px; border-radius: 6px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+}
+.zoom button.on { background: #15233f; border-color: #2f6bff; color: #cfe0ff; }
+.power { display: flex; align-items: center; gap: 6px; margin: -6px 0 16px; font-size: 12px; color: var(--dim); }
+.power button {
+  font: 12px ui-sans-serif, sans-serif; padding: 4px 9px; border-radius: 6px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+}
+.power button.on { background: #102a3f; border-color: #5ec4ff; color: #bfe6ff; }
+
+/* live bridge connection (Level-0 feed — see ../bridge) */
+.live-bar { display: flex; align-items: center; gap: 8px; margin: -6px 0 16px; font-size: 12px; color: var(--dim); }
+.live-bar button {
+  font: 12px ui-sans-serif, sans-serif; padding: 4px 9px; border-radius: 6px;
+  background: #1a1d24; color: var(--fg); border: 1px solid #2a2f38; cursor: pointer;
+}
+.live-bar button:hover { background: #222632; }
+.live-status { font-size: 11.5px; }
+.live-status.on { color: var(--done); }
+.live-status.off { color: var(--dim); }
+kbd {
+  font: 11px ui-monospace, monospace; background: #0d0f14; border: 1px solid #2c323c;
+  border-radius: 4px; padding: 1px 5px; color: var(--dim);
+}
+.legend { display: grid; gap: 5px; margin: 4px 0 16px; font-size: 12px; color: #c4ccd6; }
+.legend .row2 { display: flex; align-items: center; gap: 7px; }
+.legend .dot { width: 8px; height: 8px; }
+.help { font-size: 12px; color: var(--dim); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; }
+.help b { color: #c4ccd6; }

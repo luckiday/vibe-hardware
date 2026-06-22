@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['*-v*']        # release tags: <example>-v<version> (e.g. pager-buddy-v1.2.3)
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skill structure (each skill has SKILL.md + a name:)
+        run: |
+          fail=0
+          for d in skills/*/; do
+            [ -f "$d/SKILL.md" ] || { echo "::error::missing SKILL.md in $d"; fail=1; continue; }
+            grep -q '^name:' "$d/SKILL.md" || { echo "::error::no 'name:' frontmatter in $d/SKILL.md"; fail=1; }
+          done
+          [ "$fail" = 0 ] && echo "OK: every skill has SKILL.md + name:"
+          exit $fail
+
+      - name: Python scripts compile
+        run: |
+          files=$(find skills -name '*.py')
+          [ -z "$files" ] || python3 -m py_compile $files
+          echo "OK: python scripts compile"
+
+      - name: English-only (no CJK in docs/scripts)
+        run: |
+          if grep -rIlP '[\x{4e00}-\x{9fff}]' --include='*.md' --include='*.sh' --include='*.py' --exclude-dir=.git . ; then
+            echo "::error::non-English (CJK) text found in the files listed above"; exit 1
+          fi
+          echo "OK: English-only"
+
+      - name: Shellcheck (advisory)
+        continue-on-error: true
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          find skills -name '*.sh' -print0 | xargs -0 -r shellcheck -S warning
+
+  # Build an example's firmware ONLY on a release tag named "<example>-v<version>"
+  # (e.g. pager-buddy-v1.2.3). Never on branch pushes or PRs — firmware builds are slow and
+  # only meaningful for a cut release. Runs in the SAME pinned ESP-IDF Docker image the
+  # example's idf.sh uses, so CI artifacts match a local reproducible build.
+  firmware:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve example from the tag
+        id: ex
+        run: |
+          tag="$GITHUB_REF_NAME"            # e.g. pager-buddy-v1.2.3
+          name="${tag%-v*}"                 # strip -v<version> -> pager-buddy
+          dir="examples/$name/firmware"
+          if [ "$name" = "$tag" ] || [ -z "$name" ]; then
+            echo "::error::tag '$tag' is not of the form '<example>-v<version>'"; exit 1
+          fi
+          if [ ! -d "$dir" ]; then
+            echo "::error::no firmware for example '$name' (expected $dir)"; exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "dir=$dir"   >> "$GITHUB_OUTPUT"
+          echo "Building '$name' firmware ($dir) for tag $tag"
+
+      - name: Build firmware (pinned ESP-IDF Docker)
+        run: |
+          docker run --rm -v "$PWD/${{ steps.ex.outputs.dir }}":/project -w /project \
+            espressif/idf:v5.5 idf.py build
+
+      - name: Size report
+        run: ls -l "${{ steps.ex.outputs.dir }}/build/"*.bin
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ex.outputs.name }}-${{ github.ref_name }}
+          path: |
+            ${{ steps.ex.outputs.dir }}/build/*.bin
+            ${{ steps.ex.outputs.dir }}/build/bootloader/bootloader.bin
+            ${{ steps.ex.outputs.dir }}/build/partition_table/partition-table.bin
+            ${{ steps.ex.outputs.dir }}/build/flasher_args.json
+          if-no-files-found: error
