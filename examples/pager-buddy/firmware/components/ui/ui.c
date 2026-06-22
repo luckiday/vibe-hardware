@@ -539,6 +539,27 @@ static void view_idle(lv_obj_t *scr, const app_model_t *m) {
     footer(scr, FI_OK, "OPEN", FI_DOWN, "MENU");
 }
 
+// No live snapshot yet (link down, or up but the first snapshot hasn't arrived): mirror
+// the idle layout so the locally-extrapolated clock stays prominent, but swap the session
+// summary for a quiet "Connecting" line and a dim, calm ring (no session colour yet).
+static void view_connecting(lv_obj_t *scr, const app_model_t *m) {
+    lv_obj_t *date = mk_label(scr, m->date, &lv_font_montserrat_12, C_DIM);
+    lv_obj_align(date, LV_ALIGN_TOP_MID, 0, 18);
+    lv_obj_t *clk = mk_label(scr, m->clock, &lv_font_montserrat_40, C_FG);
+    lv_obj_align(clk, LV_ALIGN_TOP_MID, 0, 30);
+    s_clk_big = clk;   // ui_refresh_time() ticks this in place — keeps time even while unpaired
+
+    hero_rings(scr, C_DIM, false, 13);   // dim, slow ring = "searching for the link"
+
+    // status band: the one quiet white line. "Connecting" plus the pairing-name hint so the
+    // user knows which device to look for from the Mac. ASCII only (no "…" — it'd be tofu).
+    char sum[40];
+    if (m->device && m->device[0]) snprintf(sum, sizeof sum, "Connecting\n%s", m->device);
+    else                           snprintf(sum, sizeof sum, "Connecting");
+    status_band(scr, sum);
+    footer(scr, FI_NONE, "", FI_NONE, "");   // no actions — just the divider, for layout symmetry
+}
+
 static void view_list(lv_obj_t *scr, const app_model_t *m) {
     lv_obj_t *c = content(scr);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
@@ -755,7 +776,9 @@ void ui_render(const app_model_t *m) {
     s_clk_bar = NULL; s_clk_big = NULL; s_age_n = 0; s_cur_view = m->view;  // labels are recreated below
     status_bar(scr, m);
 
-    if (is_home(m)) {                       // idle, or an empty list — one "all clear" home
+    if (m->connecting) {                    // no live data yet → "Connecting" (clock still ticks)
+        view_connecting(scr, m);
+    } else if (is_home(m)) {                // idle, or an empty list — one "all clear" home
         view_idle(scr, m);
     } else if (m->view == VIEW_LIST) {
         view_list(scr, m);
