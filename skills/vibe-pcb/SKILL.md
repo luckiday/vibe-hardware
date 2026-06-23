@@ -135,7 +135,14 @@ plays to relational reasoning + reading images, not blind one-shot geometry:
 `.ses` back). So: **placement = model + the visual loop** (judgment-heavy, decides whether
 the board looks professional); **routing = freerouting** (or scripted `trk` for a trivial
 board), with the model only **reading the render to accept/reject** — never hand-placing
-copper blind. (freerouting needs a JRE; if absent, route by `trk` and document it.)
+copper blind. (freerouting needs a JRE; if absent, route by `trk` and document it.) The
+**validated, fully-headless recipe** — including the non-obvious bits (kicad-cli has no
+Specctra, so go through pcbnew `ExportSpecctraDSN`/`ImportSpecctraSES`; freerouting 1.9.0
+isn't headless and 2.2.4 needs JDK 25; it saves the `.ses` ~10 s after "completed"; the
+belly needs a real track/via keepout, not just a no-fill; a GND pour over routed GND needs
+`ZONE_CONNECTION_FULL`) — is in `references/autorouting.md`, driven by
+[`scripts/autoroute.sh`](scripts/autoroute.sh) (`gen STAGE=place → export_dsn.py →
+freerouting → import_ses.py → pcb_check.sh`).
 
 See `references/design-rules.md` → *Layered layout & the feedback loop* for the cluster
 helper shape (`cluster(name, anchor) · c.place(ref, slot)`), the `STAGE` flag, and the
