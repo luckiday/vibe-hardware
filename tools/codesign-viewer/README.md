@@ -11,17 +11,18 @@ tools/codesign-viewer/codesign-viewer.sh <product-dir> [port]    # dir holds pro
 
 ## What you get
 
-A single page with a header (`product · revision · contract chips`) and five tabs:
+A single page with a header (`product · revision · contract chips`) and up to six tabs:
 
 | Tab | Pane | Source |
 |---|---|---|
-| **PCB 2D** | KiCanvas, live `.kicad_pcb` | `pcb/kicad/*.kicad_pcb` (layers · objects · schematic) |
+| **PCB 2D** | KiCanvas, live `.kicad_pcb` | `pcb/kicad/*.kicad_pcb` (layers · objects) |
+| **Schematic** | KiCanvas, live `.kicad_sch` | `pcb/kicad/*.kicad_sch` — the design's schematic sheet (tab shown only when one exists) |
 | **PCB 3D** | three.js | `view/pcb.glb` — kicad-cli export (board + parts + the real enclosure tray model) |
 | **Enclosure** | three.js | `cad/models/.*assembly*.step.glb` (or tray) |
 | **Fit** | three.js | `cad/models/.*fit*.step.glb` — board placed in the shell |
 | **Exploded** | three.js | `cad/models/.*exploded*.step.glb` |
 
-Keys **1–5** switch tabs. A 3D tab whose GLB is missing is greyed out.
+**Number keys** switch tabs (left→right). A tab whose source is missing — the schematic, a 3D GLB — is greyed out or omitted.
 
 ## How it works (and why it's self-contained)
 

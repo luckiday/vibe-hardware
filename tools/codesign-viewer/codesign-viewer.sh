@@ -41,13 +41,13 @@ CONSTR=$(ctract constraints "cad/constraints.yaml")
 
 # ── PCB: live .kicad_pcb for KiCanvas + a GLB for the 3D pane ─────────────────────────
 KPCB="$(ls "$PROD"/pcb/kicad/*.kicad_pcb 2>/dev/null | head -1 || true)"
-KSRC=""; PCB_GLB=""
+KSRC=""; SCHSRC=""; PCB_GLB=""
 if [ -n "$KPCB" ]; then
   PROJ="$(basename "${KPCB%.kicad_pcb}")"
   REL_PCB="pcb/kicad/$(basename "$KPCB")"
   KSRC="      <kicanvas-source src='/$REL_PCB'></kicanvas-source>"
-  [ -f "${KPCB%.kicad_pcb}.kicad_sch" ] && KSRC="$KSRC
-      <kicanvas-source src='/pcb/kicad/$PROJ.kicad_sch'></kicanvas-source>"
+  [ -f "${KPCB%.kicad_pcb}.kicad_sch" ] && \
+    SCHSRC="      <kicanvas-source src='/pcb/kicad/$PROJ.kicad_sch'></kicanvas-source>"
   if [ -x "$CLI" ]; then
     echo "-> export PCB GLB (board + components + the enclosure tray model)"
     "$CLI" pcb export glb --include-tracks --include-pads --include-silkscreen \
@@ -64,6 +64,15 @@ glb(){ # keyword -> root-absolute url of the matching cad GLB (or empty)
 G_ENCL="$(glb assembly)"; [ -z "$G_ENCL" ] && G_ENCL="$(glb tray)"
 G_FIT="$(glb fit)"; G_EXPL="$(glb exploded)"
 [ -z "$G_FIT$G_ENCL$G_EXPL" ] && echo "-> no CAD GLBs in cad/models/ — run: (cd cad && ../../structure/.venv/bin/python build_all.py)"
+
+# ── schematic tab + pane — only injected when a .kicad_sch resolved ───────────────────
+SCH_BTN=""; SCH_PANE=""
+if [ -n "$SCHSRC" ]; then
+  SCH_BTN="    <button data-v=sch>Schematic</button>"
+  SCH_PANE="  <div id=psch class=hide><kicanvas-embed controls=full controlslist=nodownload theme=kicad>
+$SCHSRC
+  </kicanvas-embed></div>"
+fi
 
 # ── one page ─────────────────────────────────────────────────────────────────────────
 KICANVAS="https://kicanvas.org/kicanvas/kicanvas.js"
@@ -96,7 +105,7 @@ cat > "$VIEW/index.html" <<HTML
   .seg button:disabled{color:var(--muted);cursor:not-allowed}
   .hint{margin-left:auto;color:var(--muted)}
   #stage{height:calc(100% - 86px);padding:10px;box-sizing:border-box}
-  #p2d,#p3d{position:relative;width:100%;height:100%;background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  #p2d,#psch,#p3d{position:relative;width:100%;height:100%;background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
   #p3d{background:#eaeef4}
   #p3d canvas{display:block;width:100%;height:100%}
   kicanvas-embed{display:block;height:100%}
@@ -114,18 +123,20 @@ cat > "$VIEW/index.html" <<HTML
   <span class=chips>$PINMAP $BOARDSTEP $CONSTR</span>
   <div class=seg id=tabs>
     <button data-v=2d>PCB 2D</button>
+$SCH_BTN
     <button data-v=3d data-mode=pcb data-src="$PCB_GLB">PCB 3D</button>
     <button data-v=encl data-mode=cad data-src="$G_ENCL">Enclosure</button>
     <button data-v=fit data-mode=cad data-src="$G_FIT">Fit</button>
     <button data-v=expl data-mode=cad data-src="$G_EXPL">Exploded</button>
   </div>
-  <span class=hint>2D=KiCanvas · 3D=orbit/zoom · keys 1–5</span>
+  <span class=hint>PCB 2D / Schematic = KiCanvas · 3D = orbit/zoom · number keys switch tabs</span>
   <div class=sum>$SUMMARY</div>
 </div>
 <div id=stage>
   <div id=p2d><kicanvas-embed controls=full controlslist=nodownload theme=kicad>
 $KSRC
   </kicanvas-embed></div>
+$SCH_PANE
   <div id=p3d class=hide><div id=parts class=hide></div><div class=note>orbit · scroll-zoom · right-drag pan · toggle parts ↖</div></div>
 </div>
 <script type=module>
@@ -266,18 +277,19 @@ renderer.setAnimationLoop(function(){
 });
 
 // ── tabs: PCB 2D = KiCanvas · the four 3D tabs = this renderer (mode pcb|cad) ──────────
-var tabs=document.getElementById('tabs'), p2d=document.getElementById('p2d'), p3d=document.getElementById('p3d');
+var tabs=document.getElementById('tabs'), p2d=document.getElementById('p2d'), p3d=document.getElementById('p3d'), psch=document.getElementById('psch');
 [].forEach.call(tabs.querySelectorAll('button[data-src]'),function(b){ if(!b.dataset.src) b.disabled=true; });
 var curSrc=null;
 function setv(v){
   var btn=tabs.querySelector('button[data-v="'+v+'"]'); if(!btn||btn.disabled) return;
   [].forEach.call(tabs.children,function(b){ b.classList.toggle('on',b===btn); });
-  var is2d=(v==='2d');
-  p2d.classList.toggle('hide',!is2d); p3d.classList.toggle('hide',is2d);
-  if(!is2d){ resize(); if(btn.dataset.src!==curSrc){ curSrc=btn.dataset.src; load(curSrc,btn.dataset.mode); } }
+  var isSch=(v==='sch'), is2d=(v==='2d'), is3d=!isSch&&!is2d;
+  if(psch) psch.classList.toggle('hide',!isSch);
+  p2d.classList.toggle('hide',!is2d); p3d.classList.toggle('hide',!is3d);
+  if(is3d){ resize(); if(btn.dataset.src!==curSrc){ curSrc=btn.dataset.src; load(curSrc,btn.dataset.mode); } }
 }
 [].forEach.call(tabs.children,function(b){ b.addEventListener('click',function(){ setv(b.dataset.v); }); });
-addEventListener('keydown',function(e){ var m={'1':'2d','2':'3d','3':'encl','4':'fit','5':'expl'}; if(m[e.key]) setv(m[e.key]); });
+addEventListener('keydown',function(e){ var bs=tabs.querySelectorAll('button'), i=parseInt(e.key,10)-1; if(i>=0&&i<bs.length&&!bs[i].disabled) setv(bs[i].dataset.v); });
 setv('2d');
 </script></body></html>
 HTML
@@ -285,5 +297,6 @@ HTML
 # ── serve from the PRODUCT ROOT so /pcb/... /cad/... /view/... all resolve ────────────
 old=$(lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
 [ -n "$old" ] && { echo "freeing port $PORT (pid $old)"; kill $old 2>/dev/null || true; sleep 1; }
-echo "codesign view ($NAME $REV) -> http://127.0.0.1:$PORT/view/   [PCB 2D | PCB 3D | Enclosure | Fit | Exploded]"
+SCHLBL=""; [ -n "$SCH_BTN" ] && SCHLBL=" | Schematic"
+echo "codesign view ($NAME $REV) -> http://127.0.0.1:$PORT/view/   [PCB 2D$SCHLBL | PCB 3D | Enclosure | Fit | Exploded]"
 exec python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$PROD"
