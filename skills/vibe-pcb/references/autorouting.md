@@ -54,9 +54,11 @@ FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
      use 2.x.
    - **2.x — genuinely headless (no display), but needs a newer JDK.** `-de/-do` works on a
      no-display CI box. **2.2.4 is compiled for Java 25** (class-file 69), so it needs a JDK 25 —
-     it dies on JDK 24 with `UnsupportedClassVersionError`. A no-sudo Temurin `tar.gz` extract
-     works; the Homebrew `temurin` *cask* needs sudo (fails non-interactively), and the `openjdk`
-     *formula* currently only ships JDK 24 (class-file 68 < the 69 the 2.2.4 jar needs).
+     it dies on JDK 24 with `UnsupportedClassVersionError`. On macOS, `brew install openjdk@25`
+     is now the least-friction source (validated 25.0.3 → class-file 69); a no-sudo Temurin
+     `tar.gz` extract also works. Pin the **versioned** `openjdk@25` formula, not the bare
+     `openjdk` (which tracks the latest GA, not necessarily 25); the Homebrew `temurin` *cask*
+     needs sudo (fails non-interactively).
    - **Rule of thumb:** on a workstation with a display, **1.9.0 plain** (any JDK 11+) is the
      least-friction route; for unattended CI, **2.x + JDK 25**. The earlier "1.9.0 is unusable,
      use 2.x" was over-stated — it's unusable *headless*, not unusable.
@@ -102,4 +104,4 @@ FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
 ## Tooling (not vendored)
 
 - freerouting jar — <https://github.com/freerouting/freerouting/releases>
-- a JDK 25 (Temurin tarball) — <https://adoptium.net>
+- a JDK 25 — `brew install openjdk@25` (macOS), or a Temurin tarball <https://adoptium.net>
