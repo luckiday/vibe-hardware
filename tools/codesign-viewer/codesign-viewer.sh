@@ -101,6 +101,11 @@ cat > "$VIEW/index.html" <<HTML
   #p3d canvas{display:block;width:100%;height:100%}
   kicanvas-embed{display:block;height:100%}
   #p3d .note{position:absolute;left:14px;bottom:12px;color:#5b6b82;font-size:11px;pointer-events:none}
+  #parts{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.82);border:1px solid #d3dae6;border-radius:8px;padding:6px 9px;font-size:11px;color:#1f2933;max-height:calc(100% - 24px);overflow:auto;min-width:104px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+  #parts .ptitle{display:flex;justify-content:space-between;gap:10px;font-weight:600;color:#5b6b82;margin:0 0 4px;text-transform:uppercase;letter-spacing:.4px;font-size:10px}
+  #parts .ptitle a{color:#3076d1;text-decoration:none;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500}
+  #parts .prow{display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;white-space:nowrap}
+  #parts .prow input{margin:0;cursor:pointer;accent-color:#36a37a}
   .hide{display:none!important}
   .empty{display:grid;place-items:center;height:100%;color:var(--muted);font-size:13px}
 </style></head><body>
@@ -121,7 +126,7 @@ cat > "$VIEW/index.html" <<HTML
   <div id=p2d><kicanvas-embed controls=full controlslist=nodownload theme=kicad>
 $KSRC
   </kicanvas-embed></div>
-  <div id=p3d class=hide><div class=note>orbit · scroll-zoom · right-drag pan</div></div>
+  <div id=p3d class=hide><div id=parts class=hide></div><div class=note>orbit · scroll-zoom · right-drag pan · toggle parts ↖</div></div>
 </div>
 <script type=module>
 import * as THREE from 'three';
@@ -161,7 +166,56 @@ var rim=new THREE.DirectionalLight('#ffffff',0.35); rim.position.set(-260,240,18
 
 var loader=new GLTFLoader(), current=null, ground=null;
 function disposeObj(o){ o.traverse(function(n){ if(n.geometry)n.geometry.dispose(); if(n.material){ [].concat(n.material).forEach(function(m){m.dispose&&m.dispose();}); } }); }
-function clear(){ if(current){ scene.remove(current); disposeObj(current); current=null; } if(ground){ scene.remove(ground); ground.geometry.dispose(); ground.material.dispose(); ground=null; } }
+function clear(){ if(current){ scene.remove(current); disposeObj(current); current=null; } if(ground){ scene.remove(ground); ground.geometry.dispose(); ground.material.dispose(); ground=null; } var pp=document.getElementById('parts'); if(pp){ pp.classList.add('hide'); pp.innerHTML=''; } }
+
+// ── per-part show/hide (like the text-to-cad CAD Viewer) ──────────────────────────────
+// Group meshes by their nearest *named* ancestor and map that to a friendly module: the
+// PCB GLB names nodes by kicad refdes (A1/MLX1/J1/H1/ENCLOSURE_REF…), the CAD GLBs name
+// their top-level parts (tray/carrier/xiao/thermal/cover — set by build_all.py).
+function moduleOf(nm){
+  if(!nm) return null; var n=nm.toUpperCase();
+  if(n==='TRAY'||n.indexOf('ENCLOSURE')>=0) return 'Enclosure';
+  if(n==='COVER') return 'Cover';
+  if(n==='CARRIER') return 'Carrier';
+  if(n==='XIAO'||n.indexOf('XIAO')>=0||n.indexOf('A1')===0||n.indexOf('USB TYPE')>=0) return 'XIAO';
+  if(n==='THERMAL'||n.indexOf('MLX')>=0||n.indexOf('90642')>=0||n.indexOf('90640')>=0) return 'Thermal sensor';
+  if(n.indexOf('J1')===0||n.indexOf('HEADER')>=0||n.indexOf('CONNECTOR_1X4')>=0) return 'Header';
+  if(n.indexOf('SUP')===0||n.indexOf('SPACER')>=0) return 'Spacer';
+  if(/^H\d/.test(nm)||n.indexOf('STANDOFF')>=0) return 'Standoffs';
+  return null;
+}
+function classify(obj,groups){
+  var mod=moduleOf(obj.name);
+  if(mod){ (groups[mod]=groups[mod]||[]).push(obj); return; }  // anchor: whole subtree is this module
+  if(obj.isMesh){ (groups['Board']=groups['Board']||[]).push(obj); }
+  for(var i=0;i<obj.children.length;i++) classify(obj.children[i],groups);
+}
+var PART_ORDER=['Board','Carrier','XIAO','Thermal sensor','Header','Spacer','Standoffs','Enclosure','Cover'];
+function buildParts(root){
+  var groups={}; classify(root,groups);
+  var panel=document.getElementById('parts'); panel.innerHTML='';
+  var keys=Object.keys(groups);
+  if(keys.length<2){ panel.classList.add('hide'); return; }   // nothing meaningful to toggle
+  keys.sort(function(a,b){ var ia=PART_ORDER.indexOf(a),ib=PART_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
+  var head=document.createElement('div'); head.className='ptitle';
+  var t=document.createElement('span'); t.textContent='Parts';
+  var all=document.createElement('a'); all.textContent='all'; head.appendChild(t); head.appendChild(all);
+  panel.appendChild(head);
+  var boxes=[];
+  keys.forEach(function(k){
+    var row=document.createElement('label'); row.className='prow';
+    var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=true; boxes.push(cb);
+    cb.addEventListener('change',function(){ groups[k].forEach(function(o){ o.visible=cb.checked; }); });
+    var sp=document.createElement('span'); sp.textContent=k;
+    row.appendChild(cb); row.appendChild(sp); panel.appendChild(row);
+  });
+  all.addEventListener('click',function(){
+    var any=boxes.some(function(b){ return !b.checked; }); // if any hidden -> show all, else hide all
+    boxes.forEach(function(b,i){ b.checked=any; b.dispatchEvent(new Event('change')); });
+    all.textContent=any?'none':'all';
+  });
+  panel.classList.remove('hide');
+}
 
 function shade(root,mode){
   root.traverse(function(o){
@@ -199,7 +253,7 @@ function frame(obj){
 var token=0, lastFitW=0;
 function load(url,mode){
   clear(); if(!url) return; var my=++token; userMoved=false; lastFitW=0;
-  loader.load(url,function(g){ if(my!==token) return; shade(g.scene,mode); scene.add(g.scene); current=g.scene; },null,
+  loader.load(url,function(g){ if(my!==token) return; shade(g.scene,mode); scene.add(g.scene); current=g.scene; buildParts(g.scene); },null,
     function(){ if(my===token) host.querySelector('.note').textContent='failed to load model'; });
 }
 function resize(){ var w=host.clientWidth||1,h=host.clientHeight||1; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
