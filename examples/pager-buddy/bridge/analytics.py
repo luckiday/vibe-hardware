@@ -198,8 +198,8 @@ def compute(conn: sqlite3.Connection, days: list[str]) -> dict:
     sessions: set = set()
     prompts = 0
     tools: Counter = Counter()
-    hours: Counter = Counter()          # 所有事件 / 小时 (活跃直方图)
-    prompt_hours: Counter = Counter()   # 仅 prompt / 小时
+    hours: Counter = Counter()          # all events per hour (activity histogram)
+    prompt_hours: Counter = Counter()   # prompts only, per hour
     active: set = set()
     first_ts = last_ts = None
     per_day: dict = defaultdict(

@@ -28,12 +28,22 @@ jobs:
           [ -z "$files" ] || python3 -m py_compile $files
           echo "OK: python scripts compile"
 
-      - name: English-only (no CJK in docs/scripts)
+      - name: English-only code & docs (CJK only in localized *.<lang>.md)
         run: |
-          if grep -rIlP '[\x{4e00}-\x{9fff}]' --include='*.md' --include='*.sh' --include='*.py' --exclude-dir=.git . ; then
-            echo "::error::non-English (CJK) text found in the files listed above"; exit 1
+          # Default language is English: code/scripts (*.py, *.sh) and normal docs
+          # (*.md) must be English. Translations are allowed, but only in files with a
+          # language suffix — *.zh.md / *.ja.md / *.ko.md (e.g. docs/manual.zh.md).
+          hits=$(grep -rIlP '[\x{4e00}-\x{9fff}]' \
+                   --include='*.md' --include='*.sh' --include='*.py' \
+                   --exclude-dir=.git . \
+                 | grep -vP '\.(zh|ja|ko)\.md$' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::non-English (CJK) text in non-localized files:"
+            echo "$hits"
+            echo "Fix: keep code/scripts/docs English, or move the translation into a *.<lang>.md file (e.g. README.zh.md)."
+            exit 1
           fi
-          echo "OK: English-only"
+          echo "OK: code & docs English; CJK only in localized *.<lang>.md"
 
       - name: Shellcheck (advisory)
         continue-on-error: true
