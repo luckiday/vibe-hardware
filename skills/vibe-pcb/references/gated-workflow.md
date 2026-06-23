@@ -9,7 +9,7 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 | 1 | **Schematic, by block** | organized by function (power / MCU / interface / peripheral), **not a pile**; **block frames auto-sized from content + uniform pad, aligned on a macro grid** | `gen_sch.py` `_frame()`/`_padf()` + align pass; read the PDF |
 | 2 | **Annotation** | refdes **unique, no `U?`/`R?`** left | generator assigns explicit refs (placeholders impossible) |
 | 3 | **ERC** | **no floating input · no power conflict · every rail has a driver/PWR_FLAG** | `kicad-cli sch erc` → 0 errors; know the warning classes |
-| 4 | **Netlist + footprints** | every part has a footprint; standard parts **IPC-7351**; sch↔pcb consistent | std lib for passives; custom lands flagged **EST**; `cross_analysis` |
+| 4 | **Netlist + footprints** | every part has a footprint; standard parts **IPC-7351**; a purchased module's land **derived from its vendor reference** (EST only if none exists); sch↔pcb consistent | std lib for passives; `parts/<slug>/reference/` → exact land; `cross_analysis` |
 | 5 | **Place** | decoupling hugs the power pin · xtal by the MCU · connectors at the edge · heat spread | `gen_pcb.py` P2 clusters; courtyard + cluster-box no-overlap gate |
 | 6 | **Route** | **power widened · critical nets first · continuous return · antenna keep-out** | P5 net-class widths; P6 GND pour + belly/antenna rule-area |
 | 7 | **DRC** | **0 violations / 0 unconnected** (zones filled) | `pcb_check.sh` → `kicad-cli pcb drc --refill-zones` + `belly_check.py` |
@@ -20,9 +20,19 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 - **Gate 3 — drivers.** GND/main rails as power symbols are `power_in`; they need a `power_out`
   pin (regulator/MCU) **or a `PWR_FLAG`** on the net, else ERC says *power input not driven*.
   Derived rails kept as net labels don't trigger this.
+- **Gate 4 — derive a purchased module's land from its vendor reference; don't EST it.** If the
+  module has a vendor-released footprint/3D (keep it read-only in `parts/<slug>/reference/`),
+  extract the land **verbatim** — its pads *and* its datasheet pad numbering — so it is **not
+  EST at all**. That kills both failure modes in one move: the wrong-pad miswire (next bullet)
+  *and* an approximated castellated land that's geometrically inaccurate and hard to hand-solder
+  (no real half-holes, guessed row pitch). EST is only the fallback for a part with **no**
+  published reference — then datasheet-read it (next bullet). Worked example: the TC5.1-Xiao
+  carrier pulls the exact Seeed `XIAO-14P-Add-On` land + 3D transform from
+  `parts/xiao-esp32s3-sense/reference/`.
 - **Gate 4 — IPC-7351 is for *standard* parts.** A custom module/connector land (a castellated
-  XIAO footprint, a breakout landing) is **not** IPC-7351 by definition — mark it **EST** and
-  put it on the brief's verify-against-datasheet list; don't claim IPC compliance for it.
+  XIAO footprint, a breakout landing) is **not** IPC-7351 by definition — derive it from the
+  vendor reference (above) or mark it **EST** and put it on the brief's verify-against-datasheet
+  list; don't claim IPC compliance for it.
 - **Gate 4 — verify a purchased module's pad-NUMBER → position map against the vendor's real
   castellation order; `cross_analysis` will NOT catch a wrong one.** A reversed row in the
   footprint (e.g. the XIAO bottom row numbered backwards) keeps every net electrically valid —
