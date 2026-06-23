@@ -118,6 +118,10 @@ multimeter):
 - sensor header **actual** line order vs the assumed net-map order
 - module land pattern / castellation row pitch vs the official footprint (your
   `.pretty` land is EST)
+- module **pad-NUMBER → signal** map vs the datasheet castellation order — not just the
+  outline. A reversed row passes ERC/DRC/cross-check (valid net, wrong pin); the only catch
+  is reading the vendor drawing. (Cost of skipping it: power on a GPIO pad → a dead sensor on
+  a fabbed board.)
 - mount-hole spacing vs the enclosure standoffs
 - I²C address vs firmware (a swapped sensor often shifts it)
 - connector pitch / count / pin length (reaches through both boards)

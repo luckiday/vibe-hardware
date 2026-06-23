@@ -150,11 +150,16 @@ in `pcbnew`, in milliseconds — print on every regen:
   worsens the layout). (`ratsnest total length` from `board.GetConnectivity()` is an
   equivalent proxy if you prefer the air-wire sum.)
 
-**Routing half — freerouting is a real CLI.** Placement has no auto tool (→ the loop above),
-but routing does: `kicad-cli pcb export specctra <proj>.kicad_pcb -o b.dsn` →
-`freerouting -de b.dsn -do b.ses` → `kicad-cli pcb import specctra … b.ses`. Quality needs a
-cleanup pass and a JRE must be installed; for a trivial board keep scripted `trk`. Either
-way the model's job is to **read the routed render and accept/reject**, not to place copper blind.
+**Routing half — freerouting is a real CLI, but the naive `kicad-cli … specctra` form is a
+hallucination.** Placement has no auto tool (→ the loop above); routing you hand to freerouting.
+The validated headless recipe + every gotcha that bit lives in **`references/autorouting.md`**,
+driven by `scripts/autoroute.sh` — **read that, don't reconstruct the pipeline from memory.** The
+ones that cost real time: `kicad-cli` has **no** Specctra subcommand (go through pcbnew
+`ExportSpecctraDSN`/`ImportSpecctraSES`); the freerouting version ↔ JRE ↔ display pick is a trap
+(1.9.0 plain on a workstation vs 2.x + JDK 25 for headless CI); the belly keep-out must block
+**tracks**, not just zone fills, or the router lays F.Cu under the module; and the `.ses` saves
+~10 s *after* "completed". For a handful of nets keep scripted `trk` if you prefer. Either way the
+model's job is to **read the routed render and accept/reject**, not to place copper blind.
 
 **Read routing per layer — the copper plot is the review of record.** The 3D render hides
 copper under soldermask, so a 2D **per-net, per-layer** plot (one colour per net, F.Cu | B.Cu
@@ -196,4 +201,9 @@ so it reads as blocks with real connections — and keep it ERC-clean *by constr
   `gen_sch.py`) so there's no GUI "rescue" prompt.
 - A custom module land (e.g. a 2×7 castellated XIAO footprint) lives in
   `<proj>.pretty/` and is **EST until checked against the official footprint** —
-  put it on the brief's verify list.
+  put it on the brief's verify list. **Verify the pad-NUMBER → physical-position map,
+  not just the outline/pitch.** A reversed bottom row (pad 9/10 vs 12/13) is geometrically
+  perfect and **passes ERC/DRC** — the net is electrically valid, it just lands on the wrong
+  pin. On a real carrier this silently routed `+3V3`/`GND` onto two GPIO pads; the sensor
+  enumerated on I²C but its measurement core never ran (powered through a GPIO). ERC/DRC
+  can't catch it — only a pinmap-vs-datasheet cross-check can.
