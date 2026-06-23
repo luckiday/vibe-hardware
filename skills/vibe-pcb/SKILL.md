@@ -65,6 +65,19 @@ spec (prose)  ──►  generate  ──►  validate  ──►  review  ─�
   power, parts)                    (iterate)                                or LCEDA 3-piece
 ```
 
+0. **Module reference + presets — do this FIRST, before any generation.** For every
+   *purchased* module on the board, pull its **vendor reference** into
+   `parts/<slug>/reference/` (the vendor's released KiCad land / pinout / 3D) and capture the
+   module's **presets** up front: the exact footprint + its **datasheet pad numbering**, the
+   pinmap (pad → GPIO → function), the 3D STEP **and its mount transform** (offset/rotation),
+   the **belly keep-out** box (exposed back-pads), antenna keep-out (or external-antenna note),
+   and what's already on the module (pull-ups/decoupling → DNP yours · VIN voltage · header
+   order). Then **derive** the land/symbol/model from that ground truth — never hand-draw an
+   approximation. Skipping this is exactly what caused the two worst real defects on a carrier:
+   a **wiring error** (a guessed castellation numbering put power on GPIO pads — passed
+   ERC/DRC, failed on the bench) and an **EST land that was inaccurate + hard to hand-solder**.
+   `vibe-parts` `reference/` is the home for this; `parts/xiao-esp32s3-sense/` is the worked
+   example. Only EST a land when no vendor reference exists — then datasheet-verify it.
 1. **Spec** — write/update `<proj>_brief.md`. This is *the* deliverable a beginner
    controls; everything downstream is mechanical. Use `references/spec-template.md`.
    The heart of it is the **net map** (pin-by-pin: net · module pin · GPIO · target
@@ -213,9 +226,16 @@ hardware/<line>/pcb-<name>/
   the `.zip` to JLCPCB. Importing the KiCad project into EasyEDA mangles footprints +
   the netlist; it's the importer, not your board.
 - **Sync schematic and PCB values** — `cross_analysis` fails on mismatches.
-- **Photo/caliper-verify the real module before ordering** — pull-ups already
-  present (→ leave yours DNP), VIN voltage, header line order, land pattern / row
-  pitch, mount-hole spacing, I²C address. Track these in the brief's EST checklist.
+- **Start a purchased module from its vendor reference, not an approximation.** Pull the
+  vendor's released footprint / pinout / 3D into `parts/<slug>/reference/` and **derive the
+  land/symbol/model from it verbatim** (pads *and* the datasheet pad numbering). An EST
+  (guessed) land has bitten the same board twice: a **miswire** (reversed castellation
+  numbering → power on GPIO pads; passes ERC/DRC, dies on the bench) *and* an **inaccurate,
+  hard-to-hand-solder land** (no castellation half-holes, guessed row pitch). Mark a land
+  **EST only when no vendor reference exists** — then photo/caliper-verify (pull-ups present
+  → DNP yours · VIN voltage · header line order · land/row pitch · mount-hole spacing · I²C
+  address · **pad-number↔position vs the datasheet**) before ordering, tracked in the brief's
+  EST checklist.
 
 ## When to reach for this skill vs others
 
