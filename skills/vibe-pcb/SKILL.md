@@ -138,7 +138,8 @@ board), with the model only **reading the render to accept/reject** — never ha
 copper blind. (freerouting needs a JRE; if absent, route by `trk` and document it.) The
 **validated, fully-headless recipe** — including the non-obvious bits (kicad-cli has no
 Specctra, so go through pcbnew `ExportSpecctraDSN`/`ImportSpecctraSES`; freerouting 1.9.0
-isn't headless and 2.2.4 needs JDK 25; it saves the `.ses` ~10 s after "completed"; the
+routes plain on a workstation but not headless, 2.x is headless yet 2.2.4 needs JDK 25; it
+saves the `.ses` ~10 s after "completed"; the
 belly needs a real track/via keepout, not just a no-fill; a GND pour over routed GND needs
 `ZONE_CONNECTION_FULL`) — is in `references/autorouting.md`, driven by
 [`scripts/autoroute.sh`](scripts/autoroute.sh) (`gen STAGE=place → export_dsn.py →

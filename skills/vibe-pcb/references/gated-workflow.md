@@ -23,6 +23,17 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 - **Gate 4 — IPC-7351 is for *standard* parts.** A custom module/connector land (a castellated
   XIAO footprint, a breakout landing) is **not** IPC-7351 by definition — mark it **EST** and
   put it on the brief's verify-against-datasheet list; don't claim IPC compliance for it.
+- **Gate 4 — verify a purchased module's pad-NUMBER → position map against the vendor's real
+  castellation order; `cross_analysis` will NOT catch a wrong one.** A reversed row in the
+  footprint (e.g. the XIAO bottom row numbered backwards) keeps every net electrically valid —
+  it just bonds the net to the wrong physical pin — so ERC, DRC, *and* the sch↔pcb cross-check
+  all pass clean. The cross-check only proves sch and pcb agree on pad *N*; if pad *N* itself
+  is mislocated, both agree on the same lie. The only gate that catches it is a
+  pinmap-vs-datasheet read (cross the `pinmap.yaml` pin↔pad map against the module's datasheet
+  castellation drawing). Real incident: a reversed XIAO bottom row routed `+3V3`/`GND` onto two
+  GPIO pads, fabbed, and the sensor only ACK'd on I²C while its measurement core stayed dead —
+  because it was powered through a GPIO. Treat the module pinmap as **EST until datasheet-read**,
+  same as the land itself.
 - **Gate 6 — return path on 2 layers.** Add a **GND pour** (both layers) for a continuous return;
   it auto-clears around traces, so a DRC-clean trace layout stays clean once poured. **Zones save
   UNFILLED** from headless pcbnew (`ZONE_FILLER.Fill()` segfaults) — fill at check/fab time with

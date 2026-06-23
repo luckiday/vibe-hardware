@@ -21,6 +21,14 @@ Driver: [`scripts/autoroute.sh <proj>`](../scripts/autoroute.sh). It sits **betw
 pipeline, never a replacement for it. The board the model accepts is still the one that
 passes `pcb_check.sh` + `belly_check.py`.
 
+> **The routed board is a SEPARATE artifact (`autoroute-work/<proj>.routed.kicad_pcb`); the
+> placement source stays unrouted and regenerable.** This is deliberate: a later `gen_pcb.py`
+> (or any regen, e.g. `pcb_check.sh`) can then never wipe your copper. **If you instead choose
+> to overwrite the source `<proj>.kicad_pcb` in place** (folding the route back), then the SES
+> import must be the **last** step in that file's life — any subsequent regen silently erases
+> every track. Either keep the routed copy separate, or treat "route" as terminal; don't regen
+> past it.
+
 ```bash
 # from the project kicad/ dir:
 FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
@@ -34,14 +42,24 @@ FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
    `pcbnew.ExportSpecctraDSN(board, f)` and `pcbnew.ImportSpecctraSES(board, f)` (KiCad 10).
    That is what keeps the whole loop GUI-free and inside the generator flow.
 
-2. **freerouting version is tied to a JRE.**
-   - **1.9.0 is NOT truly headless** — `MainApplication.main` calls `getScreenSize()`
-     unconditionally, so `-Djava.awt.headless=true` throws `HeadlessException`. Don't use it
-     for CI/scripted routing.
-   - **Use 2.x** (`-de in.dsn -do out.ses` is genuinely headless). **2.2.4 is compiled for
-     Java 25**, so it needs a JDK 25. A no-sudo Temurin `tar.gz` extract works; the Homebrew
-     `temurin` *cask* needs sudo (fails non-interactively), and the `openjdk` *formula*
-     currently only ships JDK 24 (class-file 68 < the 69 the 2.2.4 jar needs).
+2. **freerouting version ↔ JRE ↔ display — pick by *where* you run.** Both 1.9.0 and 2.x take
+   the same `-de in.dsn -do out.ses` batch flags (`autoroute.sh`'s driver line works with either
+   jar — only `FREEROUTING_JAR` changes); they differ in the display + JDK they need.
+   - **1.9.0 — runs on JDK 11+, but needs a *display session*.** Its batch path still inits AWT
+     (`MainApplication` touches `getScreenSize()`), so it throws `HeadlessException` **only when
+     you force `-Djava.awt.headless=true`** — so do NOT pass that flag. Run it **plain** on a
+     machine with a logged-in desktop (macOS / X11) and `-de/-do` routes fine. This is the path
+     that shipped a real Rev B carrier **on JDK 24** — least-friction, and it sidesteps the
+     JDK-25 hunt entirely. It will **not** work on a truly headless CI box (no display) — there,
+     use 2.x.
+   - **2.x — genuinely headless (no display), but needs a newer JDK.** `-de/-do` works on a
+     no-display CI box. **2.2.4 is compiled for Java 25** (class-file 69), so it needs a JDK 25 —
+     it dies on JDK 24 with `UnsupportedClassVersionError`. A no-sudo Temurin `tar.gz` extract
+     works; the Homebrew `temurin` *cask* needs sudo (fails non-interactively), and the `openjdk`
+     *formula* currently only ships JDK 24 (class-file 68 < the 69 the 2.2.4 jar needs).
+   - **Rule of thumb:** on a workstation with a display, **1.9.0 plain** (any JDK 11+) is the
+     least-friction route; for unattended CI, **2.x + JDK 25**. The earlier "1.9.0 is unusable,
+     use 2.x" was over-stated — it's unusable *headless*, not unusable.
 
 3. **freerouting saves the `.ses` LATE.** It logs `session completed` ~10–15 s **before** it
    actually writes the output file. Run java in the **foreground** (the process stays alive
