@@ -198,7 +198,8 @@ def compute(conn: sqlite3.Connection, days: list[str]) -> dict:
     sessions: set = set()
     prompts = 0
     tools: Counter = Counter()
-    hours: Counter = Counter()
+    hours: Counter = Counter()          # 所有事件 / 小时 (活跃直方图)
+    prompt_hours: Counter = Counter()   # 仅 prompt / 小时
     active: set = set()
     first_ts = last_ts = None
     per_day: dict = defaultdict(
@@ -223,6 +224,7 @@ def compute(conn: sqlite3.Connection, days: list[str]) -> dict:
                 projects[project]["sessions"].add(sid)
         if event == TURN_START:
             prompts += 1
+            prompt_hours[hour] += 1
             per_day[day]["prompts"] += 1
             if project:
                 projects[project]["prompts"] += 1
@@ -244,6 +246,7 @@ def compute(conn: sqlite3.Connection, days: list[str]) -> dict:
         "tools": dict(tools.most_common()),
         "tool_calls": sum(tools.values()),
         "hours": {h: hours.get(h, 0) for h in range(24)},
+        "prompt_hours": {h: prompt_hours.get(h, 0) for h in range(24)},
         "active_seconds": len(active) * ACTIVE_BIN,
         "first_ts": first_ts,
         "last_ts": last_ts,

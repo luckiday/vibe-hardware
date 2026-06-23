@@ -216,8 +216,8 @@ affects Claude even if the DB is busy or missing. Env: `PAGER_BUDDY_DB` (path),
 
 The `--json` shape is stable and self-describing (`sessions`, `prompts`,
 `turns{count,avg,median,total}`, `tool_calls`, `tools{}`, `hours{0..23}`,
-`active_seconds`, `per_day{}`, `projects{}`, `first_ts`/`last_ts`) — the seam to join
-against your Screen Time export.
+`prompt_hours{0..23}`, `active_seconds`, `per_day{}`, `projects{}`,
+`first_ts`/`last_ts`) — the seam to join against your Screen Time export.
 
 ## Files
 
