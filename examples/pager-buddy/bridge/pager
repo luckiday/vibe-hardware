@@ -292,6 +292,8 @@ def cmd_up(args) -> int:
     write_plist(port, boot, ble=ble)
     launchd_bootstrap()
     launchd_kickstart()
+    if no_ble:
+        subprocess.run(["pkill", "-f", "ble_push.py"], capture_output=True)
     hub_ok, lstate, ldetail = _await_up(port, since, 8.0 if bleak else 3.0)
 
     mode_note = "   · hub-only (no BLE)" if no_ble else ""
