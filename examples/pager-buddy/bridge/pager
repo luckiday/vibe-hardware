@@ -14,17 +14,28 @@ orchestrator (no new pip deps) over the existing pieces — it does not replace 
 Background runs always go through a macOS LaunchAgent, so "is it running?" has one honest
 answer (plus crash-restart + a log file). `pager run` is the foreground escape hatch.
 
-    pager up [--boot]        start in background (hub + relay); --boot also at login
-    pager down               stop now
-    pager status [--watch]    colored status block
-    pager logs [-f]          tail the bridge log
-    pager run                foreground (run.sh) — live [ble] lines, Ctrl-C to stop
-    pager install …          venv + bleak + Claude hooks
-    pager uninstall          reverse everything
-    pager boot on|off        toggle auto-start at login
-    pager hooks on|off|status   Claude Code hooks
+Two modes:
+
+  Hub-only (no device needed) — monitors agent conversations, no BLE scanning:
+    pager up --no-ble        start hub only; great when the device is off or not nearby
+    pager connect            later, when the device powers on, link it live
+
+  Full (hub + BLE relay):
+    pager up                 start hub + BLE relay (scans for pg-XXXX, connects)
+
+Commands:
+    pager up [--no-ble] [--boot]   start in background; --no-ble = hub only, --boot = at login
+    pager down                     stop now
+    pager connect [--hub URL]      (re)start the BLE relay against a running hub
+    pager status [--watch]         colored status block
+    pager logs [-f]                tail the bridge log
+    pager run                      foreground (run.sh) — live [ble] lines, Ctrl-C to stop
+    pager install …                venv + bleak + Claude hooks
+    pager uninstall                reverse everything
+    pager boot on|off              toggle auto-start at login
+    pager hooks on|off|status      Claude Code hooks
     pager audio [on|off] [--volume N]   alert audio
-    pager doctor             diagnose the whole chain
+    pager doctor                   diagnose the whole chain
     pager report [--days N] [--json]    agent-usage report (SQLite-backed)
 """
 from __future__ import annotations
@@ -137,17 +148,20 @@ def launchd_pid():
     m = re.search(r"^\s*pid = (\d+)", r.stdout, re.M)
     return int(m.group(1)) if m else None
 
-def write_plist(port: int, boot: bool) -> None:
+def write_plist(port: int, boot: bool, ble: bool = True) -> None:
     PLIST.parent.mkdir(parents=True, exist_ok=True)
     LOG.parent.mkdir(parents=True, exist_ok=True)
+    env: dict = {
+        "PAGER_BUDDY_PORT": str(port),
+        "PAGER_BUDDY_PY": runtime_python(),
+        "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    }
+    if not ble:
+        env["PAGER_BUDDY_BLE"] = "0"
     plist = {
         "Label": LABEL,
         "ProgramArguments": ["/bin/bash", str(DIR / "run.sh")],
-        "EnvironmentVariables": {
-            "PAGER_BUDDY_PORT": str(port),
-            "PAGER_BUDDY_PY": runtime_python(),
-            "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-        },
+        "EnvironmentVariables": env,
         "RunAtLoad": bool(boot),                  # → start at login
         "KeepAlive": {"SuccessfulExit": False},   # restart on crash, NOT on a clean stop
         "StandardOutPath": str(LOG),
@@ -171,6 +185,13 @@ def plist_port():
         return int(_read_plist()["EnvironmentVariables"]["PAGER_BUDDY_PORT"])
     except Exception:
         return None
+
+def plist_ble() -> bool:
+    """True when the installed plist runs hub+BLE (default); False = hub-only."""
+    try:
+        return _read_plist()["EnvironmentVariables"].get("PAGER_BUDDY_BLE", "1") != "0"
+    except Exception:
+        return True
 
 def launchd_bootstrap() -> None:
     if launchd_loaded():
@@ -258,20 +279,30 @@ def _await_up(port: int, since: int, timeout: float) -> tuple[bool, str | None, 
 
 def cmd_up(args) -> int:
     port = resolve_port(args)
-    bleak = has_bleak()
-    if not bleak:
-        warn("bleak isn't installed — the BLE relay can't run. Fix:  pager install")
+    no_ble = getattr(args, "no_ble", False)
+    ble = not no_ble
+    if ble:
+        bleak = has_bleak()
+        if not bleak:
+            warn("bleak isn't installed — the BLE relay can't run. Fix:  pager install")
+    else:
+        bleak = False
     boot = bool(args.boot) or boot_enabled()   # a plain `up` never silently disables boot
     since = LOG.stat().st_size if LOG.exists() else 0
-    write_plist(port, boot)
+    write_plist(port, boot, ble=ble)
     launchd_bootstrap()
     launchd_kickstart()
+    if no_ble:
+        subprocess.run(["pkill", "-f", "ble_push.py"], capture_output=True)
     hub_ok, lstate, ldetail = _await_up(port, since, 8.0 if bleak else 3.0)
 
-    ok(f"bridge up → {hub_base(port)}" + ("   · starts at login" if boot else ""))
+    mode_note = "   · hub-only (no BLE)" if no_ble else ""
+    ok(f"bridge up → {hub_base(port)}" + mode_note + ("   · starts at login" if boot else ""))
     if not hub_ok:
         warn("hub didn't answer yet — check  pager logs -f")
-    if lstate == "connected":
+    if no_ble:
+        print(f"  relay   {DOT_OFF}  hub-only mode — run  pager connect  when device is on")
+    elif lstate == "connected":
         print(f"  device  {DOT_OK}  connected {ldetail}".rstrip())
     elif bleak:
         print(f"  device  {DOT_WARN}  searching… (pager status --watch · pager doctor)")
@@ -312,6 +343,8 @@ def _status_rows(port: int, timeout: float = 2.0) -> list[tuple[str, str, str]]:
         rows.append(("relay", "warn", "searching  (scanning for pg-XXXX)"))
     elif lstate == "down":
         rows.append(("relay", "bad", f"down       {ldetail}".rstrip()))
+    elif not plist_ble():
+        rows.append(("relay", "off", "hub-only   → pager connect  (when device is on)"))
     else:
         rows.append(("relay", "off", "stopped"))
 
@@ -369,7 +402,7 @@ def cmd_status(args) -> int:
 def cmd_default(args) -> int:
     """Bare `pager` (no subcommand): a friendly status block + a one-line cheat sheet."""
     _status_block(plist_port() or DEFAULT_PORT)
-    print(_c(DIM, "\n  up · down · status --watch · logs -f · boot on|off · doctor · top · report · --help"))
+    print(_c(DIM, "\n  up [--no-ble] · connect · down · status --watch · logs -f · boot on|off · doctor · top · report · --help"))
     return 0
 
 def _log_tail(n: int) -> list[str]:
@@ -488,7 +521,9 @@ def cmd_uninstall(args) -> int:
 
 def cmd_boot(args) -> int:
     if args.state == "on":
-        return cmd_up(argparse.Namespace(boot=True, port=getattr(args, "port", None)))
+        # preserve current BLE mode from the plist rather than resetting to default
+        return cmd_up(argparse.Namespace(boot=True, port=getattr(args, "port", None),
+                                         no_ble=not plist_ble()))
     # off: rewrite the plist so the NEXT login won't auto-start; leave running state alone.
     if not PLIST.exists():
         print("already off (not installed).")
@@ -534,6 +569,37 @@ def cmd_report(args) -> int:
     rep = a.build_report(a.resolve_days(args.date, args.days), db=args.db)
     print(a.render_json(rep) if args.json else a.render_text(rep))
     return 0
+
+def cmd_connect(args) -> int:
+    """Start (or restart) the BLE relay against a running hub.
+
+    Use this when you power on the pager device and want to link it live.
+    The hub must already be running (`pager up --no-ble` or `pager up`).
+    Runs in the foreground — Ctrl-C to disconnect; the hub keeps going.
+    """
+    port = resolve_port(args)
+    hub_url = getattr(args, "hub", None) or f"{hub_base(port)}/v1/snapshot"
+    py = runtime_python()
+
+    if not hub_up(port):
+        warn(f"hub not running at {hub_base(port)}")
+        print("  start it first:  pager up --no-ble")
+        return 1
+    if not _imports_bleak(py):
+        warn("bleak isn't installed — run:  pager install")
+        return 1
+
+    # kill any stale relay so we get a clean connect
+    subprocess.run(["pkill", "-f", "ble_push.py"], capture_output=True)
+
+    print(f"{_c(BOLD, 'pager connect')}  scanning for pg-XXXX…")
+    print(f"  hub  {hub_url}")
+    print(_c(DIM, "  Ctrl-C to disconnect (the hub keeps running)"))
+    try:
+        return subprocess.call([py, str(DIR / "ble_push.py"), "--hub", hub_url])
+    except KeyboardInterrupt:
+        print()
+        return 0
 
 _SCAN = r'''
 import asyncio
@@ -616,7 +682,7 @@ def cmd_doctor(args) -> int:
     return 0
 
 # ── shell completion ─────────────────────────────────────────────────────────────
-_COMMANDS = ("up down status logs run install uninstall boot hooks "
+_COMMANDS = ("up down connect status logs run install uninstall boot hooks "
              "audio doctor top report completion")
 
 _COMPLETION_BASH = r'''# pager bash completion.  Install:  pager completion bash > /usr/local/etc/bash_completion.d/pager
@@ -631,7 +697,7 @@ _pager() {
     hooks)      COMPREPLY=( $(compgen -W "on off status" -- "$cur") );;
     audio)      COMPREPLY=( $(compgen -W "on off --volume" -- "$cur") );;
     completion) COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") );;
-    up)         COMPREPLY=( $(compgen -W "--boot --port" -- "$cur") );;
+    up)         COMPREPLY=( $(compgen -W "--no-ble --boot --port" -- "$cur") );;
     status|top) COMPREPLY=( $(compgen -W "--watch --port" -- "$cur") );;
     logs)       COMPREPLY=( $(compgen -W "-f --follow" -- "$cur") );;
     install)    COMPREPLY=( $(compgen -W "--gate --no-hooks --boot --port" -- "$cur") );;
@@ -673,11 +739,18 @@ def build_parser() -> argparse.ArgumentParser:
         sp.set_defaults(fn=fn)
         return sp
 
-    s = add("up", cmd_up, "start in background (hub + BLE relay)")
+    s = add("up", cmd_up, "start in background (hub + relay); --no-ble = hub only")
+    s.add_argument("--no-ble", action="store_true",
+                   help="hub-only: monitor agent conversations without BLE scanning")
     s.add_argument("--boot", action="store_true", help="also start at login")
     s.add_argument("--port", type=int, help=f"hub port (default {DEFAULT_PORT})")
 
     add("down", cmd_down, "stop the bridge now")
+
+    s = add("connect", cmd_connect,
+            "(re)start the BLE relay — use when the device is powered on")
+    s.add_argument("--hub", metavar="URL", help="hub snapshot URL (default: auto from port)")
+    s.add_argument("--port", type=int)
 
     s = add("status", cmd_status, "show the bridge status block")
     s.add_argument("--watch", action="store_true", help="repaint every ~2s")
