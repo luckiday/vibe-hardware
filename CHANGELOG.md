@@ -4,6 +4,15 @@ Notable changes to vibe-hardware. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions aim for
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `vibe-cad`: `references/usb-connector-cutouts.md` — how to cut USB port openings in an
+  enclosure wall. Encodes the lesson that the opening must clear the **receptacle** on the
+  board (not the bare plug shell), the **conforming-funnel** pattern (snug obround throat →
+  flared overmold-clearing mouth) with validated USB-C numbers + a build123d recipe, and the
+  `constraints.yaml` port-contract shape. Linked from the SKILL's enclosure conventions.
+
 ## [0.1.0] — Initial public release
 
 ### Added

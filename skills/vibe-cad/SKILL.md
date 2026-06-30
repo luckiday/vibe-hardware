@@ -146,6 +146,10 @@ Patterns a polished consumer enclosure uses — bake these into the param block 
   boss (bore + melt relief); **hide the screws** (back-cover screws that also capture the shell,
   not exposed on a show face).
 - **Anti-slip: textured surface + rubber feet** on the base (model recesses for the feet).
+- **USB / connector openings clear the RECEPTACLE, not the bare plug.** On edge-mounted
+  boards the receptacle overhangs into the wall, so a plug-based cutout pinches it. Cut an
+  obround **conforming funnel** (snug throat hugging the receptacle → flared mouth clearing
+  the cable overmold). Full recipe + validated USB-C numbers: `references/usb-connector-cutouts.md`.
 - **Self-locating assembly + an exploded view.** Every part should drop into one position
   (bore/stop/keyed); ship an `build_exploded()` view **and a numbered mechanical BOM** (screws
   `M1.4×N`, gaskets, light pipe, inserts, battery + carrier) so a builder can assemble it.
