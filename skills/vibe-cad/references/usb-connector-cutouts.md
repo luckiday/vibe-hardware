@@ -76,6 +76,11 @@ actually plug in and accept that some boots won't fully sink.
 
 ### build123d recipe
 
+Shipped as `skills/vibe-cad/scripts/patterns.py: usb_funnel(port_w, port_h, wall_t,
+throat_clear=0.3, mouth_grow=1.6)` — pass the **receptacle** W×H, get the cutter solid
+(axis +X, throat at the inner face x=0, mouth past the outer face; `Pos`/`Rot` it into
+place and subtract). The hand-rolled version, for reference:
+
 ```python
 # Funnel axis along +X through the wall; opening centered on the receptacle axis (USB_AX in Z).
 USB_IN_W, USB_IN_H  = 9.8, 4.2     # throat — hugs the receptacle shell (~8.94×3.26)
@@ -117,7 +122,8 @@ plug-shell column is only the USB-IF anchor.
       against the board STEP, not the datasheet plug number.
 - [ ] Axis centered on the receptacle in Z (eyeball it in the CAD Viewer fit view).
 - [ ] Mouth clears the overmold of the **cable you'll actually use**; recess depth set.
-- [ ] `check_fit.py` shows the connector STEP passing through with **0 mm³** wall overlap.
+- [ ] `skills/vibe-cad/scripts/check_fit.py <model>.py` shows the connector STEP
+      passing through with **0 mm³** wall overlap.
 - [ ] Print tolerance (~0.1–0.2 mm) won't pinch the tightest gap.
 
 ## Record it in the interface contract

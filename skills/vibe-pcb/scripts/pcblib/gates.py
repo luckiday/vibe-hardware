@@ -63,10 +63,12 @@ def cluster_overlaps(clusters=None, tol: float = 1e-3) -> list:
     return bad
 
 
-def keepout_violations(board, boxes=None) -> list:
+def keepout_violations(board, boxes=None, allow=()) -> list:
     """Anything inside a keepout box: part courtyards, track points, via
     barrels. `boxes` defaults to the contract's structured keepouts; pass
-    extra [(name, (x0,y0,x1,y1))] to add module belly boxes etc."""
+    extra [(name, (x0,y0,x1,y1))] to add module belly boxes etc. `allow` lists
+    refs that legitimately live in a keepout (e.g. the RF module whose antenna
+    section IS the antenna keepout) — copper is still checked."""
     boxes = list(boxes if boxes is not None else board.c.keepout_boxes())
     bad = []
 
@@ -75,8 +77,8 @@ def keepout_violations(board, boxes=None) -> list:
 
     for name, box in boxes:
         for part in board.parts.values():
-            if part.ref.startswith("H"):        # mount holes are contract-placed
-                continue
+            if part.ref.startswith("H") or part.ref in allow:
+                continue                        # mount holes are contract-placed
             if _isect(box, part.courtyard()) > 1e-3:
                 bad.append((name, f"part {part.ref}"))
         for t in board.pcb.GetTracks():
@@ -113,14 +115,16 @@ def hpwl(board) -> dict:
     return out
 
 
-def scorecard(board, budgets=None, extra_keepouts=None, top: int = 8) -> int:
+def scorecard(board, budgets=None, extra_keepouts=None, keepout_allow=(),
+              top: int = 8) -> int:
     """Print the honest gate table; return the number of HARD fails.
     budgets: {"hpwl_mm": float} -> over-budget prints a warning (not a fail)."""
     budgets = budgets or {}
     co = courtyard_overlaps(board)
     cl = cluster_overlaps()
     ko = keepout_violations(board, boxes=None if extra_keepouts is None
-                            else list(board.c.keepout_boxes()) + list(extra_keepouts))
+                            else list(board.c.keepout_boxes()) + list(extra_keepouts),
+                            allow=keepout_allow)
     wl = hpwl(board)
     fails = 0
 
