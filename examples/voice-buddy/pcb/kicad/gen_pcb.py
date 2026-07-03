@@ -82,10 +82,12 @@ u3 = put(AUD, fp("U3"), "U3", at=(0, -6))              # ES7210
 u4 = put(AUD, fp("U4"), "U4", at=(12, 2), rot=90)      # NS4150B
 
 # ES8311 support: refs row under the chip, supplies beside it
-c11 = put(AUD, fp("C11"), "C11", at=(-6, 6), rot=90)   # VMID
+# ref/rail caps live in ONE row above the codec, keeping the whole left
+# flank (x<13.5) free as the I2S/I2C bus channel down to both chips
 c12 = put(AUD, fp("C12"), "C12", at=(-6.5, 10.5), rot=0)  # DACVREF
 c13 = put(AUD, fp("C13"), "C13", at=(0, 0), rot=0)        # ADCVREF
 beside(c12, c13, side="right", gap=0.6)
+c11 = put(AUD, fp("C11"), "C11", at=(-4.2, 7), rot=0)     # VMID (left of U2 top)
 c8 = put(AUD, fp("C8"), "C8", at=(0.5, 10.5), rot=0)   # PVDD/DVDD 100n above chip
 c9 = put(AUD, fp("C9"), "C9", at=(6, 10.5), rot=0)     # AVDD 100n
 r12 = put(AUD, fp("R12"), "R12", at=(4.5, 6), rot=90)  # CE strap
@@ -96,8 +98,8 @@ beside(fb1, c10, side="below", gap=0.5)
 # ES7210 support: ref/bias caps flank the chip
 c17 = put(AUD, fp("C17"), "C17", at=(-5, -2.5), rot=0)
 c18 = put(AUD, fp("C18"), "C18", at=(6, -2.5), rot=0)
-c19 = put(AUD, fp("C19"), "C19", at=(-5.5, -6), rot=90)
-c20 = put(AUD, fp("C20"), "C20", at=(0, 0), rot=90)
+c19 = put(AUD, fp("C19"), "C19", at=(9.5, -5), rot=90)     # REF12x by their pins
+c20 = put(AUD, fp("C20"), "C20", at=(0, 0), rot=90)          # (U3 right column)
 beside(c19, c20, side="below", gap=0.5)
 c24 = put(AUD, fp("C24"), "C24", at=(6.5, -6), rot=90)   # MICBIAS12
 c25 = put(AUD, fp("C25"), "C25", at=(0, 0), rot=90)      # MICBIAS34

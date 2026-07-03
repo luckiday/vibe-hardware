@@ -1,0 +1,9 @@
+# voice-buddy selftest — platform contract (fresh-build only; see
+# skills/vibe-firmware/references/bringup-gotchas.md: defaults do NOT apply
+# to an existing sdkconfig)
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+# console on the native USB port (GPIO19/20) — no UART bridge on this board
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

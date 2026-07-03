@@ -76,12 +76,17 @@ Start at [**docs/getting-started.md**](docs/getting-started.md).
 
 Worked, end-to-end builds live in [`examples/`](examples/). Flagship:
 
+- [**voice-buddy**](examples/voice-buddy/) — a xiaozhi-style **AI speaker** (ESP32-S3 +
+  ES8311/ES7210 duplex audio + OLED + rear-firing speaker) that exercises **all four
+  skills end to end**: a manifest with content-checked contracts, a fully **generated**
+  2-layer KiCad board (relational placement + numeric gates + scripted routing, DRC
+  0/0), a contract-driven printed enclosure (fit-check 0 mm³), and a drop-in firmware
+  port for the MIT-licensed [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32).
 - [**pager-buddy**](examples/pager-buddy/) — a desk "pager" that lights up and buzzes on
   **Claude Code session status / notifications** (task done, waiting on input, build
   failed) and can answer prompts from the device. The **firmware** (LVGL UI + NimBLE on an
   M5StickC S3) and the **Mac bridge** (Claude Code hooks → BLE) work today; the custom
-  carrier **PCB** and 3D-printed **shell** are still stubs — the in-progress target for
-  vibe-pcb / vibe-cad.
+  carrier **PCB** and 3D-printed **shell** are still stubs.
 
 Add your own build as `examples/<name>/` and point the skills' "worked reference" at it.
 
@@ -99,9 +104,11 @@ Add your own build as `examples/<name>/` and point the skills' "worked reference
 
 ## Status
 
-Early — this is the **framework**. The skills' *methods, scripts, and lessons* are real
-and battle-tested. The flagship [`pager-buddy`](examples/pager-buddy/) example has working
-firmware + a Mac bridge (on an M5StickC S3); its custom PCB/enclosure are still stubs.
+Early but real: the skills' *methods, scripts, and lessons* are battle-tested, and
+[`voice-buddy`](examples/voice-buddy/) runs the whole loop (generated board through
+enclosure fit-check) — though it is `wip` until the ERC/firmware/datasheet checklist in
+its README closes. [`pager-buddy`](examples/pager-buddy/) has working firmware + a Mac
+bridge; its custom PCB/enclosure are still stubs.
 Contributions and new examples welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## License

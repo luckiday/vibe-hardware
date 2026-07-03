@@ -1,0 +1,16 @@
+# generated at build time — sources of truth are gen_*.py + parts/pinmap yaml
+kicad/*.kicad_pcb
+kicad/*.kicad_sch
+kicad/*.kicad_pro
+kicad/*.kicad_prl
+kicad/voicebuddy.pretty/
+kicad/*-erc.rpt
+kicad/*-drc.rpt
+kicad/drc.rpt
+kicad/*.pdf
+kicad/*.png
+kicad/*.svg
+kicad/autoroute-work/
+kicad/fp-info-cache
+fab/
+view/
