@@ -3,6 +3,8 @@
 build123d>=0.9      # vibe-cad: parametric solids -> STEP / STL / GLB
 ezdxf>=1.1          # vibe-pcb: board-outline DXF (EasyEDA / LCSC hand-off)
 matplotlib>=3.8     # section views / quick previews
+pyyaml>=6.0         # cad_contract loader (its stdlib fallback parser can't read
+                    # multi-line quoted scalars, e.g. an antenna keepout note)
 
 # NOTE: gen_pcb.py, ERC and DRC use KiCad's OWN bundled python (it ships `pcbnew`,
 # which is NOT pip-installable). Install KiCad 10 separately; the scripts find its

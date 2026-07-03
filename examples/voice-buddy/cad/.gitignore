@@ -1,0 +1,4 @@
+# regenerated outputs — sources of truth are voicebuddy_case.py + build_all.py
+models/
+section_*.png
+__pycache__/

@@ -15,6 +15,11 @@ in the model to check exactly those pairs instead of the cross product.
 Why a tolerance at all: coincident design faces (a board resting on a boss)
 intersect to ~0, so a small threshold separates "touching" from a real clash.
 build123d returns an empty Compound for a no-op `&` — treated as 0 here.
+
+Compound trap (bit the voice-buddy build): a raw import_step() Compound can
+intersect (`&`) to silently-empty even when it DOES overlap — a vacuous pass.
+Both sides are therefore exploded to their solids and intersected pairwise;
+an input that contains no solids at all is reported loudly.
 """
 
 from __future__ import annotations
@@ -39,16 +44,32 @@ def import_model(path: str):
     return mod
 
 
-def intersection_mm3(a, b) -> float:
-    """Volume of a & b, robust to empty results (no solids -> 0.0)."""
-    try:
-        inter = a & b
-    except Exception:
-        return 0.0                              # disjoint shapes can raise; that's a pass
-    if inter is None:
-        return 0.0
-    solids = list(inter.solids()) if hasattr(inter, "solids") else []
-    return float(sum(s.volume for s in solids))
+def explode(x, key: str) -> list:
+    """A shape's constituent solids (a Compound-safe view; see header)."""
+    if hasattr(x, "solids"):
+        s = list(x.solids())
+        if s:
+            return s
+        print(f"warning: fit_solids()[{key!r}] contains NO solids — "
+              "it cannot clash with anything (vacuous pass?)", file=sys.stderr)
+        return []
+    return [x]
+
+
+def intersection_mm3(a_solids, b_solids) -> float:
+    """Summed volume of pairwise solid intersections (empty results -> 0.0)."""
+    total = 0.0
+    for sa in a_solids:
+        for sb in b_solids:
+            try:
+                inter = sa & sb
+            except Exception:
+                continue                        # disjoint shapes can raise; that's a pass
+            if inter is None:
+                continue
+            solids = list(inter.solids()) if hasattr(inter, "solids") else []
+            total += sum(s.volume for s in solids)
+    return float(total)
 
 
 def main() -> int:
@@ -85,11 +106,12 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
+    exploded = {k: explode(v, k) for k, v in solids.items()}
     wid = max(len(f"{a} & {b}") for a, b in pairs)
     worst, failed = 0.0, False
     print(f"{'pair'.ljust(wid)}  intersection (mm^3)")
     for a, b in pairs:
-        v = intersection_mm3(solids[a], solids[b])
+        v = intersection_mm3(exploded[a], exploded[b])
         worst = max(worst, v)
         clash = v > args.tol_mm3
         failed |= clash

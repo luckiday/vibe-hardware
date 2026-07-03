@@ -14,7 +14,8 @@ into gen_pcb.py (one number, one place):
 Stdlib-only. PyYAML is used when importable; otherwise a small YAML-subset
 parser (nested maps, lists, inline {..}/[..], comments) — same spirit as
 vibe-plm's plm_check.py, which must stay import-free of this file (skills never
-import each other's code; the parsers are twins by design).
+import each other's code; the parsers are twins by design). Subset means
+subset: NO multi-line/folded scalars — keep contract strings on one line.
 
 NOTE: skills/vibe-cad/scripts/cad_contract.py mirrors the constraints loader for
 the CAD side. If the constraints schema grows, update both.

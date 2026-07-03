@@ -50,7 +50,8 @@ offboard:
     header_offset_y: 12.6              # module top row (header pins) -> visible-area center
 
 keepouts:
-  antenna: { edge: "+Y", depth: 6, note: "module PCB-antenna strip: no copper, no
-             parts (module itself excepted), and no enclosure bosses/metal within it" }
+  # NB: keep contract strings single-line — the PyYAML-optional fallback
+  # parsers (pcblib.contract / cad_contract) don't fold multi-line scalars
+  antenna: { edge: "+Y", depth: 6, note: "module PCB-antenna strip: no copper, no parts (module itself excepted), no enclosure bosses/metal" }
 
 tolerance_mm: 0.5        # plm placement cross-check tolerance
