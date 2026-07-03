@@ -47,4 +47,4 @@ cost a debugging session. **Read the gotchas before you trust the happy path.**
 When a build teaches you something the skill didn't warn you about, **edit the skill and
 commit it**. That's the point — each project makes the next one easier.
 
-See [`examples/pager-buddy`](../examples/pager-buddy/) for a worked target.
+See [`examples/voice-buddy`](../examples/voice-buddy/) for the worked end-to-end build (and [`examples/pager-buddy`](../examples/pager-buddy/) for the firmware+bridge-focused one).

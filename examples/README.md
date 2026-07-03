@@ -6,6 +6,7 @@ skill produced.
 
 | Example | Skills used | What it is |
 |---|---|---|
+| [**voice-buddy**](voice-buddy/) | plm · pcb · cad · firmware | a xiaozhi-style **AI speaker** (ESP32-S3 + ES8311/ES7210 + OLED) — the end-to-end reference: generated board (DRC 0/0), printed enclosure (fit 0 mm³), xiaozhi firmware port |
 | [**pager-buddy**](pager-buddy/) | plm · firmware · pcb · cad | a desk "pager" that signals **Claude Code session status / notifications** — firmware + Mac bridge working on an M5StickC S3; custom pcb/cad still stubs |
 
 ## Add your own
