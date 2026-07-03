@@ -1,0 +1,39 @@
+# product.yaml — voice-buddy product manifest
+#
+# The vibe-plm single source of truth: product identity, per-domain status, and
+# the INTERFACE CONTRACTS the domains must agree on. Validate with:
+#   python3 ../../skills/vibe-plm/scripts/plm_check.py product.yaml
+#
+# Bump `revision` on ANY cross-domain change (a pin move, an outline change, a
+# shared fit-number change). vibe-plm owns this file; each domain owns its dir.
+
+product: voice-buddy
+revision: v2026-07-03            # vYYYY-MM-DD — bump on any cross-domain change
+summary: "A xiaozhi-style AI speaker: ESP32-S3 + ES8311/ES7210 duplex audio, OLED, rear-firing 4ohm speaker."
+
+# --- the three domains (each is a self-contained vibe-* project) ---
+firmware:                        # vibe-firmware
+  dir: firmware/
+  status: wip                    # board port + selftest written; NOT yet compiled/hw-tested
+  toolchain: "esp-idf v5.4 (Docker espressif/idf:v5.4) — xiaozhi upstream requirement"
+  board: voice-buddy             # custom carrier, see pcb/
+  config_header: firmware/boards-port/voice-buddy/config.h   # plm cross-checks pinmap <-> this
+pcb:                             # vibe-pcb
+  dir: pcb/
+  status: wip                    # generated + DRC-clean on KiCad 7; ERC gate pending KiCad >=8 host
+  gate: "ERC/DRC 0 errors / 0 unconnected + antenna keep-out + placement scorecard 0 fails"
+cad:                             # vibe-cad
+  dir: cad/
+  status: wip
+  gate: "fit-check 0 mm^3 board<->shell interference"
+
+# --- interface contracts: the files TWO domains must agree on ---
+# SOURCE contracts (.yaml/.md) MUST exist; generated artifacts warn until
+# produced. `placement` uses the mapping form: json would classify as source
+# by extension, but it is generated EVIDENCE (plm compares it to the
+# constraints contract within tolerance_mm).
+interfaces:
+  pinmap: pcb/pinmap.yaml                       # pcb    -> firmware  (net map: pin <-> signal)
+  board_step: pcb/board.step                    # pcb    -> cad       (board 3D for the fit-check; generated)
+  enclosure_constraints: cad/constraints.yaml   # cad   <-> pcb       (the shared fit numbers)
+  placement: { path: pcb/placement.json, kind: artifact }   # pcb -> plm/cad (evidence of where items landed)

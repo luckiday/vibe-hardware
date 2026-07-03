@@ -181,6 +181,12 @@ def _mount_hole_name(dia: float) -> str:
     return f"MountingHole_{dia}mm"
 
 
+def _merged(a, b):
+    m = pcbnew.BOX2I(a.GetPosition(), a.GetSize())
+    m.Merge(b)
+    return m
+
+
 # ---------------------------------------------------------------------------- part
 
 class Part:
@@ -222,16 +228,29 @@ class Part:
                 for p in self.fp.Pads() if p.GetPadName() == name]
 
     def courtyard(self, side=None) -> tuple:
-        """(x0, y0, x1, y1) courtyard bbox in board frame. Falls back to the
-        footprint bbox + 0.25 mm when the footprint ships no courtyard."""
-        layer = pcbnew.B_CrtYd if (side or self.side()) == "B" else pcbnew.F_CrtYd
-        poly = self.fp.GetCourtyard(layer)
-        if poly.OutlineCount() > 0:
-            bb = poly.BBox()
-            pad = 0.0
-        else:
+        """(x0, y0, x1, y1) BODY box (pads ∪ Fab shapes + 0.25 mm) in board
+        frame — the box the overlap/keepout gates use.
+
+        Deliberately NOT the F.CrtYd polygon: antenna modules draw their
+        recommended far-field clear zone on the courtyard layer (the WROOM's
+        spans ±24 mm), which would make any compact board "overlap"
+        everything; the antenna rule is the contract keepout instead. Real
+        courtyard-vs-courtyard checking still happens in DRC. (KiCad 7 note:
+        GetCourtyard() is empty off-board and BuildCourtyardCaches() segfaults
+        on an unattached footprint — another reason to derive from geometry.)"""
+        bb = None
+        for p in self.fp.Pads():
+            b = p.GetBoundingBox()
+            bb = b if bb is None else _merged(bb, b)
+        fab = pcbnew.B_Fab if (side or self.side()) == "B" else pcbnew.F_Fab
+        for g in self.fp.GraphicalItems():
+            if g.GetClass() in ("MGRAPHIC", "FP_SHAPE", "PCB_SHAPE") \
+                    and g.GetLayer() in (fab, pcbnew.F_Fab, pcbnew.B_Fab):
+                b = g.GetBoundingBox()
+                bb = b if bb is None else _merged(bb, b)
+        if bb is None:
             bb = self.fp.GetBoundingBox(False, False)
-            pad = 0.25
+        pad = 0.25
         x0, y0 = self.board.from_kicad(VECTOR2I(bb.GetLeft(), bb.GetBottom()))
         x1, y1 = self.board.from_kicad(VECTOR2I(bb.GetRight(), bb.GetTop()))
         return (min(x0, x1) - pad, min(y0, y1) - pad,
@@ -356,14 +375,21 @@ def at_edge(board: Board, part: Part, port: str, overhang: float = 0.0) -> Part:
 
 class Cluster:
     """A functional group with a movable MACRO origin. Slots are relative;
-    move the origin (code or MOVE env) and every member follows."""
+    move the origin (code or MOVE env) and every member follows.
+
+    pinned=True marks a group whose members sit at CONTRACT positions
+    (buttons on their panel windows, connectors on ports). Pinned groups are
+    excluded from the cluster-overlap gate — they are not free-floating
+    floorplan blocks, and their real collisions are still caught by the
+    courtyard gate."""
 
     all: dict = {}
 
-    def __init__(self, board: Board, name: str, origin):
+    def __init__(self, board: Board, name: str, origin, pinned: bool = False):
         self.board = board
         self.name = name
         self.ox, self.oy = float(origin[0]), float(origin[1])
+        self.pinned = pinned
         self.members: list = []
         Cluster.all[name] = self
 

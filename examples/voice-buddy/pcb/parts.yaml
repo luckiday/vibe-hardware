@@ -1,0 +1,268 @@
+# voice-buddy — the part & net table (pcblib's single net source).
+#
+# BOTH gen_sch.py (symbols + ERC) and gen_pcb.py (copper nets) derive from this
+# file, so the schematic and the board cannot drift apart. Pad->net maps follow
+# the chips' datasheet pin tables (ES8311 / ES7210 / NS4150B — see
+# voicebuddy_brief.md §2 for the pin-by-pin verification record and §10 for
+# the UNVERIFIED items that must be datasheet-checked before ordering).
+#
+# Net naming: +5V (VBUS), +3V3 (LDO), +3V3A (ferrite-filtered analog rail),
+# GND; I2S_* per pinmap.yaml; audio path OUTP/OUTN -> AMP_INP/AMP_INN -> SPK_P/
+# SPK_N; AEC_REF = ES8311 line out, attenuated, into ES7210 MIC3 (the echo
+# reference that makes server-side AEC work).
+
+power_nets: ["+5V", "+3V3", "+3V3A", GND]
+
+parts:
+  # ---------------- MCU module ----------------
+  U1:
+    footprint: RF_Module:ESP32-S3-WROOM-1
+    value: ESP32-S3-WROOM-1-N16R8
+    cluster: MCU
+    lcsc: C2913202
+    pins:
+      1: GND
+      2: +3V3
+      3: EN
+      13: USB_DN      # IO19
+      14: USB_DP      # IO20
+      18: PA_EN       # IO10
+      20: I2S_DIN     # IO12
+      21: I2S_WS      # IO13
+      22: I2S_BCLK    # IO14
+      25: LED_DATA    # IO48
+      26: I2S_DOUT    # IO45 (strap — no external pull)
+      27: BTN_BOOT    # IO0  (strap — the button)
+      31: I2S_MCLK    # IO38
+      32: BTN_VOLDN   # IO39
+      33: BTN_VOLUP   # IO40
+      38: I2C_SCL     # IO2
+      39: I2C_SDA     # IO1
+      40: GND
+      41: GND         # thermal pad
+    pin_types: { 2: power_in, 1: power_in, 40: power_in, 41: passive }
+
+  # ---------------- audio: codec DAC ----------------
+  U2:
+    footprint: Package_DFN_QFN:QFN-20-1EP_3x3mm_P0.4mm_EP1.65x1.65mm
+    value: ES8311
+    cluster: AUDIO
+    lcsc: C962342
+    pins:
+      1: I2C_SCL      # CCLK
+      2: I2S_MCLK     # MCLK
+      3: +3V3         # PVDD
+      4: +3V3         # DVDD
+      5: GND          # DGND
+      6: I2S_BCLK     # SCLK
+      7: NC           # ASDOUT (codec ADC unused; ES7210 does capture)
+      8: I2S_WS       # LRCK
+      9: I2S_DOUT     # DSDIN
+      10: GND         # AGND
+      11: +3V3A       # AVDD
+      12: OUTP
+      13: OUTN
+      14: VREF_DAC    # DACVREF decouple
+      15: VREF_ADC    # ADCVREF decouple
+      16: VMID        # mid-rail decouple
+      17: NC          # MIC1N
+      18: NC          # MIC1P
+      19: I2C_SDA     # CDATA
+      20: ES8311_CE   # CE: 10k to GND -> I2C 0x18
+      21: GND         # EP = AGND
+    pin_types: { 3: power_in, 4: power_in, 11: power_in }
+
+  # ---------------- audio: 4ch ADC (mics + echo ref) ----------------
+  U3:
+    footprint: voicebuddy:QFN-32-1EP_4x4mm_P0.4mm_EP2.6x2.6mm
+    value: ES7210
+    cluster: AUDIO
+    lcsc: C365743
+    pins:
+      1: +3V3         # AD0=1 \ 7-bit addr 0x41 (xiaozhi write-addr 0x82)
+      2: GND          # AD1=0 /
+      3: I2C_SDA      # CDATA
+      4: I2C_SCL      # CCLK
+      5: I2S_MCLK     # MCLK
+      6: +3V3         # VDDP (name EST — verify datasheet)
+      7: +3V3         # VDDD
+      8: GND          # GNDD
+      9: I2S_BCLK     # SCLK
+      10: I2S_WS      # LRCK
+      11: I2S_DIN     # SDOUT1 -> MCU
+      12: NC          # SDOUT2
+      13: NC          # INT
+      14: NC          # DMIC_CLK
+      15: MIC1N
+      16: MIC1P
+      17: REF12P      # REFP12 decouple
+      18: REF12Q      # REFQ12 decouple
+      19: MIC2P
+      20: MIC2N
+      21: GND         # GNDA
+      22: +3V3A       # VDDA
+      23: +3V3A       # VDDM (name EST — verify datasheet)
+      24: MICBIAS12
+      25: REFQM       # decouple
+      26: MICBIAS34
+      27: NC          # MIC4N
+      28: NC          # MIC4P
+      29: REF34P
+      30: REF34Q
+      31: AEC_REF     # MIC3P <- attenuated ES8311 line out (echo reference)
+      32: MIC3N
+      33: GND         # EP
+    pin_types: { 6: power_in, 7: power_in, 22: power_in, 23: power_in }
+
+  # ---------------- audio: class-D amp ----------------
+  U4:
+    footprint: Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm
+    value: NS4150B
+    cluster: AUDIO
+    lcsc: C189961
+    pins:
+      1: AMP_INN      # IN-  (pin order EST — verify pin-1 orientation)
+      2: AMP_INP      # IN+
+      3: PA_EN        # SD/CTRL: high = play (100k pulldown keeps it silent at boot)
+      4: GND
+      5: SPK_P        # VO+
+      6: +5V          # VDD
+      7: GND
+      8: SPK_N        # VO-
+      9: GND          # EP
+    pin_types: { 6: power_in }
+
+  # ---------------- power ----------------
+  U5:
+    footprint: Package_TO_SOT_SMD:SOT-223-3_TabPin2
+    value: AMS1117-3.3
+    cluster: PWR
+    lcsc: C6186
+    pins: { 1: GND, 2: +3V3, 3: +5V }
+    pin_types: { 2: power_out, 3: power_in }
+  U6:
+    footprint: Package_TO_SOT_SMD:SOT-23-6
+    value: USBLC6-2SC6
+    cluster: PWR
+    lcsc: C7519
+    pins: { 1: USB_DN, 2: GND, 3: USB_DP, 4: USB_DP, 5: +5V, 6: USB_DN }
+
+  # ---------------- microphones (back side, port through PCB) ----------------
+  MK1:
+    footprint: voicebuddy:MEMS_Analog_BottomPort_3.76x2.95
+    value: MSM381A3729
+    cluster: MICL
+    pins: { 1: MICL_OUT, 2: GND, 3: MICL_VDD, 4: GND }
+  MK2:
+    footprint: voicebuddy:MEMS_Analog_BottomPort_3.76x2.95
+    value: MSM381A3729
+    cluster: MICR
+    pins: { 1: MICR_OUT, 2: GND, 3: MICR_VDD, 4: GND }
+
+  # ---------------- connectors ----------------
+  J1:
+    footprint: Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12
+    value: USB-C-16P
+    cluster: PWR
+    lcsc: C165948
+    pins:
+      A1: GND
+      A4: +5V
+      A5: CC1
+      A6: USB_DP
+      A7: USB_DN
+      A8: NC
+      A9: +5V
+      A12: GND
+      B1: GND
+      B4: +5V
+      B5: CC2
+      B6: USB_DP
+      B7: USB_DN
+      B8: NC
+      B9: +5V
+      B12: GND
+      S1: GND
+  J2:
+    footprint: Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical
+    value: SPK-4ohm-3W
+    cluster: AUDIO
+    pins: { 1: SPK_P, 2: SPK_N }
+  J3:
+    footprint: Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical
+    value: OLED-SSD1306-0.96
+    cluster: UI
+    pins: { 1: GND, 2: +3V3, 3: I2C_SCL, 4: I2C_SDA }
+
+  # ---------------- HMI ----------------
+  SW1:
+    footprint: Button_Switch_SMD:SW_SPST_PTS645
+    value: BOOT
+    cluster: UI
+    pins: { 1: BTN_BOOT, 2: GND }
+  SW2:
+    footprint: Button_Switch_SMD:SW_SPST_PTS645
+    value: VOL-
+    cluster: UI
+    pins: { 1: BTN_VOLDN, 2: GND }
+  SW3:
+    footprint: Button_Switch_SMD:SW_SPST_PTS645
+    value: VOL+
+    cluster: UI
+    pins: { 1: BTN_VOLUP, 2: GND }
+  D1:
+    footprint: LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm
+    value: WS2812B
+    cluster: UI
+    pins: { 1: +3V3, 2: LED_OUT, 3: GND, 4: LED_DATA }
+
+  # ---------------- R (0603) ----------------
+  R1: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 5.1k, cluster: PWR, pins: { 1: CC1, 2: GND } }
+  R2: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 5.1k, cluster: PWR, pins: { 1: CC2, 2: GND } }
+  R3: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 4.7k, cluster: MCU, pins: { 1: +3V3, 2: I2C_SDA } }
+  R4: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 4.7k, cluster: MCU, pins: { 1: +3V3, 2: I2C_SCL } }
+  R5: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 10k, cluster: MCU, pins: { 1: +3V3, 2: BTN_BOOT } }
+  R6: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 10k, cluster: MCU, pins: { 1: +3V3, 2: EN } }
+  R7: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 100k, cluster: AUDIO, pins: { 1: PA_EN, 2: GND } }
+  R8: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 47k, cluster: AUDIO, pins: { 1: OUTP, 2: AEC_IN }, notes: "AEC ref attenuator (values EST)" }
+  R9: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 4.7k, cluster: AUDIO, pins: { 1: AEC_IN, 2: GND } }
+  R10: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 100, cluster: MICL, pins: { 1: MICBIAS12, 2: MICL_VDD } }
+  R11: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 100, cluster: MICR, pins: { 1: MICBIAS12, 2: MICR_VDD } }
+  R12: { footprint: "Resistor_SMD:R_0603_1608Metric", value: 10k, cluster: AUDIO, pins: { 1: ES8311_CE, 2: GND } }
+
+  # ---------------- FB / C ----------------
+  FB1: { footprint: "Inductor_SMD:L_0805_2012Metric", value: "FB 600R@100MHz", cluster: AUDIO, pins: { 1: +3V3, 2: +3V3A } }
+  C1: { footprint: "Capacitor_SMD:C_0805_2012Metric", value: 22u, cluster: PWR, pins: { 1: +5V, 2: GND }, notes: "VBUS bulk" }
+  C2: { footprint: "Capacitor_SMD:C_0805_2012Metric", value: 22u, cluster: AUDIO, pins: { 1: +5V, 2: GND }, notes: "amp bulk, at U4" }
+  C3: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 10u, cluster: PWR, pins: { 1: +5V, 2: GND }, notes: "LDO in" }
+  C4: { footprint: "Capacitor_SMD:C_0805_2012Metric", value: 22u, cluster: PWR, pins: { 1: +3V3, 2: GND }, notes: "LDO out" }
+  C5: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: MCU, pins: { 1: +3V3, 2: GND } }
+  C6: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 10u, cluster: MCU, pins: { 1: +3V3, 2: GND } }
+  C7: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: MCU, pins: { 1: EN, 2: GND }, notes: "EN RC" }
+  C8: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: +3V3, 2: GND }, notes: "U2 PVDD/DVDD" }
+  C9: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: +3V3A, 2: GND }, notes: "U2 AVDD" }
+  C10: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 10u, cluster: AUDIO, pins: { 1: +3V3A, 2: GND }, notes: "analog rail bulk" }
+  C11: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 4.7u, cluster: AUDIO, pins: { 1: VMID, 2: GND } }
+  C12: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: AUDIO, pins: { 1: VREF_DAC, 2: GND } }
+  C13: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: AUDIO, pins: { 1: VREF_ADC, 2: GND } }
+  C14: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: AUDIO, pins: { 1: OUTP, 2: AMP_INP } }
+  C15: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: AUDIO, pins: { 1: OUTN, 2: AMP_INN } }
+  C16: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: AUDIO, pins: { 1: AEC_IN, 2: AEC_REF } }
+  C17: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: +3V3, 2: GND }, notes: "U3 VDDP/VDDD" }
+  C18: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: +3V3A, 2: GND }, notes: "U3 VDDA/VDDM" }
+  C19: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: REF12P, 2: GND } }
+  C20: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: REF12Q, 2: GND } }
+  C21: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: REF34P, 2: GND } }
+  C22: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: REF34Q, 2: GND } }
+  C23: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: REFQM, 2: GND } }
+  C24: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 2.2u, cluster: AUDIO, pins: { 1: MICBIAS12, 2: GND } }
+  C25: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: MICBIAS34, 2: GND } }
+  C26: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: MIC3N, 2: GND }, notes: "AEC ref pseudo-diff return" }
+  C27: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: MICL, pins: { 1: MICL_VDD, 2: GND } }
+  C28: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 1u, cluster: MICR, pins: { 1: MICR_VDD, 2: GND } }
+  C29: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: MICL, pins: { 1: MICL_OUT, 2: MIC1P } }
+  C30: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: MICR, pins: { 1: MICR_OUT, 2: MIC2P } }
+  C31: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: MICL, pins: { 1: MIC1N, 2: GND } }
+  C32: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: MICR, pins: { 1: MIC2N, 2: GND } }
+  C33: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: AUDIO, pins: { 1: +5V, 2: GND }, notes: "U4 VDD hf" }
+  C34: { footprint: "Capacitor_SMD:C_0603_1608Metric", value: 100n, cluster: UI, pins: { 1: +3V3, 2: GND }, notes: "D1" }

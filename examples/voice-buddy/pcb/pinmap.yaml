@@ -1,0 +1,48 @@
+# voice-buddy — pcb -> firmware net map (the pinmap contract; see skills/vibe-plm).
+#
+# Every entry's `define:` names the macro in the firmware's config-as-code header
+# (firmware/boards-port/voice-buddy/config.h — the xiaozhi board port). plm_check.py
+# cross-checks the two: a pin moved here without moving the #define fails the gate.
+# `strap_ok: true` acknowledges a deliberate ESP32-S3 strapping-pin use.
+#
+# GPIO plan derives from the lichuang-dev xiaozhi reference (ES8311+ES7210 duplex
+# I2S) with two deltas: PA enable on a direct GPIO (no PCA9557 expander), and the
+# SSD1306 OLED sharing the codec I2C bus (0x3C / 0x18 / 0x41 — no address clash).
+
+mcu: esp32-s3-wroom-1-n16r8     # octal PSRAM -> GPIO33-37 reserved (plm lint enforces)
+
+bus:
+  i2c:
+    sda: GPIO1
+    scl: GPIO2
+    hz: 400000
+    devices:
+      - { name: ES8311,  role: codec_dac, addr: 0x18 }
+      - { name: ES7210,  role: adc_4ch,   addr: 0x41 }
+      - { name: SSD1306, role: display,   addr: 0x3C }
+  i2s:                          # one duplex bus: MCLK/BCLK/WS shared by both codecs
+    mclk: GPIO38
+    bclk: GPIO14
+    ws: GPIO13
+    dout: GPIO45                # -> ES8311 DAC data
+    din: GPIO12                 # <- ES7210 ADC data (4ch TDM)
+  usb: { dn: GPIO19, dp: GPIO20 }
+
+pins:
+  - { signal: I2C_SDA,   gpio: GPIO1,  dir: io,  to: es8311+es7210+oled, define: AUDIO_CODEC_I2C_SDA_PIN }
+  - { signal: I2C_SCL,   gpio: GPIO2,  dir: io,  to: es8311+es7210+oled, define: AUDIO_CODEC_I2C_SCL_PIN }
+  - { signal: I2S_MCLK,  gpio: GPIO38, dir: out, to: es8311+es7210, define: AUDIO_I2S_GPIO_MCLK }
+  - { signal: I2S_BCLK,  gpio: GPIO14, dir: out, to: es8311+es7210, define: AUDIO_I2S_GPIO_BCLK }
+  - { signal: I2S_WS,    gpio: GPIO13, dir: out, to: es8311+es7210, define: AUDIO_I2S_GPIO_WS }
+  - { signal: I2S_DOUT,  gpio: GPIO45, dir: out, to: es8311, define: AUDIO_I2S_GPIO_DOUT,
+      strap_ok: true, notes: "VDD_SPI strap; codec data-in only, no external pull — proven in lichuang-dev" }
+  - { signal: I2S_DIN,   gpio: GPIO12, dir: in,  to: es7210, define: AUDIO_I2S_GPIO_DIN }
+  - { signal: PA_EN,     gpio: GPIO10, dir: out, to: ns4150, define: AUDIO_CODEC_PA_PIN,
+      notes: "NS4150 CTRL; keep low until codec is up (pop suppression)" }
+  - { signal: BTN_BOOT,  gpio: GPIO0,  dir: in,  to: button, define: BOOT_BUTTON_GPIO,
+      strap_ok: true, notes: "boot strap IS the button (idle high, pressed low)" }
+  - { signal: BTN_VOLUP, gpio: GPIO40, dir: in,  to: button, define: VOLUME_UP_BUTTON_GPIO }
+  - { signal: BTN_VOLDN, gpio: GPIO39, dir: in,  to: button, define: VOLUME_DOWN_BUTTON_GPIO }
+  - { signal: LED_DATA,  gpio: GPIO48, dir: out, to: ws2812, define: BUILTIN_LED_GPIO }
+  - { signal: USB_DN,    gpio: GPIO19, dir: io,  to: usb_c, notes: "native USB D-" }
+  - { signal: USB_DP,    gpio: GPIO20, dir: io,  to: usb_c, notes: "native USB D+" }

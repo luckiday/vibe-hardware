@@ -1,0 +1,124 @@
+{
+  "product": "voice-buddy",
+  "revision": "v2026-07-03",
+  "frame": "board mm, origin bottom-left viewed from front, +y up",
+  "outline": {
+    "l": 70.0,
+    "w": 70.0,
+    "t": 1.6,
+    "corner_r": 3.0
+  },
+  "mount_holes": {
+    "dia": 2.7,
+    "positions": [
+      [
+        4.0,
+        4.0
+      ],
+      [
+        66.0,
+        4.0
+      ],
+      [
+        4.0,
+        66.0
+      ],
+      [
+        66.0,
+        66.0
+      ]
+    ]
+  },
+  "items": [
+    {
+      "ref": "J1",
+      "kind": "usb_c",
+      "center": [
+        66.28,
+        12.0
+      ],
+      "w": 8.97,
+      "h": 10.14
+    },
+    {
+      "ref": "SW1",
+      "kind": "btn_boot",
+      "center": [
+        35.0,
+        8.0
+      ],
+      "w": 10.01,
+      "h": 6.6
+    },
+    {
+      "ref": "SW2",
+      "kind": "btn_voldn",
+      "center": [
+        22.0,
+        8.0
+      ],
+      "w": 10.01,
+      "h": 6.6
+    },
+    {
+      "ref": "SW3",
+      "kind": "btn_volup",
+      "center": [
+        48.0,
+        8.0
+      ],
+      "w": 10.01,
+      "h": 6.6
+    },
+    {
+      "ref": "D1",
+      "kind": "led",
+      "center": [
+        57.0,
+        21.0
+      ],
+      "w": 6.9,
+      "h": 5.6
+    },
+    {
+      "ref": "MK1",
+      "kind": "mic_l",
+      "center": [
+        8.0,
+        50.0
+      ],
+      "w": 4.36,
+      "h": 3.55
+    },
+    {
+      "ref": "MK2",
+      "kind": "mic_r",
+      "center": [
+        62.0,
+        50.0
+      ],
+      "w": 4.36,
+      "h": 3.55
+    },
+    {
+      "ref": "J2",
+      "kind": "speaker_conn",
+      "center": [
+        10.0,
+        8.0
+      ],
+      "w": 6.91,
+      "h": 5.51
+    },
+    {
+      "ref": "J3",
+      "kind": "display",
+      "center": [
+        35.0,
+        26.5
+      ],
+      "w": 27.3,
+      "h": 27.8
+    }
+  ]
+}

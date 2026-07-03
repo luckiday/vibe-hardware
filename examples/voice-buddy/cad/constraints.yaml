@@ -1,0 +1,56 @@
+# voice-buddy — the cad<->pcb fit contract (see skills/vibe-plm).
+#
+# ONE number, ONE place: the PCB generator READS this file (outline, mount
+# holes, port positions, keepouts) and the enclosure model READS this file
+# (windows, stack, speaker). Neither re-types a number the other owns.
+# gen_pcb.py exports placement.json as EVIDENCE; plm_check.py compares the
+# two within tolerance_mm.
+#
+# Frame: board mm, origin at the board's bottom-left corner viewed from the
+# FRONT, +x right, +y up. Front-panel windows are given in this same frame
+# (the enclosure model knows where the board sits and maps them out).
+# Units mm.
+
+board:
+  outline: { l: 70, w: 70, t: 1.6, corner_r: 3 }
+  mount_holes: { dia: 2.7, positions: [[4,4],[66,4],[4,66],[66,66]] }  # M2.5 heat-set bosses
+
+stack:
+  front_gap: 12.0        # front-panel INNER face -> PCB front face (OLED on its
+                         # header lands the glass here; buttons get printed plungers)
+  rear_gap: 42.0         # PCB back face -> rear-wall INNER face (speaker lives here)
+  board_lift: 4.0        # enclosure interior floor -> board bottom edge
+
+ports:
+  usb_c: { edge: "+X", center_y: 12, w: 9.2, h: 3.4 }   # exits the right wall
+
+windows:                 # front-panel openings, board frame (x,y = center)
+  display:  { x: 35, y: 26.5, w: 23.0, h: 12.0 }        # SSD1306 0.96" visible area + margin
+  mic_l:    { x: 8,  y: 50, dia: 1.2 }
+  mic_r:    { x: 62, y: 50, dia: 1.2 }
+  btn_voldn: { x: 22, y: 8, dia: 4.5 }                  # printed plungers ride in these
+  btn_boot:  { x: 35, y: 8, dia: 4.5 }
+  btn_volup: { x: 48, y: 8, dia: 4.5 }
+  led:      { x: 57, y: 21, dia: 2.0 }                  # light-pipe bore (clear of the
+                                                        # OLED module over x 21..49 and of the USB-C body)
+
+offboard:
+  speaker:                             # rear-firing cavity speaker on the back wall
+    dia: 40
+    depth: 20
+    ohm: 4
+    watt: 3
+    baffle_cutout: 36                  # rear-wall opening behind the cone
+    center: [35, 35]                   # in the same board frame, projected onto the rear wall
+    grille_open_ratio_min: 0.25        # computed grille must reach this open area
+  oled_module:                         # 0.96" SSD1306 I2C module on a 1x4 socket
+    w: 27.3                            # module PCB incl. glass stack
+    h: 27.8
+    t: 4.0
+    header_offset_y: 12.6              # module top row (header pins) -> visible-area center
+
+keepouts:
+  antenna: { edge: "+Y", depth: 6, note: "module PCB-antenna strip: no copper, no
+             parts (module itself excepted), and no enclosure bosses/metal within it" }
+
+tolerance_mm: 0.5        # plm placement cross-check tolerance

@@ -50,9 +50,11 @@ def courtyard_overlaps(board, tol: float = 1e-3) -> list:
 
 
 def cluster_overlaps(clusters=None, tol: float = 1e-3) -> list:
-    """[(nameA, nameB, mm^2)] for colliding cluster bboxes."""
+    """[(nameA, nameB, mm^2)] for colliding cluster bboxes (pinned clusters
+    excluded — see layout.Cluster)."""
     from .layout import Cluster
-    cl = list((clusters or Cluster.all).values())
+    cl = [c for c in (clusters or Cluster.all).values()
+          if not getattr(c, "pinned", False)]
     bad = []
     for i, a in enumerate(cl):
         ba = a.bbox()
