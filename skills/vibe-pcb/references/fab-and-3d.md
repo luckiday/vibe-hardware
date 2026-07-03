@@ -1,7 +1,7 @@
 # 3D fit-check + fab hand-off
 
 The last two steps: prove the board fits its enclosure in 3D, then package the
-order. Sourced from `pcb-xiao-tile/` (both a JLCPCB gerber set and an LCEDA
+order. Sourced from a real carrier-board order (both a JLCPCB gerber set and an LCEDA
 three-piece set exist there).
 
 ## 3D fit-check (and the bridge to `vibe-cad`)
@@ -88,7 +88,7 @@ bakes in the gotchas that bit us hand-rolling it:
   before an SMT order (choose Basic/Preferred parts → no extended-part fee).
 
 Then: jlcpcb.com → **Gerber upload** (the `.zip`). For bare boards that's the whole
-order; for SMT also upload the CPL + BOM. (See `pcb-xiao-tile/kicad/fab/` for output.)
+order; for SMT also upload the CPL + BOM.
 
 ### B. LCEDA / LCSC three-piece (the hand-off "of record" here)
 For a hand-drawn-in-EDA or fully-SMT-by-JLCPCB order, the canonical hand-off is three

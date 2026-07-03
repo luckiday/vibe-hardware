@@ -6,13 +6,13 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 
 | # | Stage | Gate (pass =) | Enforced by |
 |---|---|---|---|
-| 1 | **Schematic, by block** | organized by function (power / MCU / interface / peripheral), **not a pile**; **block frames auto-sized from content + uniform pad, aligned on a macro grid** | `gen_sch.py` `_frame()`/`_padf()` + align pass; read the PDF |
+| 1 | **Schematic, by block** | organized by function, **not a pile**; every part's pins/nets from `parts.yaml` | `pcblib.sch.Sheet` (box symbols, typed pins, PWR_FLAGs); read the plot |
 | 2 | **Annotation** | refdes **unique, no `U?`/`R?`** left | generator assigns explicit refs (placeholders impossible) |
 | 3 | **ERC** | **no floating input · no power conflict · every rail has a driver/PWR_FLAG** | `kicad-cli sch erc` → 0 errors; know the warning classes |
-| 4 | **Netlist + footprints** | every part has a footprint; standard parts **IPC-7351**; a purchased module's land **derived from its vendor reference** (EST only if none exists); sch↔pcb consistent | std lib for passives; `parts/<slug>/reference/` → exact land; `cross_analysis` |
-| 5 | **Place** | decoupling hugs the power pin · xtal by the MCU · connectors at the edge · heat spread | `gen_pcb.py` P2 clusters; courtyard + cluster-box no-overlap gate |
-| 6 | **Route** | **power widened · critical nets first · continuous return · antenna keep-out** | P5 net-class widths; P6 GND pour + belly/antenna rule-area |
-| 7 | **DRC** | **0 violations / 0 unconnected** (zones filled) | `pcb_check.sh` → `kicad-cli pcb drc --refill-zones` + `belly_check.py` |
+| 4 | **Netlist + footprints** | every part has a footprint; standard parts **IPC-7351**; a purchased module's land **derived from its vendor reference** (EST only if none exists); sch↔pcb consistent | std lib for passives; vendor reference / generated land (`gen_footprints.py`); sch+pcb share `parts.yaml` → consistent by construction |
+| 5 | **Place** | decoupling hugs the power pin · connectors at contract ports · routing channels reserved | `pcblib` relations (`beside`/`align_pads`/`at_edge`/`Cluster`); `gates.scorecard` = 0 hard fails |
+| 6 | **Route** | **power widened · critical nets first · continuous return · antenna keep-out** | freerouting (`autoroute.sh`, classes from `parts.yaml`) or `pcblib.route` scripted; `gnd_pours` + contract rule-areas |
+| 7 | **DRC** | **0 error-severity / 0 unconnected** (zones filled) | `pcb_check.sh` → `kicad-cli pcb drc --refill-zones` (or `drc_report.py` on kicad-cli <8) + `belly_check.py` / `gates.keepout_violations` |
 | 8 | **Fab + review** | gerber/BOM/CPL out; design reviewed; physical-verify checklist | `fab_export.sh`; `REVIEW.md`; kicad-happy cross/EMC |
 
 ## Notes that bite
@@ -28,7 +28,7 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
   (no real half-holes, guessed row pitch). EST is only the fallback for a part with **no**
   published reference — then datasheet-read it (next bullet). Worked example: the TC5.1-Xiao
   carrier pulls the exact Seeed `XIAO-14P-Add-On` land + 3D transform from
-  `parts/xiao-esp32s3-sense/reference/`.
+  the vendor reference dir of the module (the `vibe-parts` companion repo hosts worked ones; a bare-chip example is `examples/voice-buddy/pcb/kicad/gen_footprints.py`).
 - **Gate 4 — IPC-7351 is for *standard* parts.** A custom module/connector land (a castellated
   XIAO footprint, a breakout landing) is **not** IPC-7351 by definition — derive it from the
   vendor reference (above) or mark it **EST** and put it on the brief's verify-against-datasheet
