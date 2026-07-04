@@ -10,7 +10,7 @@ Hardware: ESP32-S3-WROOM-1-N16R8 · ES8311 codec DAC → NS4150B → rear-firing
 4 Ω/3 W speaker · ES7210 4-ch ADC with 2 analog MEMS mics + amp echo-reference
 (server-side AEC) · SSD1306 OLED on a socket · BOOT/VOL± buttons · WS2812 ·
 USB-C 5 V. The audio architecture follows xiaozhi's `lichuang-dev`
-(立创实战派) reference; pins are cross-checked between `pcb/pinmap.yaml` and
+(LiChuang ShiZhanPai) reference; pins are cross-checked between `pcb/pinmap.yaml` and
 the firmware header by `plm_check.py`.
 
 ```
