@@ -25,6 +25,14 @@ non-mirrored back text) are cosmetic and never block a fab — clean them for ti
 not correctness. (Counting total violations as the fail metric false-failed a clean
 board on 10 silk warnings — `pcb_check.sh` now splits the two.)
 
+**Verify the gate parser against the actual report format before trusting a 0.**
+kicad-cli ends violation lines with `; error`, but pcbnew's `WriteDRCReport` (the
+KiCad-7 fallback) writes GUI-style `Severity: error` lines — a grep for the former
+read **444 real violations as zero** on the voice-buddy board, and two routing
+sessions built copper on top of phantom-clean DRC. `drc_report.py` now normalizes
+its output to match; if you ever add another report source, run one DELIBERATE
+short through it first and watch the number move.
+
 **But treat a DRC *error* as real until proven otherwise.** On xiao-carrier (example) the DRC
 flagged a trace crossing another net on the same layer — a true short, not noise. Fix
 by rerouting, never by waiving.

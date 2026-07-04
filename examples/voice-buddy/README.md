@@ -2,7 +2,7 @@
 
 The first worked example that exercises **all four skills**: one natural-language
 spec became a manifest + contracts (vibe-plm), a generated 2-layer KiCad board
-(vibe-pcb), a printed 2-part enclosure (vibe-cad), and a firmware port
+(vibe-pcb; placement gated, routing in progress), a printed 2-part enclosure (vibe-cad), and a firmware port
 (vibe-firmware) for the MIT-licensed
 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) AI chatbot.
 
@@ -51,7 +51,7 @@ cd ../../cad && ../../../.venv/bin/python build_all.py                        # 
 
 ## Status — read before building one
 
-`status: wip` on every domain. DRC is clean on KiCad 7 (ERC needs a ≥8 host);
+`status: wip` on every domain. Placement gates are green and the enclosure fit-check is 0 mm³, but **routing is still in progress — DRC is NOT yet clean** (ERC additionally needs a ≥8 host);
 the firmware has **not** been compiled or run on hardware; and
 `pcb/voicebuddy_brief.md` §10 lists datasheet values that are UNVERIFIED
 (ES7210 supply-pin names, NS4150B pin-1 orientation, MEMS mic port variant,

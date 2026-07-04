@@ -21,12 +21,13 @@ are stubs.
 
 Prove the whole loop on a real, public build.
 
-- [x] **`examples/voice-buddy`** — a xiaozhi-style AI speaker exercising all four skills:
-      generated ES8311/ES7210 carrier PCB (pcblib relations + gates + scripted route,
-      DRC 0/0), printed enclosure (contract-driven build123d, fit-check 0 mm³), xiaozhi
-      board port + selftest firmware, and content-level `plm_check` cross-checks.
-      Remaining before "done-done": ERC on a KiCad ≥8 host, firmware compile + real-
-      hardware bring-up, and the brief §10 datasheet verifications.
+- [~] **`examples/voice-buddy`** — a xiaozhi-style AI speaker exercising all four skills:
+      generated ES8311/ES7210 carrier PCB (pcblib relations + placement gates green;
+      scripted routing IN PROGRESS — DRC not yet clean), printed enclosure
+      (contract-driven build123d, fit-check 0 mm³), xiaozhi board port + selftest
+      firmware, and content-level `plm_check` cross-checks. Remaining: finish routing
+      to DRC 0/0, ERC on a KiCad ≥8 host, firmware compile + real-hardware bring-up,
+      and the brief §10 datasheet verifications.
 - [ ] `examples/pager-buddy` filled in: structure + `product.yaml` manifest scaffolded ✔
       — now the `pcb/`, `cad/` sources (follow the voice-buddy pattern) + the Claude Code
       hook→bridge→device glue.

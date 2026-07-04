@@ -9,9 +9,9 @@ Notable changes to vibe-hardware. Format follows
 ### Added
 - **`examples/voice-buddy`** — the first end-to-end worked example across all four
   skills: a xiaozhi-style AI speaker (ESP32-S3-WROOM-1 + ES8311/ES7210 duplex audio +
-  NS4150B + SSD1306 + rear-firing 4 Ω speaker). Generated 2-layer KiCad board (DRC
-  0 / 0 on KiCad 7; ERC pending a ≥8 host), contract-driven printed enclosure with a
-  0 mm³ fit-check, a drop-in board port for the MIT-licensed `78/xiaozhi-esp32`
+  NS4150B + SSD1306 + rear-firing 4 Ω speaker). Generated 2-layer KiCad board
+  (placement gates green; scripted routing in progress), contract-driven printed
+  enclosure with a 0 mm³ fit-check, a drop-in board port for the MIT-licensed `78/xiaozhi-esp32`
   firmware plus a minimal selftest app, and a `product.yaml` whose contracts are
   content-verified.
 - `vibe-pcb`: **`scripts/pcblib/`** — the relational layout library ("relations in,

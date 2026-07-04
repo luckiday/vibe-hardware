@@ -20,7 +20,7 @@ firmware:                        # vibe-firmware
   config_header: firmware/boards-port/voice-buddy/config.h   # plm cross-checks pinmap <-> this
 pcb:                             # vibe-pcb
   dir: pcb/
-  status: wip                    # generated + DRC-clean on KiCad 7; ERC gate pending KiCad >=8 host
+  status: wip                    # placement gates green; ROUTING IN PROGRESS (DRC not yet clean)
   gate: "ERC/DRC 0 errors / 0 unconnected + antenna keep-out + placement scorecard 0 fails"
 cad:                             # vibe-cad
   dir: cad/

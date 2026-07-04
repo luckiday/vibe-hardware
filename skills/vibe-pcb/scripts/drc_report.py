@@ -22,4 +22,16 @@ filler.Fill(board.Zones())
 ok = pcbnew.WriteDRCReport(board, sys.argv[2], pcbnew.EDA_UNITS_MILLIMETRES, True)
 if not ok:
     sys.exit(f"WriteDRCReport failed on {sys.argv[1]}")
+
+# WriteDRCReport emits GUI-style severity lines ("Local override; Severity: error"),
+# while kicad-cli ends violation lines with "; error" — and pcb_check.sh greps the
+# latter. Normalize so the same gate parsing works on both. (This mismatch once
+# made the gate read 444 real violations as ZERO. Parsers lie; verify formats.)
+with open(sys.argv[2], "r+", encoding="utf-8") as f:
+    text = f.read()
+    text = text.replace("Severity: error", "Severity: error ; error")
+    text = text.replace("Severity: warning", "Severity: warning ; warning")
+    f.seek(0)
+    f.write(text)
+    f.truncate()
 print(f"wrote {sys.argv[2]}")

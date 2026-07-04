@@ -84,10 +84,10 @@ u4 = put(AUD, fp("U4"), "U4", at=(12, 2), rot=90)      # NS4150B
 # ES8311 support: refs row under the chip, supplies beside it
 # ref/rail caps live in ONE row above the codec, keeping the whole left
 # flank (x<13.5) free as the I2S/I2C bus channel down to both chips
-c12 = put(AUD, fp("C12"), "C12", at=(-6.5, 10.5), rot=0)  # DACVREF
-c13 = put(AUD, fp("C13"), "C13", at=(0, 0), rot=0)        # ADCVREF
-beside(c12, c13, side="right", gap=0.6)
-c11 = put(AUD, fp("C11"), "C11", at=(-4.2, 7), rot=0)     # VMID (left of U2 top)
+c12 = put(AUD, fp("C12"), "C12", at=(7.6, 1.5), rot=270)  # DACVREF (pocket right of R12; pad1 up)
+c13 = put(AUD, fp("C13"), "C13", at=(0, 0), rot=270)       # ADCVREF (pad1 up)
+beside(c12, c13, side="left", gap=0.8)   # c13 on the left — U4 sits right
+c11 = put(AUD, fp("C11"), "C11", at=(-0.6, 8.7), rot=0)   # VMID above U2, out of the channel
 c8 = put(AUD, fp("C8"), "C8", at=(0.5, 10.5), rot=0)   # PVDD/DVDD 100n above chip
 c9 = put(AUD, fp("C9"), "C9", at=(6, 10.5), rot=0)     # AVDD 100n
 r12 = put(AUD, fp("R12"), "R12", at=(4.5, 6), rot=90)  # CE strap
@@ -96,7 +96,7 @@ fb1 = put(AUD, fp("FB1"), "FB1", at=(-8, 2), rot=90)
 c10 = put(AUD, fp("C10"), "C10", at=(0, 0), rot=90)
 beside(fb1, c10, side="below", gap=0.5)
 # ES7210 support: ref/bias caps flank the chip
-c17 = put(AUD, fp("C17"), "C17", at=(-5, -2.5), rot=0)
+c17 = put(AUD, fp("C17"), "C17", at=(-2.0, -1.6), rot=90)  # between the chips, out of the bus channel
 c18 = put(AUD, fp("C18"), "C18", at=(6, -2.5), rot=0)
 c19 = put(AUD, fp("C19"), "C19", at=(9.5, -5), rot=90)     # REF12x by their pins
 c20 = put(AUD, fp("C20"), "C20", at=(0, 0), rot=90)          # (U3 right column)
@@ -113,7 +113,7 @@ r8 = put(AUD, fp("R8"), "R8", at=(3.5, -4.5), rot=90)
 r9 = put(AUD, fp("R9"), "R9", at=(0, 0), rot=90)
 c16 = put(AUD, fp("C16"), "C16", at=(0, 0), rot=90)
 row([r8, r9, c16], axis="y", gap=0.6)
-c26 = put(AUD, fp("C26"), "C26", at=(9, -11.5), rot=0)   # MIC3N return
+c26 = put(AUD, fp("C26"), "C26", at=(1.2, -2.6), rot=0)   # MIC3N return, right by U3.32
 # amp support
 c14 = put(AUD, fp("C14"), "C14", at=(7.5, 8.5), rot=0)   # OUTP coupling
 c15 = put(AUD, fp("C15"), "C15", at=(0, 0), rot=0)
