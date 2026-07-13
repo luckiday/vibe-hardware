@@ -23,6 +23,12 @@ PROJ="${1:?usage: autoroute.sh <proj-basename>   (run in the project kicad/ dir)
 S="$_VS"
 JAVA="${JAVA:-java}"
 FR_JAR="${FREEROUTING_JAR:?set FREEROUTING_JAR to a freerouting jar}"
+# Fanout-first knobs (references/autorouting.md): when gen_pcb pre-fans the power
+# pads with LOCKED stubs+vias (pcblib.route.fanout — exported as Specctra
+# "(type fix)"), set FR_INC=power so freerouting skips the whole power class and
+# only ever routes signals. FR_MP caps autoroute passes (deterministic runtime).
+FR_INC="${FR_INC:-}"       # net classes freerouting must IGNORE, e.g. "power"
+FR_MP="${FR_MP:-}"         # max autoroute passes, e.g. 40
 WORK="$(pwd)/autoroute-work"; mkdir -p "$WORK"
 [ -f gen_pcb.py ] || { echo "run me from the project kicad/ dir (no gen_pcb.py here)"; exit 1; }
 
@@ -37,7 +43,10 @@ echo "-> 2. export DSN (belly keepout + per-net widths)"
 echo "-> 3. freerouting (headless)"
 # NB: freerouting logs 'session completed' ~10-15 s BEFORE it writes the .ses. Running java
 # in the foreground is enough -- the process stays alive until the save finishes.
-( cd "$WORK" && "$JAVA" -jar "$FR_JAR" -de "$PROJ.dsn" -do "$PROJ.ses" )
+FR_OPTS=""
+[ -n "$FR_INC" ] && FR_OPTS="$FR_OPTS -inc $FR_INC"
+[ -n "$FR_MP" ] && FR_OPTS="$FR_OPTS -mp $FR_MP"
+( cd "$WORK" && "$JAVA" -jar "$FR_JAR" -de "$PROJ.dsn" -do "$PROJ.ses" $FR_OPTS )
 [ -f "$WORK/$PROJ.ses" ] || { echo "no .ses produced"; exit 1; }
 
 echo "-> 4. import SES (+GND solid pour + silk fix)"

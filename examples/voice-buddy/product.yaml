@@ -8,8 +8,8 @@
 # shared fit-number change). vibe-plm owns this file; each domain owns its dir.
 
 product: voice-buddy
-revision: v2026-07-03            # vYYYY-MM-DD — bump on any cross-domain change
-summary: "A xiaozhi-style AI speaker: ESP32-S3 + ES8311/ES7210 duplex audio, OLED, rear-firing 4ohm speaker."
+revision: v2026-07-13            # vYYYY-MM-DD — bump on any cross-domain change
+summary: "A xiaozhi-style AI speaker: ESP32-S3 + ES8388 duplex codec (mic + AEC ref), OLED, rear-firing 4ohm speaker."
 
 # --- the three domains (each is a self-contained vibe-* project) ---
 firmware:                        # vibe-firmware

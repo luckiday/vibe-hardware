@@ -341,7 +341,7 @@ def build_shell_front():
         Plane.XY.offset(PANEL_OUT + 0.1) * Pos(wx, wy) *
         RectangleRounded(ww + 2 * WIN_DRAFT, wh + 2 * WIN_DRAFT, WIN_R + WIN_DRAFT),
     ])
-    for name in ("mic_l", "mic_r"):       # mic acoustic ports
+    for name in ("mic",):                 # mic acoustic port (single mic + AEC ref)
         m = C.window(name)
         shell -= Pos(float(m["x"]), float(m["y"]), PANEL_IN - 0.5) * Cylinder(
             float(m["dia"]) / 2, PANEL_T + 1, align=(Align.CENTER, Align.CENTER, Align.MIN))

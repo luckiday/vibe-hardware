@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(_d, "skills", "vibe-pcb", "scripts"))
 from pcblib import load_parts, Sheet
 
 P = load_parts(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "parts.yaml"))
-sheet = Sheet("voicebuddy", title="voice-buddy — ESP32-S3 + ES8311/ES7210 speaker",
+sheet = Sheet("voicebuddy", title="voice-buddy — ESP32-S3 + ES8388 speaker",
               paper="A2", cols=6, cell=(70.0, 0.0))
 for spec in P:
     sheet.symbol(spec, power_nets=P.power_nets)

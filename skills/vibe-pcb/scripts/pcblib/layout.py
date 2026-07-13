@@ -73,7 +73,8 @@ class Board:
 
     def __init__(self, pcb: "pcbnew.BOARD", constraints, origin=(100.0, 100.0),
                  copper_layers: int = 2, min_track: float = 0.2,
-                 min_clearance: float = 0.2, min_hole: float = 0.3):
+                 min_clearance: float = 0.2, min_hole: float = 0.3,
+                 edge_clearance: float = None):
         self.pcb = pcb
         self.c = constraints
         self.ox, self.oy = origin           # KiCad-sheet mm of the board's TOP-left
@@ -83,22 +84,32 @@ class Board:
         self._nets: dict = {}
         self.copper_layers = copper_layers
         self._set_stackup(copper_layers)
-        self._set_design_rules(min_track, min_clearance, min_hole)
+        self._set_design_rules(min_track, min_clearance, min_hole,
+                               edge_clearance)
         self._draw_outline()
         self._draw_mount_holes()
         self._draw_keepouts()
 
     def _set_design_rules(self, min_track: float, min_clearance: float,
-                          min_hole: float = 0.3):
+                          min_hole: float = 0.3, edge_clearance: float = None):
         """Board-wide min track width + clearance + through-hole drill (mm).
         Fine-pitch parts (0.4mm QFN) need ~0.15mm track/clearance to fan out their
         pads; modules with a stitched thermal pad (ESP32-S3-WROOM-1) ship 0.2mm
         belly vias, so min_hole must reach 0.2mm or DRC flags the stock footprint.
+        edge_clearance: copper-to-board-edge (mm). KiCad's 0.5mm default fails
+        every edge connector (a USB-C receptacle's pads sit ~0.3mm from the
+        wall) AND starves the autorouter of legal space around those pads —
+        set 0.3 (JLCPCB standard) on boards with edge connectors.
         Kept within JLCPCB standard capability."""
         ds = self.pcb.GetDesignSettings()
         ds.m_TrackMinWidth = MM(min_track)
         ds.m_MinClearance = MM(min_clearance)
         ds.m_MinThroughDrill = MM(min_hole)
+        # min via diameter follows the min drill + 0.1mm annular ring per side
+        # (fanout() vias are drill+0.2 — JLCPCB's standard 4-layer capability)
+        ds.m_ViasMinSize = MM(min_hole + 0.2)
+        if edge_clearance is not None:
+            ds.m_CopperEdgeClearance = MM(edge_clearance)
         # DRC enforces the (default) netclass clearance/width, not just m_MinClearance
         # — set it too, or narrow routes flag against the stock 0.2mm netclass.
         nc = ds.m_NetSettings.GetDefaultNetclass()

@@ -29,8 +29,8 @@ __all__ = [
     "courtyard_overlaps", "cluster_overlaps", "keepout_violations", "hpwl",
     "scorecard", "export_placement", "draw_cluster_boxes",
     # route (lazy — needs pcbnew)
-    "path", "wire", "via", "fanout_decoupling", "gnd_pours", "plane_pours",
-    "apply_ses",
+    "path", "wire", "via", "fanout_decoupling", "fanout", "bridge_pads",
+    "gnd_pours", "plane_pours", "apply_ses",
 ]
 
 _LAZY = {
@@ -38,8 +38,8 @@ _LAZY = {
                "row", "at_edge", "apply_move_env"],
     "gates": ["courtyard_overlaps", "cluster_overlaps", "keepout_violations",
               "hpwl", "scorecard", "export_placement", "draw_cluster_boxes"],
-    "route": ["path", "wire", "via", "fanout_decoupling", "gnd_pours",
-              "plane_pours", "apply_ses"],
+    "route": ["path", "wire", "via", "fanout_decoupling", "fanout",
+              "bridge_pads", "gnd_pours", "plane_pours", "apply_ses"],
 }
 
 

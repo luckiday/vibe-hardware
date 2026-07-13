@@ -10,11 +10,10 @@
 
 static const char *TAG = "selftest";
 
-// ES8311/ES7210 both expose readable chip-ID registers; an ACK plus a sane ID
-// read proves the I2C path AND that the right die is on the pads. Register
-// numbers per the datasheets (ES8311 0xFD/0xFE = 0x83/0x11; ES7210 0x3D
-// family) — treat unexpected values as WARN, not FAIL, until verified on
-// real silicon.
+// The ES8388 has no dedicated chip-ID register; an ACK plus a readable
+// control register (0x00, CHIPCONTROL1 — known reset default) proves the
+// I2C path and that a live die is on the pads. Treat unexpected values as
+// WARN, not FAIL, until verified on real silicon.
 static void check_codec(const char *name, uint8_t addr, uint8_t id_reg)
 {
     if (!board_i2c_probe(addr)) {
@@ -31,9 +30,8 @@ void app_main(void)
     board_init();
     ESP_LOGI(TAG, "== voice-buddy selftest ==");
 
-    // 1+2. codecs on the shared I2C bus
-    check_codec("ES8311", BOARD_I2C_ADDR_ES8311, 0xFD);
-    check_codec("ES7210", BOARD_I2C_ADDR_ES7210, 0x3D);
+    // 1. the codec on the shared I2C bus
+    check_codec("ES8388", BOARD_I2C_ADDR_ES8388, 0x00);
     if (board_i2c_probe(BOARD_I2C_ADDR_SSD1306)) {
         ESP_LOGI(TAG, "PASS SSD1306: ACK at 0x%02X", BOARD_I2C_ADDR_SSD1306);
     } else {

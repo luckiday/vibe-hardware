@@ -1,93 +1,102 @@
 # voice-buddy carrier — PCB spec / brief
 
+> **v2 (revision v2026-07-13).** One ES8388 duplex codec replaced the v1
+> ES8311+ES7210 pair; GPIO map is placement-driven. Routing status and the
+> remaining finish steps live in `../TODO.md`. `parts.yaml` is the net source
+> of truth; this brief is the rationale.
+
 ## 0. Overview
-A xiaozhi-style AI-speaker carrier: ESP32-S3-WROOM-1-N16R8 + ES8311 (mono DAC →
-NS4150B → 4 Ω/3 W rear speaker) + ES7210 (2 analog MEMS mics + amp echo
-reference for AEC) + SSD1306 OLED on a socket + 3 buttons + WS2812. 70 × 70 mm,
-4-layer, USB-C 5 V powered. Front (F) faces the enclosure front panel; the two
-mics are on B, listening through PCB port holes.
+A xiaozhi-style AI-speaker carrier: ESP32-S3-WROOM-1-N16R8 + **ES8388** (one
+duplex codec: mono DAC → NS4150B → 4 Ω/3 W rear speaker; stereo ADC used as
+mic + echo reference) + one analog MEMS mic + SSD1306 OLED on a socket + 3
+buttons + WS2812. 70 × 70 mm, 4-layer, USB-C 5 V powered. Front (F) faces the
+enclosure front panel; the mic is on B, listening through a PCB port hole.
 
-Stackup note: started 2-layer but the dual-codec bus (I2S ×5 + I2C) plus the
-analog mic nets do not fit — freerouting stalled at 58 unrouted, and adding two
-layers alone did NOT help (still 58): the true bottleneck is fanning out the
-0.4 mm-pitch QFN codecs, which needs 0.15 mm track/clearance, not more layers.
-Now 4-layer (all signal) + 0.15/0.15 rules; GND poured F+B.
+Stackup: **4-layer, F/B signal + In1 = GND plane + In2 = +3V3 plane**, 0.15 mm
+track/clearance. Routed **fanout-first**: freerouting 2.2.x deleted its SMD→plane
+fanout pass (PR #605), so `gen_pcb.py` pre-fans every GND/+3V3 pad with locked
+stubs+vias (Specctra `(type fix)`) and `autoroute.sh` runs `-inc power` — the
+router only ever handles signals. The single 0.45 mm-pitch QFN escapes cleanly
+at 0.15 mm; a 0.3 mm copper-edge-clearance rule is what lets the USB-C pads route
+at the wall.
 
-Reference design lineage: `78/xiaozhi-esp32` `lichuang-dev` board (MIT), minus
-its PCA9557 expander (PA_EN is a direct GPIO) and with the OLED sharing the
-codec I²C bus.
+Reference design lineage: the xiaozhi `78/xiaozhi-esp32` **yunliao-s3** board
+(MIT) — ES8388 with `AUDIO_INPUT_REFERENCE true` for hardware AEC. Codec facts
+verified 2026-07-13 against the ES8388 datasheet Rev 5.0 + Olimex ESP32-ADF and
+Ai-Thinker ESP32-A1S / ESP32-Audio-Kit schematics.
 
 ## 1. Why this board is light
 One rail conversion (5 V → 3.3 V LDO), no battery, no RF beyond the module,
-audio is all chip-level I²S/I²C. The only fine-pitch parts are the two 0.4 mm
-QFN codecs.
+audio is all chip-level I²S/I²C. The only fine-pitch part is the single 0.45 mm
+QFN-28 codec.
 
 ## 2. Net map — THE single source of truth
 The machine-readable net map is `parts.yaml` (both generators derive from it)
 plus `pinmap.yaml` (signal ↔ GPIO, cross-checked against the firmware header by
-plm_check). Chip pin tables came from datasheet research; **pin-by-pin
-verification status is tracked in §10** — do not order boards before closing it.
+plm_check). ES8388 pin table came from datasheet Rev 5.0; verification record is
+in §10.
 
-Key GPIO plan (see pinmap.yaml for the full table): I²C SDA/SCL = 1/2 (ES8311
-0x18, ES7210 0x41, SSD1306 0x3C); duplex I²S MCLK/BCLK/WS/DOUT/DIN =
-38/14/13/45/12; PA_EN = 10; BOOT/VOL+/VOL− = 0/40/39; WS2812 = 48; native USB =
-19/20.
+Key GPIO plan (see pinmap.yaml — **placement-driven**, ES8388 I2C 0x10):
+I²C SDA/SCL = 11/12; duplex I²S MCLK/BCLK/WS/DOUT/DIN = 17/18/8/9/10; PA_EN = 13;
+BOOT/VOL−/VOL+ = 0/21/47; WS2812 = 38; native USB = 19/20. The audio pins were
+chosen to face the codec cluster (lower-left) through the ESP32-S3 GPIO matrix,
+which carries I2S (MCLK included) + I2C to any pad at audio rates — this frees
+the IO45/46/3 strapping pins that v1 was forced to use.
 
 ## 3. Power — how the board comes up
 USB-C VBUS (CC 5.1 k pulldowns → 5 V sink) → C1 bulk → AMS1117-3.3 (U5) →
-+3V3 (module, codecs digital, OLED, WS2812) → FB1 → +3V3A (codec analog).
-NS4150B runs from +5V directly (C2 bulk at the amp). EN = 10 k + 1 µ RC.
-PA_EN has a 100 k pulldown: the amp stays in shutdown until firmware raises it.
++3V3 (module, codec DVDD/PVDD, OLED, WS2812) → FB1 → +3V3A (codec AVDD+HPVDD,
+mic supply). NS4150B runs from +5V directly (C2 bulk at the amp). EN = 10 k + 1 µ
+RC. PA_EN has a 100 k pulldown: the amp stays in shutdown until firmware raises it.
 
 ## 4. I²C pull-ups
 R3/R4 = 4.7 k on SDA/SCL (one pair for the shared bus; the OLED module usually
-carries its own — still fine at 400 kHz).
+carries its own — still fine at 400 kHz). ES8388 CE = 10 k to GND → 7-bit 0x10
+(CE must be strapped, never MCU-driven, per the ES8388 user guide).
 
-## 5. Decoupling
-100 n + bulk per supply pin domain; ES8311 VMID/DACVREF/ADCVREF and ES7210
-REFxx/MICBIAS caps per datasheet app notes (values EST — §10).
+## 5. Decoupling & bias
+Per Everest app notes + the Olimex/A1S schematics: DVDD/PVDD 100 n; AVDD/HPVDD
+100 n + 10 µ on the filtered rail (they share +3V3A; a series ferrite stands in
+for the datasheet's 10 Ω AVDD–HPVDD resistor). VMID / VREF / ADCVREF each 10 µF
+(Olimex values). No MICBIAS pin exists on the ES8388 — the analog MEMS mic is
+powered from +3V3A through a 1 k + 10 µ filter (the A1S MBIAS pattern) with its
+OUT AC-coupled (100 n) into LIN1.
 
-## 6. Connectors
+## 6. Audio path
+DAC LOUT1 (pin 12) → 1 µF (C14) → NS4150B IN−; IN+ AC-grounded via 100 n (C15) —
+the Ai-Thinker ESP32-Audio-Kit single-ended wiring. Get L+R mono digitally
+(ES8388 reg 29 mono bit) rather than shorting outputs. AEC reference: LOUT1 →
+R8/R9 divider → 1 µF (C16) → RIN1 (pin 23), so the right ADC channel captures the
+amp drive for echo cancellation.
+
+## 7. Connectors
 J1 USB-C 16P (power + native USB), J2 JST-PH-2 speaker, J3 1×4 socket for the
-SSD1306 module (GND/VCC/SCL/SDA order — verify against the actual module
-before soldering the socket!).
+SSD1306 module (GND/VCC/SCL/SDA order — verify against the actual module before
+soldering the socket!).
 
-## 7. Enclosure interlock (feeds vibe-cad)
+## 8. Enclosure interlock (feeds vibe-cad)
 All shared numbers live in `../cad/constraints.yaml`: outline 70×70×1.6 r3,
-M2.5 holes at (4,4)(66,4)(4,66)(66,66), USB-C on +X at y=12, front windows
-(display/mics/buttons/led), rear-firing 40 mm speaker. gen_pcb.py READS that
-file and exports `placement.json` as evidence; plm_check compares them.
+M2.5 holes at (4,4)(66,4)(4,66)(66,66), USB-C on +X at y=13.5, front windows
+(display/mic/buttons/led — single mic now), rear-firing 40 mm speaker.
+gen_pcb.py READS that file and exports `placement.json` as evidence; plm_check
+compares them.
 
-## 8. On-board layout hard constraints
+## 9. On-board layout hard constraints
 - Antenna keepout: +Y edge, 6 mm deep, no copper/parts (module excepted) —
   drawn as a rule area from the contract AND gated by `pcblib.gates`.
 - Module belly: the WROOM is body-mounted on F; no F.Cu/vias under the body
   (routing uses B.Cu beneath it).
-- Mic analog runs (MIC1/2 P/N) keep ≥1 mm from the I²S trunk.
-- QFN 0.4 mm fanout: 0.2 mm stubs straight out of the pad row.
+- QFN 0.45 mm fanout: locked 0.2 mm stubs + 0.4/0.2 vias out of the pad row to
+  the inner planes (`route.fanout`, collision-checked).
+- USB-C J1: pin row **inboard** (rot=90); copper-edge clearance 0.3 mm.
 
-## 9. Process & ordering
-JLCPCB 4-layer 1.6 mm, min track/clearance 0.15/0.15, min through-drill 0.2 mm
-(the WROOM belly-via array), NPTH mount holes — all within JLC standard
-capability. `fab_export.sh voicebuddy` builds gerbers/CPL/BOM. LCSC parts are
-tagged in parts.yaml (`lcsc:`).
+## 10. Process, ordering & verify-before-ordering
+JLCPCB 4-layer 1.6 mm, min track/clearance 0.15/0.15, min drill 0.2 mm, no
+via-in-pad (not standard on 4-layer, and not needed — the QFN is perimeter-only).
+`fab_export.sh voicebuddy` builds gerbers/CPL/BOM. LCSC parts tagged in
+parts.yaml (`lcsc:`).
 
-## 10. EST / verify-before-ordering checklist
-Unverified numbers that MUST be closed against real datasheets/schematics
-before money is spent (datasheet hosts were unreachable from the build
-environment; values marked came from indexed summaries):
-
-- [ ] **ES7210 QFN-32 4×4 exposed-pad size** (footprint uses 2.6 mm typ) and
-      **pin names 6/7/8 and 23/25** (VDDP/VDDD/GNDD, VDDM/REFQM) — confirm the
-      supply/bias mapping in parts.yaml against the mechanical + pin tables.
-- [ ] **ES8311 QFN-20 EP size** (KiCad footprint EP 1.65 vs datasheet).
-- [ ] **NS4150B pin-1 orientation** (IN−/IN+/CTRL/GND | VO+/VDD/GND/VO−
-      assumed) and its ESOP-8 EP dimensions; exact gain (≈15 dB assumed).
-- [ ] **MEMS mic variant**: MSM381A3729-family, must be ANALOG and
-      BOTTOM-port; land pattern + acoustic hole (0.8 mm assumed) from the
-      exact suffix's drawing. Top-port variants of the same body exist.
-- [ ] **AEC reference divider** (R8 47 k / R9 4.7 k / C16 1 µ assumed): check
-      against the lichuang-dev / Korvo-2 schematic levels into MIC3P.
-- [ ] OLED module pin order GND/VCC/SCL/SDA matches the purchased module.
-- [ ] ERC on a KiCad ≥ 8 host (`pcb_check.sh` prints PASS* until then).
-- [ ] Print §9 gerbers 1:1 and dry-fit the USB-C, speaker JST, OLED socket.
+The UNVERIFIED-before-money checklist and the routing finish steps are tracked in
+**`../TODO.md`** (ES8388 audio wiring against the Audio-Kit schematic, CE strap,
+MEMS mic variant, NS4150B orientation, OLED pin order, ERC on KiCad ≥ 8, 1:1
+gerber dry-fit, and the `routing.ses` acceptance).

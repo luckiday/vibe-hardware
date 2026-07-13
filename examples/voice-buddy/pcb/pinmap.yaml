@@ -5,44 +5,51 @@
 # cross-checks the two: a pin moved here without moving the #define fails the gate.
 # `strap_ok: true` acknowledges a deliberate ESP32-S3 strapping-pin use.
 #
-# GPIO plan derives from the lichuang-dev xiaozhi reference (ES8311+ES7210 duplex
-# I2S) with two deltas: PA enable on a direct GPIO (no PCA9557 expander), and the
-# SSD1306 OLED sharing the codec I2C bus (0x3C / 0x18 / 0x41 — no address clash).
+# GPIO plan is PLACEMENT-DRIVEN (routability co-design): the ESP32-S3 GPIO matrix
+# routes I2S (all five lines, MCLK included — the 0/1/3 MCLK limit is classic-ESP32
+# only) and I2C to any GPIO at full audio rates, so the signals are assigned to the
+# module pads that physically FACE their targets: the audio cluster sits lower-left,
+# so the codec bus lives on the module's lower-left pads (IO17/18/8 left column,
+# IO9/10 bottom row); I2C center-bottom (IO11/12) between codec and OLED; buttons
+# and LED on the bottom-right/right pads. Straps IO45/IO46/IO3 are left UNUSED
+# (v1 had I2S_DOUT on IO45); IO0 stays the boot button by design.
+#
+# Codec: single ES8388 duplex (I2C 0x10; L-ADC = mic, R-ADC = amp echo reference
+# for AEC), replacing the v1 ES8311+ES7210 pair — one 0.45mm QFN instead of two
+# 0.4mm QFNs (escape-routing co-design).
 
 mcu: esp32-s3-wroom-1-n16r8     # octal PSRAM -> GPIO33-37 reserved (plm lint enforces)
 
 bus:
   i2c:
-    sda: GPIO1
-    scl: GPIO2
+    sda: GPIO11
+    scl: GPIO12
     hz: 400000
     devices:
-      - { name: ES8311,  role: codec_dac, addr: 0x18 }
-      - { name: ES7210,  role: adc_4ch,   addr: 0x41 }
-      - { name: SSD1306, role: display,   addr: 0x3C }
-  i2s:                          # one duplex bus: MCLK/BCLK/WS shared by both codecs
-    mclk: GPIO38
-    bclk: GPIO14
-    ws: GPIO13
-    dout: GPIO45                # -> ES8311 DAC data
-    din: GPIO12                 # <- ES7210 ADC data (4ch TDM)
+      - { name: ES8388,  role: codec_duplex, addr: 0x10 }
+      - { name: SSD1306, role: display,      addr: 0x3C }
+  i2s:                          # one duplex bus into the single codec
+    mclk: GPIO17
+    bclk: GPIO18
+    ws: GPIO8
+    dout: GPIO9                 # -> ES8388 DSDIN (DAC data)
+    din: GPIO10                 # <- ES8388 ASDOUT (ADC data: L=mic, R=AEC ref)
   usb: { dn: GPIO19, dp: GPIO20 }
 
 pins:
-  - { signal: I2C_SDA,   gpio: GPIO1,  dir: io,  to: es8311+es7210+oled, define: AUDIO_CODEC_I2C_SDA_PIN }
-  - { signal: I2C_SCL,   gpio: GPIO2,  dir: io,  to: es8311+es7210+oled, define: AUDIO_CODEC_I2C_SCL_PIN }
-  - { signal: I2S_MCLK,  gpio: GPIO38, dir: out, to: es8311+es7210, define: AUDIO_I2S_GPIO_MCLK }
-  - { signal: I2S_BCLK,  gpio: GPIO14, dir: out, to: es8311+es7210, define: AUDIO_I2S_GPIO_BCLK }
-  - { signal: I2S_WS,    gpio: GPIO13, dir: out, to: es8311+es7210, define: AUDIO_I2S_GPIO_WS }
-  - { signal: I2S_DOUT,  gpio: GPIO45, dir: out, to: es8311, define: AUDIO_I2S_GPIO_DOUT,
-      strap_ok: true, notes: "VDD_SPI strap; codec data-in only, no external pull — proven in lichuang-dev" }
-  - { signal: I2S_DIN,   gpio: GPIO12, dir: in,  to: es7210, define: AUDIO_I2S_GPIO_DIN }
-  - { signal: PA_EN,     gpio: GPIO10, dir: out, to: ns4150, define: AUDIO_CODEC_PA_PIN,
+  - { signal: I2C_SDA,   gpio: GPIO11, dir: io,  to: es8388+oled, define: AUDIO_CODEC_I2C_SDA_PIN }
+  - { signal: I2C_SCL,   gpio: GPIO12, dir: io,  to: es8388+oled, define: AUDIO_CODEC_I2C_SCL_PIN }
+  - { signal: I2S_MCLK,  gpio: GPIO17, dir: out, to: es8388, define: AUDIO_I2S_GPIO_MCLK }
+  - { signal: I2S_BCLK,  gpio: GPIO18, dir: out, to: es8388, define: AUDIO_I2S_GPIO_BCLK }
+  - { signal: I2S_WS,    gpio: GPIO8,  dir: out, to: es8388, define: AUDIO_I2S_GPIO_WS }
+  - { signal: I2S_DOUT,  gpio: GPIO9,  dir: out, to: es8388, define: AUDIO_I2S_GPIO_DOUT }
+  - { signal: I2S_DIN,   gpio: GPIO10, dir: in,  to: es8388, define: AUDIO_I2S_GPIO_DIN }
+  - { signal: PA_EN,     gpio: GPIO13, dir: out, to: ns4150, define: AUDIO_CODEC_PA_PIN,
       notes: "NS4150 CTRL; keep low until codec is up (pop suppression)" }
   - { signal: BTN_BOOT,  gpio: GPIO0,  dir: in,  to: button, define: BOOT_BUTTON_GPIO,
       strap_ok: true, notes: "boot strap IS the button (idle high, pressed low)" }
-  - { signal: BTN_VOLUP, gpio: GPIO40, dir: in,  to: button, define: VOLUME_UP_BUTTON_GPIO }
-  - { signal: BTN_VOLDN, gpio: GPIO39, dir: in,  to: button, define: VOLUME_DOWN_BUTTON_GPIO }
-  - { signal: LED_DATA,  gpio: GPIO48, dir: out, to: ws2812, define: BUILTIN_LED_GPIO }
+  - { signal: BTN_VOLUP, gpio: GPIO47, dir: in,  to: button, define: VOLUME_UP_BUTTON_GPIO }
+  - { signal: BTN_VOLDN, gpio: GPIO21, dir: in,  to: button, define: VOLUME_DOWN_BUTTON_GPIO }
+  - { signal: LED_DATA,  gpio: GPIO38, dir: out, to: ws2812, define: BUILTIN_LED_GPIO }
   - { signal: USB_DN,    gpio: GPIO19, dir: io,  to: usb_c, notes: "native USB D-" }
   - { signal: USB_DP,    gpio: GPIO20, dir: io,  to: usb_c, notes: "native USB D+" }

@@ -1,22 +1,22 @@
 # voice-buddy — a xiaozhi-style AI speaker, end to end
 
 The first worked example that exercises **all four skills**: one natural-language
-spec became a manifest + contracts (vibe-plm), a generated 2-layer KiCad board
-(vibe-pcb; placement gated, routing in progress), a printed 2-part enclosure (vibe-cad), and a firmware port
-(vibe-firmware) for the MIT-licensed
+spec became a manifest + contracts (vibe-plm), a generated 4-layer KiCad board
+(vibe-pcb; placement gated, fanout-first routing in progress), a printed 2-part
+enclosure (vibe-cad), and a firmware port (vibe-firmware) for the MIT-licensed
 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) AI chatbot.
 
-Hardware: ESP32-S3-WROOM-1-N16R8 · ES8311 codec DAC → NS4150B → rear-firing
-4 Ω/3 W speaker · ES7210 4-ch ADC with 2 analog MEMS mics + amp echo-reference
-(server-side AEC) · SSD1306 OLED on a socket · BOOT/VOL± buttons · WS2812 ·
-USB-C 5 V. The audio architecture follows xiaozhi's `lichuang-dev`
-(LiChuang ShiZhanPai) reference; pins are cross-checked between `pcb/pinmap.yaml` and
-the firmware header by `plm_check.py`.
+Hardware: ESP32-S3-WROOM-1-N16R8 · one ES8388 duplex codec (DAC → NS4150B →
+rear-firing 4 Ω/3 W speaker; ADC L = analog MEMS mic, ADC R = amp echo-reference
+for hardware AEC) · SSD1306 OLED on a socket · BOOT/VOL± buttons · WS2812 ·
+USB-C 5 V. The audio architecture follows xiaozhi's `yunliao-s3` (ES8388 +
+`AUDIO_INPUT_REFERENCE`) reference; pins are cross-checked between
+`pcb/pinmap.yaml` and the firmware header by `plm_check.py`.
 
 ```
 product.yaml          the manifest + interface contracts (validate: plm_check.py)
 pcb/                  brief, pinmap.yaml, parts.yaml (single net source),
-                      kicad/gen_sch.py + gen_pcb.py + routing.py  → generated board
+                      kicad/gen_sch.py + gen_pcb.py (fanout + ses replay) → board
 cad/                  constraints.yaml (the shared fit numbers), voicebuddy_case.py
 firmware/
   boards-port/…       drop-in board dir for upstream xiaozhi (config.h/json + class)
@@ -35,8 +35,9 @@ No coordinate in this design is hand-invented twice:
 - Placement is **relations** (`beside`, `align_pads`, `at_edge`, clusters), and
   numeric gates (courtyard/cluster overlap, keepouts, HPWL) fail the build
   before a bad floorplan reaches copper.
-- Routing is **computed** (pad-anchored `wire()/via()` — freerouting is the
-  preferred alternative when available).
+- Routing is **fanout-first**: `gen_pcb.py` pre-fans the plane-net pads with
+  locked stubs+vias, then freerouting routes only signals (`-inc power`) and the
+  accepted session (`routing.ses`) is replayed on regeneration.
 - `gen_pcb.py` exports `placement.json`; `plm_check.py` compares contract vs
   evidence, and `check_fit.py` proves board↔shell interference = 0 mm³.
 
@@ -51,8 +52,10 @@ cd ../../cad && ../../../.venv/bin/python build_all.py                        # 
 
 ## Status — read before building one
 
-`status: wip` on every domain. Placement gates are green and the enclosure fit-check is 0 mm³, but **routing is still in progress — DRC is NOT yet clean** (ERC additionally needs a ≥8 host);
-the firmware has **not** been compiled or run on hardware; and
-`pcb/voicebuddy_brief.md` §10 lists datasheet values that are UNVERIFIED
-(ES7210 supply-pin names, NS4150B pin-1 orientation, MEMS mic port variant,
-AEC divider values). Close that checklist before ordering anything.
+`status: wip` on every domain. Placement gates are green and the enclosure
+fit-check is 0 mm³, but **routing is still in progress — DRC is NOT yet clean**
+(ERC additionally needs a ≥8 host); the firmware has **not** been compiled or
+run on hardware; and datasheet values remain UNVERIFIED (ES8388 audio wiring,
+NS4150B pin-1 orientation, MEMS mic port variant, AEC divider values). The
+remaining routing/verification steps are tracked in `TODO.md`. Close that
+checklist before ordering anything.

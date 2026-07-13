@@ -22,12 +22,13 @@ stack:
   board_lift: 4.0        # enclosure interior floor -> board bottom edge
 
 ports:
-  usb_c: { edge: "+X", center_y: 12, w: 9.2, h: 3.4 }   # exits the right wall
+  usb_c: { edge: "+X", center_y: 13.5, w: 9.2, h: 3.4 } # exits the right wall
+                                                        # (13.5: shell pads clear
+                                                        # the (66,4) mount boss)
 
 windows:                 # front-panel openings, board frame (x,y = center)
   display:  { x: 35, y: 26.5, w: 23.0, h: 12.0 }        # SSD1306 0.96" visible area + margin
-  mic_l:    { x: 8,  y: 50, dia: 1.2 }
-  mic_r:    { x: 62, y: 50, dia: 1.2 }
+  mic:      { x: 8,  y: 50, dia: 1.2 }   # single analog MEMS (ES8388 L-ADC; R-ADC = AEC ref)
   btn_voldn: { x: 22, y: 8, dia: 4.5 }                  # printed plungers ride in these
   btn_boot:  { x: 35, y: 8, dia: 4.5 }
   btn_volup: { x: 48, y: 8, dia: 4.5 }

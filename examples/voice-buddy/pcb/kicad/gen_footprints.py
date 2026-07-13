@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Generate voicebuddy.pretty — the two footprints KiCad's libraries don't ship.
+"""Generate voicebuddy.pretty — the one footprint KiCad's libraries don't ship.
 
 Called by gen_pcb.py before placement (idempotent), so the .pretty regenerates
-from source on every build and is never committed.
+from source on every build and is never committed. (The v1 ES7210 QFN-32
+generator left with the part — the ES8388 uses the stock
+Package_DFN_QFN:QFN-28-1EP_4x4mm_P0.45mm_EP2.6x2.6mm, whose EP matches the
+datasheet's 2.5-2.7mm range.)
 
-  ES7210 QFN-32 4x4mm P0.4  KiCad stock QFN-32 is 5x5/P0.5 — wrong part. Body
-                            and pitch verified against LCSC C365743; EP size
-                            2.6 mm is the family-typical value (EST: confirm
-                            against the datasheet mechanical drawing pre-fab).
   MEMS mic OCLGA 3.76x2.95  generic analog bottom-port land (MSM381A3729-class):
                             4 terminals + a THROUGH-PCB acoustic port (0.8 mm
                             NPTH). Land + port dia are EST items — verify the
@@ -35,35 +34,6 @@ def _outline(w, h, layer, width=0.1):
     x, y = w / 2, h / 2
     return (f'  (fp_rect (start {-x:.3f} {-y:.3f}) (end {x:.3f} {y:.3f}) '
             f'(stroke (width {width}) (type default)) (fill none) (layer "{layer}"))')
-
-
-def qfn32_4x4_p04() -> str:
-    """QFN-32-1EP 4x4mm P0.4mm EP2.6x2.6 — pads 1-32 CCW from top-left, EP=33."""
-    lines = ['(footprint "QFN-32-1EP_4x4mm_P0.4mm_EP2.6x2.6mm"',
-             '  (version 20221018) (generator gen_footprints)',
-             '  (layer "F.Cu")',
-             '  (attr smd)',
-             '  (fp_text reference "REF**" (at 0 -3.1) (layer "F.SilkS")'
-             ' (effects (font (size 1 1) (thickness 0.15))))',
-             '  (fp_text value "QFN-32" (at 0 3.1) (layer "F.Fab")'
-             ' (effects (font (size 1 1) (thickness 0.15))))']
-    lines.append(_outline(4.0, 4.0, "F.Fab"))
-    lines.append(_outline(4.7, 4.7, "F.CrtYd", 0.05))
-    # pin-1 marks: silk dot + fab chamfer corner (top-left)
-    lines.append('  (fp_circle (center -2.5 -2.1) (end -2.4 -2.1)'
-                 ' (stroke (width 0.2) (type default)) (fill solid) (layer "F.SilkS"))')
-    ys = [round(-1.4 + 0.4 * i, 3) for i in range(8)]
-    for i, y in enumerate(ys):                       # 1-8 left, top->bottom
-        lines.append(_pad(i + 1, -1.85, y, 0.8, 0.2))
-    for i, x in enumerate(ys):                       # 9-16 bottom, left->right
-        lines.append(_pad(i + 9, x, 1.85, 0.2, 0.8))
-    for i, y in enumerate(reversed(ys)):             # 17-24 right, bottom->top
-        lines.append(_pad(i + 17, 1.85, y, 0.8, 0.2))
-    for i, x in enumerate(reversed(ys)):             # 25-32 top, right->left
-        lines.append(_pad(i + 25, x, -1.85, 0.2, 0.8))
-    lines.append(_pad(33, 0, 0, 2.6, 2.6, shape="rect"))   # EP -> GND
-    lines.append(')')
-    return "\n".join(lines)
 
 
 def mems_mic_analog() -> str:
@@ -95,8 +65,7 @@ def mems_mic_analog() -> str:
 
 def ensure():
     os.makedirs(PRETTY, exist_ok=True)
-    for name, gen in [("QFN-32-1EP_4x4mm_P0.4mm_EP2.6x2.6mm", qfn32_4x4_p04),
-                      ("MEMS_Analog_BottomPort_3.76x2.95", mems_mic_analog)]:
+    for name, gen in [("MEMS_Analog_BottomPort_3.76x2.95", mems_mic_analog)]:
         path = os.path.join(PRETTY, name + ".kicad_mod")
         with open(path, "w", encoding="utf-8") as f:
             f.write(gen() + "\n")

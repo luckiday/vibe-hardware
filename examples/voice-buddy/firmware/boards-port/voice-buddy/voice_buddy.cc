@@ -1,13 +1,14 @@
 // voice-buddy — xiaozhi board class. Drop this directory into the upstream
 // 78/xiaozhi-esp32 tree as main/boards/voice-buddy/ (see README.md here).
 //
-// Shape follows the upstream reference boards: audio = BoxAudioCodec
-// (ES8311 out + ES7210 in, duplex I2S, PA on a direct GPIO — lichuang-dev
-// minus its PCA9557 expander), display = OledDisplay on the SAME I2C bus as
-// the codecs (0x3C vs 0x18/0x41), three buttons, one WS2812 status led.
+// Shape follows the upstream reference boards: audio = Es8388AudioCodec
+// (ONE duplex codec: DAC -> NS4150 PA on a direct GPIO; ADC L = mic,
+// ADC R = amp echo reference -> AUDIO_INPUT_REFERENCE, the yunliao-s3
+// pattern), display = OledDisplay on the SAME I2C bus as the codec
+// (0x3C vs 0x10), three buttons, one WS2812 status led.
 
 #include "wifi_board.h"
-#include "codecs/box_audio_codec.h"
+#include "codecs/es8388_audio_codec.h"
 #include "display/oled_display.h"
 #include "application.h"
 #include "button.h"
@@ -141,13 +142,12 @@ class VoiceBuddyBoard : public WifiBoard {
     }
 
     virtual AudioCodec* GetAudioCodec() override {
-        static BoxAudioCodec audio_codec(
-            i2c_bus_,
+        static Es8388AudioCodec audio_codec(
+            i2c_bus_, I2C_NUM_0,
             AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
             AUDIO_I2S_GPIO_MCLK, AUDIO_I2S_GPIO_BCLK, AUDIO_I2S_GPIO_WS,
             AUDIO_I2S_GPIO_DOUT, AUDIO_I2S_GPIO_DIN,
-            AUDIO_CODEC_PA_PIN,
-            AUDIO_CODEC_ES8311_ADDR, AUDIO_CODEC_ES7210_ADDR,
+            AUDIO_CODEC_PA_PIN, AUDIO_CODEC_ES8388_ADDR,
             AUDIO_INPUT_REFERENCE);
         return &audio_codec;
     }

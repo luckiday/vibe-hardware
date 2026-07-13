@@ -17,8 +17,8 @@ import pcbnew
 from pcbnew import VECTOR2I, FromMM as MM
 
 __all__ = [
-    "path", "wire", "via", "fanout_decoupling", "gnd_pours", "plane_pours",
-    "apply_ses",
+    "path", "wire", "via", "fanout_decoupling", "fanout", "bridge_pads",
+    "gnd_pours", "plane_pours", "apply_ses",
 ]
 
 _LAYERS = {"F.Cu": pcbnew.F_Cu, "In1.Cu": pcbnew.In1_Cu,
@@ -56,9 +56,11 @@ def path(start, *steps):
 
 
 def wire(board, net: str, pts, layer: str = "F.Cu", w: float = 0.3,
-         bend: str = None):
+         bend: str = None, lock: bool = False):
     """Lay track segments through pts (board frame mm). With bend='x'/'y' and
-    exactly two points, insert the L-corner (go x-first / y-first)."""
+    exactly two points, insert the L-corner (go x-first / y-first). lock=True
+    marks the tracks Locked — KiCad's DSN export then emits them (type fix),
+    so freerouting treats them as untouchable pre-routes (fanout-first flow)."""
     pts = [tuple(p) for p in pts]
     if bend and len(pts) == 2:
         (x0, y0), (x1, y1) = pts
@@ -75,11 +77,13 @@ def wire(board, net: str, pts, layer: str = "F.Cu", w: float = 0.3,
         t.SetLayer(_LAYERS[layer])
         t.SetWidth(MM(w))
         t.SetNetCode(code)
+        t.SetLocked(lock)
         board.pcb.Add(t)
     return pts[-1]
 
 
-def via(board, net: str, at, size: float = 0.6, drill: float = 0.3):
+def via(board, net: str, at, size: float = 0.6, drill: float = 0.3,
+        lock: bool = False):
     """Through via at a point (normally a pad or a wire() return)."""
     v = pcbnew.PCB_VIA(board.pcb)
     v.SetPosition(board.xy(*at))
@@ -88,6 +92,7 @@ def via(board, net: str, at, size: float = 0.6, drill: float = 0.3):
     v.SetWidth(MM(size))
     v.SetDrill(MM(drill))
     v.SetNetCode(board.net(net))
+    v.SetLocked(lock)
     board.pcb.Add(v)
     return tuple(at)
 
@@ -99,6 +104,141 @@ def fanout_decoupling(board, cap, cap_pad, ic, ic_pad, net: str,
     a, b = cap.pad(cap_pad), ic.pad(ic_pad)
     bend = "x" if abs(a[1] - b[1]) < abs(a[0] - b[0]) else "y"
     wire(board, net, [a, b], layer=layer, w=w, bend=bend)
+
+
+def _fanout_obstacles(board):
+    """Cached collision map for fanout(): every pad's (x, y, keepaway-radius,
+    netcode). Radius = half the pad diagonal (or the drill for holes)."""
+    if getattr(board, "_fanout_obs", None) is None:
+        obs = []
+        for f in board.pcb.GetFootprints():
+            for p in f.Pads():
+                x, y = board.from_kicad(p.GetPosition())
+                bb = p.GetBoundingBox()
+                r = (pcbnew.ToMM(bb.GetWidth()) ** 2 +
+                     pcbnew.ToMM(bb.GetHeight()) ** 2) ** 0.5 / 2
+                drill = pcbnew.ToMM(max(p.GetDrillSize().x, p.GetDrillSize().y))
+                obs.append((x, y, max(r, drill / 2 + 0.3), p.GetNetCode()))
+        board._fanout_obs = obs
+        board._fanout_vias = []
+    return board._fanout_obs
+
+
+def _via_fits(board, at, net_code, via_size, clearance):
+    """True if a via at `at` clears every foreign pad/hole and every fanout via."""
+    vr = via_size / 2
+    for x, y, r, nc in _fanout_obstacles(board):
+        if nc == net_code and r < 1.0:
+            continue                      # its own (small) pad — the stub target
+        if (at[0] - x) ** 2 + (at[1] - y) ** 2 < (r + vr + clearance) ** 2:
+            return False
+    for x, y in board._fanout_vias:
+        if (at[0] - x) ** 2 + (at[1] - y) ** 2 < (via_size + clearance) ** 2:
+            return False
+    return True
+
+
+def fanout(board, part, nets, stub: float = 0.8, stagger: float = 0.6,
+           w: float = 0.2, via_size: float = 0.4, via_drill: float = 0.2,
+           direction: str = "out", ep_pitch: float = 1.1):
+    """Fanout-first escape for the pads freerouting can't/won't do itself.
+
+    For every SMD pad of `part` whose net is in `nets` (normally the plane
+    nets — PTH pads reach an inner plane natively and are skipped):
+      - perimeter pad -> a LOCKED stub straight out of the pad ring + a LOCKED
+        through-via `stub` mm from the pad center. Same-facing pads alternate
+        between two via rows (`stagger`), and every via is collision-checked
+        against all pads/holes and previously placed fanout vias, sliding
+        outward in `stagger` steps until it fits (skipped loudly if it never
+        does). The via reaches the inner plane on a 4-layer board.
+      - large pad (EP, both dims >= 1.5mm) -> a LOCKED thermal via grid on the
+        pad itself (`ep_pitch`), no stub.
+
+    via_size 0.4 is the geometric limit at 0.45mm QFN pitch with 0.15mm rules:
+    via edge to the neighbour pad's stub = pitch - via/2 - w/2 = exactly the
+    clearance. Locked copper exports to Specctra as (type fix): freerouting
+    never rips it. Run freerouting with `-inc power` (the DSN power class) and
+    the router only ever sees signals — the standard fanout-first flow (the
+    2.2.x routers deleted their own fanout pass; references/autorouting.md).
+
+    direction: 'out' = away from the part center (QFN/module escape);
+               'in'  = toward the board center (edge connectors, where 'out'
+               would walk off the board).
+    """
+    clearance = 0.15
+    _fanout_obstacles(board)                     # prime the cache
+    fc = board.from_kicad(part.fp.GetPosition())
+    bc = (board.L / 2.0, board.W / 2.0)
+    groups = {}                                  # (dx,dy) -> [(perp, pad, pos)]
+    n_vias = 0
+    for p in part.fp.Pads():
+        net = p.GetNetname()
+        if net not in nets or p.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+            continue
+        pos = board.from_kicad(p.GetPosition())
+        bb = p.GetBoundingBox()
+        pw, ph = pcbnew.ToMM(bb.GetWidth()), pcbnew.ToMM(bb.GetHeight())
+        if min(pw, ph) >= 1.5:                   # EP -> thermal via grid
+            nx = max(1, int((pw - 0.6) / ep_pitch) + 1)
+            ny = max(1, int((ph - 0.6) / ep_pitch) + 1)
+            for i in range(nx):
+                for j in range(ny):
+                    at = (pos[0] - (nx - 1) * ep_pitch / 2 + i * ep_pitch,
+                          pos[1] - (ny - 1) * ep_pitch / 2 + j * ep_pitch)
+                    via(board, net, at, size=via_size + 0.15,
+                        drill=via_drill + 0.1, lock=True)
+                    board._fanout_vias.append(at)
+                    n_vias += 1
+            continue
+        ref = fc if direction == "out" else pos
+        tgt = pos if direction == "out" else bc
+        vx, vy = tgt[0] - ref[0], tgt[1] - ref[1]
+        d = ((1 if vx > 0 else -1), 0) if abs(vx) >= abs(vy) \
+            else (0, (1 if vy > 0 else -1))
+        perp = pos[1] if d[0] else pos[0]
+        groups.setdefault(d, []).append((perp, p, pos))
+    layer = "B.Cu" if part.side() == "B" else "F.Cu"
+    for d, pads in groups.items():
+        pads.sort(key=lambda t: t[0])
+        for i, (_, p, pos) in enumerate(pads):
+            dist = stub + (i % 2) * stagger
+            for _try in range(6):                # slide outward until clear
+                at = (pos[0] + d[0] * dist, pos[1] + d[1] * dist)
+                if _via_fits(board, at, p.GetNetCode(), via_size, clearance):
+                    break
+                dist += stagger
+            else:
+                print(f"fanout: NO ROOM for {part.ref}.{p.GetPadName()} "
+                      f"[{p.GetNetname()}] via — pad left to the pour")
+                continue
+            wire(board, p.GetNetname(), [pos, at], layer=layer, w=w, lock=True)
+            via(board, p.GetNetname(), at, size=via_size, drill=via_drill,
+                lock=True)
+            board._fanout_vias.append(at)
+            n_vias += 1
+    return n_vias
+
+
+def bridge_pads(board, part, net: str, w: float = 0.3):
+    """LOCKED jumpers chaining every same-net SMD pad of one footprint — the
+    USB-C 16P A/B mirror-pad pattern (A6<->B6 etc.), which autorouters at a
+    board edge reliably fail. Nearest-neighbour chain, straight segments."""
+    todo = [(board.from_kicad(p.GetPosition()), p) for p in part.fp.Pads()
+            if p.GetNetname() == net
+            and p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD]
+    if len(todo) < 2:
+        return 0
+    layer = "B.Cu" if part.side() == "B" else "F.Cu"
+    chain = [todo.pop(0)]
+    n = 0
+    while todo:
+        cx, cy = chain[-1][0]
+        todo.sort(key=lambda t: (t[0][0] - cx) ** 2 + (t[0][1] - cy) ** 2)
+        nxt = todo.pop(0)
+        wire(board, net, [chain[-1][0], nxt[0]], layer=layer, w=w, lock=True)
+        chain.append(nxt)
+        n += 1
+    return n
 
 
 def gnd_pours(board, net: str = "GND"):

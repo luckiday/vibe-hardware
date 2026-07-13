@@ -8,18 +8,32 @@ Notable changes to vibe-hardware. Format follows
 
 ### Changed
 - `vibe-pcb`: **`Board` gains `copper_layers` / `min_track` / `min_clearance` /
-  `min_hole`** — multi-layer stackup (2 or 4) and per-board DRC rules (netclass
-  clearance via `m_NetSettings.GetDefaultNetclass()`, drill via `m_MinThroughDrill`),
-  with contract keepouts now spanning every copper layer. `export_dsn.py` retypes
-  plane-bearing layers signal→power; `route.plane_pours()` added. voice-buddy is now
-  **4-layer at 0.15 mm track/clearance** — the dual-codec board is unroutable on 2
-  layers, and the real bottleneck was fine-pitch (0.4 mm QFN) escape width, not layer
-  count. `gen_pcb.py`'s full stage replays the accepted `routing.ses` via `apply_ses`.
+  `min_hole` / `edge_clearance`** — multi-layer stackup (2 or 4) and per-board DRC
+  rules (netclass clearance via `m_NetSettings.GetDefaultNetclass()`, drill via
+  `m_MinThroughDrill`, min-via + copper-edge clearance), contract keepouts spanning
+  every copper layer. `export_dsn.py` retypes plane-bearing layers signal→power.
+- `vibe-pcb`: **fanout-first routing** — `route.fanout()` (collision-checked locked
+  stubs+vias escaping every plane-net pad, EP thermal-via grids), `route.bridge_pads()`,
+  `route.plane_pours()`, and `wire()/via(lock=)`. Locked copper exports to Specctra as
+  `(type fix)`; `autoroute.sh` gains `FR_INC`/`FR_MP` so freerouting runs `-inc power`
+  and only routes signals. This is the documented workaround for freerouting 2.2.x
+  having **deleted its own SMD→plane fanout pass** (PR #605) — the real cause of the
+  dual-codec stall, not layer count. `gen_pcb.py` replays the accepted `routing.ses`.
+- `examples/voice-buddy`: **v2 respin** (revision v2026-07-13) — one **ES8388** duplex
+  codec (QFN-28, 0.45 mm) replaces the ES8311+ES7210 pair (two 0.4 mm QFNs); L-ADC =
+  the single analog mic, R-ADC = amp echo reference for hardware AEC (the xiaozhi
+  `yunliao-s3` pattern). GPIO map is now **placement-driven** (ESP32-S3 GPIO-matrix
+  pin-swap frees the IO45/46/3 straps). Firmware switched to `Es8388AudioCodec`;
+  `pinmap.yaml`↔`config.h` verified in sync (plm_check). Routing loop reaches a near-
+  clean state — see `examples/voice-buddy/TODO.md` for the remaining silk pass and the
+  `routing.ses` acceptance step.
 
 ### Fixed
-- `examples/voice-buddy`: two `parts.yaml` footprint/pad-name drifts that blocked
-  regeneration entirely (J1 USB-C shield pad `S1`→`SH`; SW1-3 `SW_SPST_PTS645`→
-  `SW_SPST_PTS645Sx43SMTR92`).
+- `examples/voice-buddy`: J1 USB-C was rotated pin-row-**outward** (v1 `rot=270`),
+  putting every USB pad ~0.3 mm past the board edge — the source of ~21
+  copper_edge_clearance violations and every unroutable USB net. Now `rot=90`
+  (pin row inboard) + `edge_clearance=0.3`. Earlier `parts.yaml` drifts (J1 shield
+  pad `S1`→`SH`; SW `SW_SPST_PTS645`→`…Sx43SMTR92`) also fixed.
 
 ### Added
 - **`examples/voice-buddy`** — the first end-to-end worked example across all four
