@@ -104,14 +104,35 @@ define product ─► set contracts ─► each domain builds to its contract �
 ```bash
 # from the product dir (the one with product.yaml):
 python3 ../../skills/vibe-plm/scripts/plm_check.py product.yaml
-#   → manifest sanity + interface-drift gate (errors fail, artifact-pending warns)
+#   → manifest sanity + interface-drift gate + content cross-checks
+#     (errors fail, artifact-pending warns)
 # (no special toolchain — plain python3, stdlib only; uses PyYAML if present)
 ```
 
-`plm_check.py` is **self-contained**: it parses the manifest and stats the contract
+`plm_check.py` is **self-contained**: it parses the manifest and reads the contract
 files; it never imports or shells out to `pcb_check.sh` / `check_fit.py` / a firmware
 build. The domains' own scripts run their own gates; this one only proves the *contracts
 between them* are consistent.
+
+## Content cross-checks (plm_check reads INSIDE the contracts)
+
+Beyond "does every contract file resolve", `plm_check.py` cross-checks contents:
+
+- **pinmap ↔ firmware header** — set `config_header:` in the manifest's `firmware:`
+  block and tag pinmap pins with `define: <NAME>`; the check parses the header's
+  `#define NAME GPIO_NUM_n` lines and **errors** on any pin whose GPIO drifted
+  (warns when a define is missing from the header).
+- **constraints ↔ placement evidence** — declare a `placement` interface (a
+  `placement.json` the pcb generator *exports*); the check compares it against
+  `constraints.yaml`: outline + mount holes exactly, every port/window center
+  within `tolerance_mm` (default 0.5). Contract vs evidence — drift is an error.
+- **GPIO lint** — whenever the pinmap parses: duplicate `gpio:` = error; strapping
+  pins warn unless `strap_ok: true`; SPI-flash / octal-PSRAM pins = error;
+  native-USB pins warn unless the signal/`to:` names usb. Tables are keyed by mcu
+  prefix (esp32-s3 today) — add a row per new MCU.
+
+Schemas + the mapping interface form (`{path: …, kind: artifact}`) are in
+[`references/manifest-and-interfaces.md`](references/manifest-and-interfaces.md).
 
 ## Scaffolding a new product
 
@@ -160,8 +181,8 @@ skill. (A one-command scaffolder is a TODO — see below.)
 
 - [ ] `scripts/plm_init.py` — scaffold `product.yaml` + the three dirs + contract stubs
       in one command (the roadmap's "new-project scaffolds the three dirs").
-- [ ] Deepen `plm_check.py` cross-checks: pinmap signals ↔ the firmware config-as-code,
-      `constraints.yaml` outline ↔ the pcb board outline (read both files, compare).
+- [x] Deepen `plm_check.py` cross-checks — shipped: pinmap ↔ firmware header,
+      constraints ↔ placement evidence, GPIO lint (see "Content cross-checks").
 - [ ] A `references/revisioning.md` — when a change is "cross-domain", changelog format.
 
 ## Keeping this current (living doc)

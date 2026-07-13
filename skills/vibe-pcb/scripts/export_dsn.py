@@ -17,6 +17,10 @@ Env (all optional; defaults shown):
   POWER_NETS="+3V3,GND,VIN" nets routed at the wider width
   SIGNAL_NETS="SDA,SCL"     nets routed at the signal width
   W_POWER=400  W_SIGNAL=300  CLEARANCE=200   (microns)
+
+When the project has a parts.yaml next to the board (the pcblib net source),
+POWER_NETS/SIGNAL_NETS default from it (power_nets: + everything else) so the
+class split needs no hand-typed net list.
 """
 import os, re, sys, pcbnew
 from pcbnew import VECTOR2I, FromMM as MM
@@ -25,10 +29,31 @@ if len(sys.argv) != 3:
     sys.exit(__doc__)
 SRC, DSN = sys.argv[1], sys.argv[2]
 
-def _nets(env, default):
-    return [n.strip() for n in os.environ.get(env, default).split(",") if n.strip()]
-POWER_NETS  = _nets("POWER_NETS",  "+3V3,GND,VIN")
-SIGNAL_NETS = _nets("SIGNAL_NETS", "SDA,SCL")
+def _yaml_nets():
+    """(power, signal) from the project's parts.yaml, or (None, None)."""
+    for cand in ("parts.yaml", os.path.join(os.path.dirname(SRC), "parts.yaml"),
+                 os.path.join(os.path.dirname(SRC), "..", "parts.yaml")):
+        if os.path.isfile(cand):
+            try:
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from pcblib import load_parts
+                p = load_parts(cand)
+                return (p.power_nets or None), (p.signal_nets() or None)
+            except Exception as e:
+                print(f"note: could not read {cand}: {e}")
+                return None, None
+    return None, None
+
+_yp, _ys = _yaml_nets()
+
+def _nets(env, default, from_yaml=None):
+    if env in os.environ:
+        return [n.strip() for n in os.environ[env].split(",") if n.strip()]
+    if from_yaml:
+        return from_yaml
+    return [n.strip() for n in default.split(",") if n.strip()]
+POWER_NETS  = _nets("POWER_NETS",  "+3V3,GND,VIN", _yp)
+SIGNAL_NETS = _nets("SIGNAL_NETS", "SDA,SCL", _ys)
 W_POWER  = int(os.environ.get("W_POWER",  "400"))
 W_SIGNAL = int(os.environ.get("W_SIGNAL", "300"))
 CLEAR    = int(os.environ.get("CLEARANCE", "200"))
@@ -40,19 +65,9 @@ board = pcbnew.LoadBoard(SRC)
 # hold the GND pour out). For the autorouter that is NOT enough -- it needs a real track +
 # via keepout, or it will run front copper / drop vias under the module.
 if BELLY:
-    x0, y0, x1, y1 = (float(v) for v in BELLY.split(","))
-    z = pcbnew.ZONE(board)
-    z.SetLayer(pcbnew.F_Cu)
-    z.SetIsRuleArea(True)
-    z.SetDoNotAllowZoneFills(True)
-    z.SetDoNotAllowTracks(True)
-    z.SetDoNotAllowVias(True)
-    z.SetDoNotAllowPads(False)
-    z.SetDoNotAllowFootprints(False)
-    o = z.Outline(); o.NewOutline()
-    for x, y in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]:
-        o.Append(VECTOR2I(MM(x), MM(y)))
-    board.Add(z)
+    from pcblib.route import _kicad_rule_area   # one zone implementation
+    box = tuple(float(v) for v in BELLY.split(","))
+    _kicad_rule_area(board, box, layers=(pcbnew.F_Cu,), name="belly")
     board.BuildConnectivity()
 
 if not pcbnew.ExportSpecctraDSN(board, DSN):

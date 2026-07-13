@@ -44,31 +44,25 @@ def edge_bbox():
                 xs.append(pcbnew.ToMM(p.x)); ys.append(pcbnew.ToMM(p.y))
     return (min(xs), min(ys), max(xs), max(ys)) if xs else None
 
+# the zone construction lives ONCE, in pcblib.route (PYTHONPATH is set by
+# autoroute.sh; both helpers take sheet-frame mm boxes)
+from pcblib.route import _kicad_rule_area, _kicad_pour
+
 if BELLY:
-    x0, y0, x1, y1 = (float(v) for v in BELLY.split(","))
-    z = pcbnew.ZONE(board); z.SetLayer(pcbnew.F_Cu); z.SetIsRuleArea(True)
-    z.SetDoNotAllowZoneFills(True)
-    for c in (z.SetDoNotAllowPads, z.SetDoNotAllowVias, z.SetDoNotAllowTracks,
-              z.SetDoNotAllowFootprints):
-        c(False)
-    o = z.Outline(); o.NewOutline()
-    for x, y in [(x0,y0),(x1,y0),(x1,y1),(x0,y1)]:
-        o.Append(VECTOR2I(MM(x), MM(y)))
-    board.Add(z)
+    box = tuple(float(v) for v in BELLY.split(","))
+    z = _kicad_rule_area(board, box, layers=(pcbnew.F_Cu,), name="belly")
+    # after routing only the POUR must stay out (copper was router-checked);
+    # keep tracks/vias allowed so DRC doesn't re-flag the imported route
+    z.SetDoNotAllowTracks(False)
+    z.SetDoNotAllowVias(False)
 
 if GND_NET:
     bb = edge_bbox()
     if not bb:
         sys.exit("no Edge.Cuts found -- cannot place GND pour")
-    gx0, gy0, gx1, gy1 = bb
     gc = board.GetNetInfo().GetNetItem(GND_NET).GetNetCode()
     for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
-        z = pcbnew.ZONE(board); z.SetLayer(layer); z.SetNetCode(gc); z.SetAssignedPriority(0)
-        z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)   # solid -- GND already trace-routed
-        o = z.Outline(); o.NewOutline()
-        for x, y in [(gx0,gy0),(gx1,gy0),(gx1,gy1),(gx0,gy1)]:
-            o.Append(VECTOR2I(MM(x), MM(y)))
-        board.Add(z)
+        _kicad_pour(board, layer, gc, bb)
 
 if SILK_FIX_REF:
     for fp in board.GetFootprints():

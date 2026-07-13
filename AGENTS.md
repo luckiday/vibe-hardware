@@ -54,8 +54,10 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
 
 - PLM: `python3 skills/vibe-plm/scripts/plm_check.py <product>/product.yaml` → manifest
   sane + every interface contract resolves (source missing = error, artifact = warn).
-- PCB: `scripts/pcb_check.sh <proj>` → ERC + DRC to 0 errors / 0 unconnected
-  (+ `BELLY_BOX=…` for the module belly keep-out).
+- PCB: `scripts/pcb_check.sh <proj>` → placement scorecard (courtyard/cluster
+  overlaps 0, contract keepouts 0, HPWL tracked) + ERC + DRC to 0 errors /
+  0 unconnected (+ `BELLY_BOX=…` for the module belly keep-out). On kicad-cli < 8
+  the ERC step SKIPs loudly (`PASS*`) — rerun on a ≥ 8 host before fab.
 - CAD: `python check_fit.py` → board↔shell interference must be **0 mm³**.
 - Review with the launchers (`scripts/pcb_view.sh`, `scripts/cad_viewer.sh`) — let them
   pick the port and serve locally; don't hand-pick ports or serve files publicly.
@@ -63,8 +65,12 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
 ## Git
 
 - Work on a branch; PR to `main`. Keep commits scoped to one skill/area.
-- **Never commit** regenerated artifacts (`view/`, `*.glb`, `models/*.stl`), `.venv/`,
-  `node_modules/`, the vendored `.agents/`/`.claude/`, or secrets (Wi-Fi creds / API
+- **Never commit** regenerated artifacts (`view/`, `*.glb`, `models/*.stl`, the
+  `.kicad_*` files — generators + `routing.ses` are the source), `.venv/`,
+  `node_modules/`, the vendored `.agents/`/`.claude/`, or secrets. Exception:
+  cross-domain **contract artifacts** (`board.step`, `placement.json`) and an accepted
+  `routing.ses` are committed at a cut revision — consumers need them without EDA
+  tools installed; review outputs never are (Wi-Fi creds / API
   keys / tokens — load from a gitignored file, commit a `.example`). See `.gitignore`.
 
 ## Always / Never

@@ -10,6 +10,13 @@ has matplotlib + PIL too).
 ## File structure (one model, importable)
 
 ```python
+# 0) CONTRACT — fit numbers IMPORTED from cad/constraints.yaml, never re-typed.
+#    Hand-typing a contract number into the model is a BUG (one number, one place).
+sys.path.insert(0, str(REPO / "skills/vibe-cad/scripts"))
+from cad_contract import load
+C = load(str(HERE / "../cad/constraints.yaml"))
+BOARD_L, BOARD_W = C.outline.l, C.outline.w   # C.port("usb_c"), C.window("display"), …
+
 # 1) PARAM BLOCK — every dimension named; derived values computed from them
 PLATE, WALL = 1.6, 2.4
 CAN_TOP  = PLATE + GAP_CAN + CAN_H        # derived — change CAN_H, this follows
@@ -18,13 +25,19 @@ CAR_BOT  = BRK_TOP + HDR_GAP             # the whole stack re-derives consistent
 # 2) BUILDERS — no side effects (no file writes); return labelled parts
 def build_tray():  ... ; tray.label = "..."; return tray
 def build_cover(): ...
-def build_fit():       return Compound(children=[build_tray(), build_carrier(), build_xiao(), build_thermal()])
+def build_fit():       return Compound(children=list(fit_solids().values()))
 def build_exploded():  ...   # parts lifted along +z to show the stack-up
+
+# 3) FIT DICT — what the shipped check/section tools read. Key prefixes matter:
+#    board*/module*/part* = the real parts; shell*/tray*/cover* = the enclosure.
+def fit_solids():      return {"shell_tray": build_tray(), "shell_cover": build_cover(),
+                               "board": build_board(), "module_xiao": build_xiao()}
 ```
 
-Exports live in a **separate** `build_all.py` so `section.py` / `check_fit.py` /
-the viewer can `import` the builders without writing files. Convention: `z=0` is the
-reference face (e.g. the outer window), `+z` into the part.
+Exports live in a **separate** `build_all.py` so the shipped
+`skills/vibe-cad/scripts/section.py` / `check_fit.py` / the viewer can `import`
+the builders without writing files. Convention: `z=0` is the reference face
+(e.g. the outer window), `+z` into the part.
 
 ## Placement & boolean idioms
 
@@ -90,9 +103,12 @@ re-measure the outline/feature edges off it and re-derive; don't keep the EST.
 
 - **matplotlib mplot3d cannot z-sort overlapping faces** → 3D mesh previews come out
   muddy and unreadable. Use them only for a rough massing glance (`render_views.py`).
-- The **dimensioned X–Z cross-section** (`section.py`, drawn to scale from the param
-  block with matplotlib `Rectangle`/`Polygon` + arrow dims) is the real review view —
-  it shows the stack-up, clearances, and the FOV cone unambiguously.
+- The **dimensioned X–Z cross-section** is the real review view — it shows the
+  stack-up and clearances unambiguously. Run the shipped
+  `skills/vibe-cad/scripts/section.py <model>.py [--y <mm>]` — it slices the
+  *real* `fit_solids()` geometry to outlines (one color per solid), not a
+  param-block cartoon; a model-level `DIMS: dict[label, mm]` prints as a
+  dimension table in the margin.
 - For interactive 3D, use the **CAD Viewer** (`references/cad-viewer.md`), not
   matplotlib.
 - **Boolean-section the `build_fit()` compound** to eyeball internal stack-ups the
@@ -111,18 +127,16 @@ re-measure the outline/feature edges off it and re-derive; don't keep the EST.
 
 ## Interference check (don't eyeball it)
 
-`check_fit.py` boolean-intersects every placed board/module against each shell part
-and sums the volume — **expect 0 mm³**. Coincident design faces (a board resting on
-a boss) intersect to zero, so a tolerance of ~1 mm³ separates "touching" from a real
-clash. Re-run after every param change; it's the only certain "the board doesn't
-cross the wall" answer.
-
-```python
-for sp in part.solids():
-    for sh in shell.solids():
-        inter = sh & sp
-        if inter: v += sum(s.volume for s in inter.solids())
-```
+The shipped `skills/vibe-cad/scripts/check_fit.py <model>.py [--tol-mm3 0.001]`
+boolean-intersects (`&`) every placed board/module against each shell part from
+the model's `fit_solids()` dict and prints a per-pair volume table — **expect
+0 mm³** (exit 2 on clash). Pairs come from the key prefixes
+(`board*/module*/part*/speaker*/oled*` × `shell*/tray*/cover*/case*/baffle*`),
+or define `FIT_PAIRS = [("board", "shell_tray"), …]` to pin them. Coincident
+design faces (a board resting on a boss) intersect to ~zero, so the tolerance
+separates "touching" from a real clash — raise it toward ~1 mm³ if coincident
+faces leave numeric slivers. Re-run after every param change; it's the only
+certain "the board doesn't cross the wall" answer.
 
 ## Design-for-fabrication gotchas (caught this session)
 
@@ -157,6 +171,16 @@ for sp in part.solids():
   protruding into a cavity prints with a steep curved overhang and is sink-prone in
   tooling. Make the solid backing a **cuboid** merged into a wall; keep only the bore
   round.
+- **Heat-set insert bosses: pilot bore per the insert maker, ≥1.6 mm wall, ~1 mm
+  melt relief.** Bore = the manufacturer's pilot diameter (≈ insert OD − 0.3–0.5 mm),
+  *not* the thread size; thinner than 1.6 mm wall splits when the insert melts in;
+  the extra bore depth gives displaced plastic and the screw tip somewhere to go.
+  `patterns.heat_set_boss(insert_d, insert_l)` builds it (cuboid body, round bore,
+  base at z=0 — union onto the wall).
+- **Don't re-derive computed geometry per model** — `skills/vibe-cad/scripts/patterns.py`
+  ships the recurring ones: `holes_in_circle` (hex-packed grille centers, asserts the
+  open-area ratio so a vent/speaker requirement fails loudly) and `usb_funnel` (the
+  conforming throat→mouth port cutter from `usb-connector-cutouts.md`).
 - **Continuous chamfer across a seam.** Two-part shells look misaligned if the tray's
   outer verticals are chamfered but the cover's aren't — give **both** the same
   vertical chamfer so the closed-box silhouette is continuous.

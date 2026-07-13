@@ -31,7 +31,7 @@ pins:
   # display — ST7789P3
   - { signal: LCD_MOSI, gpio: GPIO39, dir: out, to: display }
   - { signal: LCD_SCLK, gpio: GPIO40, dir: out, to: display }
-  - { signal: LCD_DC,   gpio: GPIO45, dir: out, to: display, notes: "RS" }
+  - { signal: LCD_DC,   gpio: GPIO45, dir: out, to: display, strap_ok: true, notes: "RS; VDD_SPI strap — display output only, safe post-boot" }
   - { signal: LCD_CS,   gpio: GPIO41, dir: out, to: display }
   - { signal: LCD_RST,  gpio: GPIO21, dir: out, to: display }
   - { signal: LCD_BL,   gpio: GPIO38, dir: out, to: display, notes: "backlight" }
@@ -39,7 +39,7 @@ pins:
   - { signal: BTN_A, gpio: GPIO11, dir: in, to: button, notes: "KEY1 front — ACK/silence" }
   - { signal: BTN_B, gpio: GPIO12, dir: in, to: button, notes: "KEY2 side" }
   # IR (RMT peripheral)
-  - { signal: IR_TX, gpio: GPIO46, dir: out, to: ir_led }
+  - { signal: IR_TX, gpio: GPIO46, dir: out, to: ir_led, strap_ok: true, notes: "boot-mode strap — output only, safe post-boot" }
   - { signal: IR_RX, gpio: GPIO42, dir: in,  to: ir_rx }
   # Grove HY2.0-4P
   - { signal: GROVE_A, gpio: GPIO9,  dir: io, to: grove, notes: "yellow" }

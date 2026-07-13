@@ -43,3 +43,11 @@ build/
 # Reference clones (study material, not ours to commit)
 examples/*/reference/
 docs/references/_clones/
+
+# Autoroute working dir + stage boards (sources: gen_*.py / routing.ses)
+**/autoroute-work/
+*.dsn
+*.place.kicad_pcb
+*.floorplan.kicad_pcb
+*-erc.rpt
+*-drc.rpt
