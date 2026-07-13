@@ -64,19 +64,22 @@ spec + fit numbers ─► model ─► review ─► fit-check ─► export
                        block     section.py                 (+ GLB sidecar)
 ```
 
-1. **Spec** — take the fit numbers from the board's brief (`vibe-pcb`
-   §enclosure-interlock): board outline, mount-hole spacing, stack height, USB
-   exit, aperture/FOV clearances, antenna placement. One set of numbers shared
-   across board + shell.
+1. **Spec** — the fit numbers live in the product's `cad/constraints.yaml`
+   (the cad↔pcb contract): board outline, mount-hole spacing, stack height, USB
+   exit, aperture/FOV clearances, antenna placement. The model **imports** them
+   via `scripts/cad_contract.py` (`C = load("../cad/constraints.yaml");
+   C.outline.l; C.port("usb_c")`) — **hand-typing a contract number into the
+   model is a bug**; one number, one place, both sides move together.
 2. **Model** — write/edit the param block + builders. For a module swap, usually
    only the param block + the affected `build_*` change.
 3. **Review** — `python build_all.py` (exports STEP + STL + the GLB sidecars),
    then open the **CAD Viewer** (`scripts/cad_viewer.sh <models-dir>`). For a
-   dimensioned read, `section.py` draws a labelled X–Z cross-section — that's the
-   primary review view (matplotlib 3D can't z-sort, so it's muddy; use the Viewer
-   for 3D, the section for measurements).
-4. **Fit-check** — `check_fit.py` boolean-intersects every real board/module
-   against the shell; expect **0 mm³**. Re-run after any param change.
+   dimensioned read, `scripts/section.py <model>.py` draws a labelled X–Z
+   cross-section — that's the primary review view (matplotlib 3D can't z-sort,
+   so it's muddy; use the Viewer for 3D, the section for measurements).
+4. **Fit-check** — `scripts/check_fit.py <model>.py` boolean-intersects every
+   real board/module against the shell (via the model's `fit_solids()` dict);
+   expect **0 mm³**. Re-run after any param change.
 5. **Export** — `build_all.py` writes `models/*.step` (+ `*.stl` for printing, +
    the hidden `.<name>.step.glb` the Viewer needs). Print orientation and any
    tooling caveats (sink, draft) go in the README.
@@ -84,10 +87,11 @@ spec + fit numbers ─► model ─► review ─► fit-check ─► export
 ## Run it
 
 ```bash
-PY=.venv/bin/python   # build123d 0.10, py3.12
-$PY build_all.py            # export STEP + STL + GLB sidecars  (run in the model dir)
-$PY section.py              # dimensioned X–Z cross-section PNG
-$PY check_fit.py            # board↔shell interference (expect 0 mm³)
+PY=.venv/bin/python           # build123d venv (has matplotlib)
+SK=skills/vibe-cad/scripts    # the shipped tools — don't write per-project copies
+$PY build_all.py                          # export STEP + STL + GLB sidecars  (run in the model dir)
+$PY $SK/section.py <model>.py [--y 15]    # X–Z cross-section PNG (+ DIMS table)
+$PY $SK/check_fit.py <model>.py           # board↔shell interference (expect 0 mm³; exit 2 on clash)
 
 # review in the latest CAD Viewer (handles install/update + the launch gotchas):
 skills/vibe-cad/scripts/cad_viewer.sh <abs-models-dir>   # prints the URL
@@ -120,15 +124,27 @@ every time — `cad_viewer.sh` and the reference handle them:
 
 ```
 hardware/<line>/structure-<name>/
-  <name>.py            # the model: param block + build_*() builders (edit this)
+  <name>.py            # the model: param block + build_*() builders + fit_solids() (edit this)
   build_all.py         # export STEP + STL + GLB sidecars → models/
-  section.py           # dimensioned X–Z cross-section (the measurement view)
-  check_fit.py         # board/module ↔ shell interference check
   render_views.py      # rough matplotlib previews (use the Viewer for real review)
   README.md            # decisions, stack-up/assembly, print orientation, EST flags
   models/              # *.step (tracked) + *.stl/.glb (gitignored, regenerated)
   .gitignore           # .venv/ __pycache__/ models/*.stl models/.*.glb
 ```
+
+The check/section/contract tools are **shipped** in `skills/vibe-cad/scripts/` —
+run those, don't write per-project copies:
+
+- `cad_contract.py` — `cad/constraints.yaml` → typed params:
+  `C = load("../cad/constraints.yaml"); C.outline.l; C.port("usb_c"); C.offboard["speaker"]`
+- `check_fit.py <model>.py [--tol-mm3 0.001]` — interference gate over the model's
+  `fit_solids() -> dict` (keys `board*/module*/part*` vs `shell*/tray*/cover*`,
+  or an explicit `FIT_PAIRS`); exit 2 on clash.
+- `section.py <model>.py [--y <mm>] [--out section.png]` — X–Z section outlines of
+  `fit_solids()`, one color per solid; a model-level `DIMS` dict prints as a table.
+- `patterns.py` — importable computed geometry: `holes_in_circle` (hex grille +
+  open-ratio assert), `heat_set_boss` / `boss` (insert boss DfM), `usb_funnel`
+  (the conforming throat→mouth port cutter).
 
 Off-the-shelf parts (servos, standoffs, the module itself) come from the
 **`step-parts`** catalog instead of being modeled.

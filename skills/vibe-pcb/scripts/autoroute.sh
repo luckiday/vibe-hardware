@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
-# Headless autoroute for a vibe-pcb board: replace the hand-coded trk()/via() lists in
-# gen_pcb.py P5 with freerouting, keeping every gate. See references/autorouting.md.
+# Headless autoroute for a vibe-pcb board: replace scripted route.wire() lists in
+# gen_pcb.py with freerouting, keeping every gate. See references/autorouting.md.
 #
 #   gen_pcb STAGE=place  ->  export_dsn.py (belly keepout + per-net widths)
-#     ->  freerouting 2.2.x (-de/-do)  ->  import_ses.py (GND solid pour + silk fix)
-#     ->  pcb_check.sh (ERC/DRC + belly)
+#     ->  freerouting (-de/-do)  ->  import_ses.py (GND solid pour + silk fix)
+#     ->  DRC + belly gate
 #
 # Run from the project's kicad/ dir (the one with gen_sch.py / gen_pcb.py):
 #   FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
 #   BELLY_BOX="94,91,115,109" scripts/autoroute.sh <proj>
 #
-# Prereqs (NOT vendored): a freerouting 2.2.x jar (needs JDK 21+; 2.2.4 needs JDK 25) and
-# a gen_pcb.py that supports STAGE=place (placement + nets + outline, no copper).
+# Accepting the result: copy the .ses next to the generator as routing.ses and
+# commit it — gen_pcb.py's full stage replays it (pcblib.route.apply_ses), so the
+# routed board regenerates from committed sources on any machine.
+#
+# Prereqs (NOT vendored): a freerouting jar (2.1.x runs on JDK 21; 2.2.4 needs
+# JDK 25) and a gen_pcb.py with STAGE=place (placement + nets, no copper).
 set -eu
 
 PROJ="${1:?usage: autoroute.sh <proj-basename>   (run in the project kicad/ dir)}"
-S="$(cd "$(dirname "$0")" && pwd)"
-KC="/Applications/KiCad/KiCad.app/Contents"
-PY="${KICAD_PY:-$KC/Frameworks/Python.framework/Versions/3.9/bin/python3}"
-CLI="${KICAD_CLI:-$KC/MacOS/kicad-cli}"
+. "$(dirname "$0")/_kicad_env.sh"
+S="$_VS"
 JAVA="${JAVA:-java}"
-FR_JAR="${FREEROUTING_JAR:?set FREEROUTING_JAR to a freerouting 2.2.x jar}"
+FR_JAR="${FREEROUTING_JAR:?set FREEROUTING_JAR to a freerouting jar}"
 WORK="$(pwd)/autoroute-work"; mkdir -p "$WORK"
 [ -f gen_pcb.py ] || { echo "run me from the project kicad/ dir (no gen_pcb.py here)"; exit 1; }
 
@@ -43,11 +45,16 @@ ROUTED="$WORK/$PROJ.routed.kicad_pcb"
 "$PY" "$S/import_ses.py" "$PLACE" "$WORK/$PROJ.ses" "$ROUTED"
 
 echo "-> 5. gates: DRC + belly"
-"$CLI" pcb drc --refill-zones "$ROUTED" -o "$WORK/$PROJ-drc.rpt" >/dev/null
+if cli_has pcb drc; then
+  "$CLI" pcb drc --refill-zones "$ROUTED" -o "$WORK/$PROJ-drc.rpt" >/dev/null
+else
+  "$PY" "$S/drc_report.py" "$ROUTED" "$WORK/$PROJ-drc.rpt" >/dev/null
+fi
 echo "   DRC errors   : $(grep -cE '; *error' "$WORK/$PROJ-drc.rpt" || true)"
 echo "   DRC warnings : $(grep -cE '; *warning' "$WORK/$PROJ-drc.rpt" || true)"
 grep -E "Found [0-9]+ (unconnected|Footprint)" "$WORK/$PROJ-drc.rpt" | sed 's/^/   /'
 if [ -n "${BELLY_BOX:-}" ]; then
   "$PY" "$S/belly_check.py" "$ROUTED" $(echo "$BELLY_BOX" | tr ',' ' ')
 fi
-echo "done -> $ROUTED   (review, then fold the routing into gen_pcb.py / accept this board)"
+echo "done -> $ROUTED"
+echo "accept: cp $WORK/$PROJ.ses routing.ses   (then gen_pcb.py full replays it; commit routing.ses)"

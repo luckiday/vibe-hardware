@@ -2,7 +2,7 @@
 
 The hard-won part. These are the mistakes a module-carrier board makes every time
 and the gates that catch them. Sourced from the xiao-carrier (example) review
-(`pcb-xiao-tile/kicad/REVIEW.md`).
+(the per-project `kicad/REVIEW.md`).
 
 ## Validation gates (drive every board through these)
 
@@ -24,6 +24,14 @@ Gate on **error-severity + unconnected**; warnings (silk text height, edge clip,
 non-mirrored back text) are cosmetic and never block a fab — clean them for tidiness,
 not correctness. (Counting total violations as the fail metric false-failed a clean
 board on 10 silk warnings — `pcb_check.sh` now splits the two.)
+
+**Verify the gate parser against the actual report format before trusting a 0.**
+kicad-cli ends violation lines with `; error`, but pcbnew's `WriteDRCReport` (the
+KiCad-7 fallback) writes GUI-style `Severity: error` lines — a grep for the former
+read **444 real violations as zero** on the voice-buddy board, and two routing
+sessions built copper on top of phantom-clean DRC. `drc_report.py` now normalizes
+its output to match; if you ever add another report source, run one DELIBERATE
+short through it first and watch the number move.
 
 **But treat a DRC *error* as real until proven otherwise.** On xiao-carrier (example) the DRC
 flagged a trace crossing another net on the same layer — a true short, not noise. Fix
@@ -88,67 +96,47 @@ worked on xiao-carrier (example):
 ## Layered layout & the feedback loop (beating "③ place & route")
 
 The model is weak at one-shot absolute-coordinate geometry — it thinks in **relations**,
-but `place(x,y)` / `trk([…])` throw the relations away and keep only the numbers, so layouts
-are brittle and look amateur. Don't auto-solve ③; **change the representation + close a
-visual loop** (full rationale in SKILL.md → *Layered layout*). Three moves:
+but raw `place(x,y)` / point lists throw the relations away and keep only the numbers, so
+layouts are brittle and look amateur. Don't auto-solve ③; **change the representation +
+close a visual loop**. All of this is SHIPPED CODE now — `scripts/pcblib/` — proven on
+`examples/voice-buddy/pcb/kicad/gen_pcb.py` (the worked generator). Three moves:
 
-**1 — Clusters as first-class objects: a TWO-LEVEL floorplan.** Split layout into a
-**macro** level (where each block sits) and a **micro** level (parts within a block):
+**1 — Clusters as first-class objects: a TWO-LEVEL floorplan** (`pcblib.Cluster`).
+- **MACRO** — `Cluster(brd, "AUDIO", (16, 30))`: the origin is the ONLY tuned number;
+  move it (or `MOVE="AUDIO:-2,3"` env, coarse stages only) and every member follows.
+- **MICRO** — members placed by `cl.place(..., at=(dx,dy))` slots or, better, by
+  relations off real courtyards: `beside(u5, c4, side="right", gap=0.7)`,
+  `align_pads(ic, "8", cap, "1")`, `row([...])`, `at_edge(brd, j1, "usb_c")` (the
+  port x/y comes from `constraints.yaml`, never a literal).
+- `cluster.bbox()` derives from member courtyards — true block sizes to pack against.
+- `Cluster(..., pinned=True)` for groups whose members sit at CONTRACT positions
+  (panel buttons, edge connectors): they aren't free-floating blocks, so they skip the
+  cluster-overlap gate; the courtyard gate still covers their real collisions.
 
-- **MACRO** — each cluster has an *origin*; you arrange the coarse layout by moving whole
-  blocks. Move a cluster as a **unit** by editing ONE origin line — every member part *and*
-  the cluster's box follow together. This is the coarse step you do first.
-- **MICRO** — a part's home is `cluster.at(dx,dy)`: a slot *relative to the origin*.
-- **The box is AUTO-derived from the members' real geometry** (pad extents), not guessed —
-  so the coarse stage shows true block sizes to pack against. Origins can be chosen to
-  reproduce an already-routed board's coords exactly → adopting this **moves nothing**
-  (DRC stays 0/0/0); the win is the relations live in the source and blocks move as one.
+**2 — Stage the generator; render the skeleton; read it back.** `gen_pcb.py` honors
+`STAGE=floorplan|place|full` (see the voice-buddy generator's exact shape) and
+`scripts/pcb_skeleton.sh <proj> <stage>` renders each stage to a PDF+PNG you READ.
+The loop: floorplan → read → nudge origins → place → read → route → full → read.
+Perception-in-the-loop, not one blind shot.
 
-```python
-class Cluster:
-    all = {}
-    def __init__(self, name, ox, oy): self.name,self.ox,self.oy,self.members = name,ox,oy,[]; Cluster.all[name]=self
-    def at(self, dx, dy): return (self.ox+dx, self.oy+dy)      # MICRO slot, relative to origin
-    def add(self, fp): self.members.append(fp); return fp      # register part -> auto box + face
-    def box(self, pad=0.3): ...                                # real bbox from member pad extents
-PWR = Cluster("PWR", CX, CY)                                   # MACRO origin (move this -> all follow)
-PWR.add(place(..., *PWR.at(-7,+3), 90, {...}, flip=True))     # C1 = origin + slot
-```
+**3 — Numeric gates (`pcblib.gates.scorecard`), printed on every regen.** Hard fails:
+**courtyard overlaps** (same-face body boxes intersect), **cluster overlaps** (MACRO
+boxes collide), **keepout violations** (parts/copper inside a contract keepout —
+generalizes the belly check; `keepout_allow=("U1",)` exempts the RF module from its
+own antenna strip). Tracked, not gated: **HPWL** (half-perimeter wirelength, the
+placement-quality proxy — watch it move when you `MOVE=` a cluster). A generator that
+fails its own scorecard exits nonzero, so `pcb_check.sh` stops before copper.
+Two implementation gotchas encoded in `pcblib.layout.Part.courtyard()`: antenna
+modules draw their far-field clearance on F.CrtYd (the WROOM's spans ±24 mm — gate on
+the body box, keep the antenna rule as a contract keepout), and KiCad 7's
+`GetCourtyard()` is empty off-board (`BuildCourtyardCaches()` segfaults there).
 
-The coarse→fine loop is then: in `STAGE=floorplan` read the **box sizes** printed per
-cluster (`box PWR[B] 9.5 x 9.6 mm @ origin (100,100)`) and the rendered boxes, **nudge
-origins to pack the blocks** (whole clusters move), watch the macro gate, then place + route.
-`MOVE="NAME:dx,dy"` (coarse stages only — never the routed full board) A/Bs a macro move
-without editing code, so you can feel the HPWL change before committing.
-
-**2 — Stage the generator; render the skeleton; read it back.** Gate `gen_pcb.py` on a
-`STAGE` env so it can stop early and emit a *skeleton* image for the model to read before any
-copper is committed:
-
-```python
-STAGE = os.environ.get("STAGE", "full")     # floorplan | place | full
-… place footprints …
-if STAGE == "floorplan": draw_cluster_boxes(); board.Save(out); sys.exit()   # boxes+labels only
-… (ratsnest is automatic from net assignment) …
-if STAGE == "place":     board.Save(out); sys.exit()                          # parts+courtyards+ratsnest, NO trk/via
-… trk()/via() copper …                                                       # full
-```
-
-Render each stage headless and **look at it**: `kicad-cli pcb render … --side top` (or the
-2D plot for ratsnest/courtyards), then read the PNG. `scripts/pcb_skeleton.sh <proj> <stage>`
-wraps this. The loop is: render floorplan → read → fix placement → render place → read →
-route → render full → read. Perception-in-the-loop, not one blind shot.
-
-**3 — Cheap numeric gates, MACRO + micro (no render needed).** Fail fast on bad placement,
-in `pcbnew`, in milliseconds — print on every regen:
-- **MACRO: same-face cluster-box overlap** — do any two clusters' auto-boxes intersect on
-  the same face? The coarse-floorplan check; arrange origins until it's empty before you even
-  place parts. (Face-aware: passives on B *under* the MCU on F don't count.)
-- **micro: pad-extent overlap** (two same-face footprints' pads intersect → parts collide)
-  and **HPWL** (half-perimeter wirelength — sum each net's pad-bbox half-perimeter; the
-  classic placement-quality proxy; minimise before routing — watch it rise when a `MOVE`
-  worsens the layout). (`ratsnest total length` from `board.GetConnectivity()` is an
-  equivalent proxy if you prefer the air-wire sum.)
+**4 — Placement serves routing: reserve channels.** Before routing, name the bus
+channels in comments and keep support passives OUT of them (voice-buddy keeps
+x≈9.5–13.5 clear for the I²S/I²C trunks down both codecs' left flanks; ref/bias caps
+live in one row above the codec instead of scattered around it). A route that fights
+means a part should move — placement is cheaper than copper. QFN 0.4 mm pitch: 0.2 mm
+stubs, straight out of the pad row, bend ≥0.5 mm away.
 
 **Routing half — freerouting is a real CLI, but the naive `kicad-cli … specctra` form is a
 hallucination.** Placement has no auto tool (→ the loop above); routing you hand to freerouting.
@@ -158,8 +146,13 @@ ones that cost real time: `kicad-cli` has **no** Specctra subcommand (go through
 `ExportSpecctraDSN`/`ImportSpecctraSES`); the freerouting version ↔ JRE ↔ display pick is a trap
 (1.9.0 plain on a workstation vs 2.x + JDK 25 for headless CI); the belly keep-out must block
 **tracks**, not just zone fills, or the router lays F.Cu under the module; and the `.ses` saves
-~10 s *after* "completed". For a handful of nets keep scripted `trk` if you prefer. Either way the
-model's job is to **read the routed render and accept/reject**, not to place copper blind.
+~10 s *after* "completed". **Accept a route by committing the `.ses` as `routing.ses`** —
+`pcblib.route.apply_ses` replays it in the full stage, so the routed board regenerates from
+committed sources. When no JRE/jar is available, route by script with the pad-anchored
+vocabulary (`wire(brd, net, [a.pad(3), b.pad(1)], bend="x")` / `via` / `path` — endpoints are
+pad lookups, waypoints relative; GND via `gnd_pours()` + stitching, never point-to-point) as
+voice-buddy's `routing.py` does. Either way the model's job is to **read the routed render and
+DRC report and accept/reject**, not to place copper blind.
 
 **Read routing per layer — the copper plot is the review of record.** The 3D render hides
 copper under soldermask, so a 2D **per-net, per-layer** plot (one colour per net, F.Cu | B.Cu

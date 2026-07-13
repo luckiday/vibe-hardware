@@ -16,6 +16,7 @@ firmware:
   dir: firmware/                 # path (relative to product.yaml) — checked to exist
   status: stub                   # stub | wip | clean | released   (informational)
   toolchain: TBD                 # optional — e.g. esp-idf (pinned tag) / platformio
+  config_header: firmware/main/board_pins.h   # optional — enables the pinmap↔header cross-check
 pcb:
   dir: pcb/
   status: stub
@@ -30,11 +31,18 @@ interfaces:
   pinmap: pcb/pinmap.yaml
   board_step: pcb/board.step
   enclosure_constraints: cad/constraints.yaml
+  # mapping form — when the extension would misclassify (a GENERATED .json
+  # would otherwise be "source" and hard-fail before first generation):
+  placement: { path: pcb/placement.json, kind: artifact }
 ```
 
-`plm_check.py` requires `product` + `revision`, checks each domain `dir:` exists, and
-resolves every `interfaces:` path. `status`/`gate`/`toolchain` are informational (not
-gated) — they're the human-readable state of each domain.
+An interface is either a plain path (classified by extension, below) or the mapping
+form `{path: <p>, kind: source|artifact}` — an explicit `kind:` overrides the
+extension. `plm_check.py` requires `product` + `revision`, checks each domain `dir:`
+exists, resolves every `interfaces:` path, and then runs the content cross-checks
+(pinmap↔header, constraints↔placement, GPIO lint — see each contract below).
+`status`/`gate`/`toolchain` are informational (not gated) — they're the human-readable
+state of each domain.
 
 ## Why these three contracts (and only these)
 
@@ -58,7 +66,16 @@ config-as-code header is generated from / checked against it). A swapped sensor 
 edit here → both the board net and the firmware pin/address move.
 
 Shape (see the pager-buddy stub): `mcu`, a `bus:` block (i2c/spi speeds + addresses),
-and a `pins:` list of `{ signal, gpio, dir, net, to, [pull] }`.
+and a `pins:` list of `{ signal, gpio, dir, net, to, [pull] }`. Two optional per-pin
+keys feed `plm_check`'s cross-checks:
+
+- `define: <NAME>` — the `#define` this pin becomes in the firmware config header
+  (named by the manifest's `firmware.config_header:`). The check errors when the
+  header's `NAME` resolves to a different GPIO than the pin's `gpio:`.
+- `strap_ok: true` — "yes, I know this is a strapping pin" — silences the GPIO
+  lint's strapping-pin warning. The lint also errors on duplicate `gpio:` and on
+  flash/PSRAM-reserved pins, and warns on the native-USB pair unless the
+  signal/`to:` mentions usb (tables keyed by mcu prefix; esp32-s3 today).
 
 ### 2. `board_step` — pcb → cad  (`pcb/board.step`, **generated artifact**)
 
@@ -88,9 +105,32 @@ the real `cad/tray.step`, or the cad fit-check importing `pcb/board.step`.
 > the cross-check: a visual clash = a real number to reconcile *here*. See `vibe-pcb`
 > `references/fab-and-3d.md` → "Drive the reference models from the shared contract".
 
+### 4 (optional). `placement` — pcb evidence  (`pcb/placement.json`, artifact)
+
+Where the pcb generator *actually put* the fit-critical items: the **generator exports
+`placement.json` as EVIDENCE; plm compares contract vs evidence**. Declare it with the
+mapping form (`{path: pcb/placement.json, kind: artifact}` — it's generated, so it may
+not exist yet) and, once it does, `plm_check` compares it against `constraints.yaml`:
+outline `l/w/t/corner_r` and mount-hole dia/positions **exactly** (mismatch = error),
+and each `ports.*` / `windows.*` center against the matching item (by `kind`, else by
+`ref`; no match = "not evidenced" warn) within the constraints' top-level
+`tolerance_mm` (default 0.5; drift beyond = error). Shape:
+
+```json
+{"product": "...", "revision": "...",
+ "frame": "board mm, origin bottom-left viewed from front, +y up",
+ "outline": {"l": 70.0, "w": 70.0, "t": 1.6, "corner_r": 3.0},
+ "mount_holes": {"dia": 2.7, "positions": [[4,4],[66,4],[4,66],[66,66]]},
+ "items": [{"ref": "J1", "kind": "usb_c", "center": [70.0, 12.0], "w": 9.2, "h": 3.4}]}
+```
+
+(Port centers derive from the constraints: edge `±X` → `(edge_x, center_y)`, edge
+`±Y` → `(center_x, edge_y)`; a window's `x,y` IS its center.)
+
 ## Source vs artifact (how `plm_check` treats a contract)
 
-The check classifies a contract by file extension:
+Without an explicit `kind:` (mapping form, above), the check classifies a contract by
+file extension:
 
 - **source** (`.yaml .yml .json .md .toml .csv`) → **must exist** (missing = error).
   These are hand-maintained / committed contracts.
@@ -133,6 +173,8 @@ lessons (learned wiring it over HTTP, then BLE) generalize:
 - A contract has **one producer**. Only the producer regenerates it; the consumer reads.
 - When a contract changes in a way the other side sees, **bump `revision`** in
   `product.yaml`. That's the signal the consumer must re-pull / rebuild.
-- The deeper cross-checks (pinmap signals vs the firmware config; constraints outline vs
-  the actual pcb outline) are a `plm_check` TODO — for now keep them aligned by hand and
-  cite the contract file from each domain's source (the brief already does this).
+- The deeper cross-checks are **shipped** in `plm_check`: pinmap `define:` keys vs the
+  `firmware.config_header:`, constraints vs the pcb's exported `placement.json`
+  evidence, and the GPIO lint. Opt in by adding the header path, the `define:` keys,
+  and the `placement` interface — and still cite the contract file from each domain's
+  source (the brief already does this).
