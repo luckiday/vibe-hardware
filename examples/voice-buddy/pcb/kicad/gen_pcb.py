@@ -30,7 +30,7 @@ import pcbnew
 from pcblib import (load_constraints, load_parts, load_pinmap, Board, Cluster,
                     place, beside, align_pads, row, at_edge, apply_move_env,
                     scorecard, export_placement, draw_cluster_boxes,
-                    wire, via, gnd_pours)
+                    wire, via, gnd_pours, apply_ses)
 import gen_footprints
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,8 +44,14 @@ C = load_constraints("../../cad/constraints.yaml")
 P = load_parts("../parts.yaml")
 PM = load_pinmap("../pinmap.yaml")
 
+# 4-layer board (F/In1/In2/B, all signal-routable). The dual-codec audio bus
+# (I2S ×5 + I2C) plus the analog mic nets do not fit on 2 layers — the freerouting
+# autoroute stalled at ~58 unrouted. Two extra routing layers clear it. (Inner GND/
+# power *planes* were tried first but freerouting 2.x won't fanout SMD pads to a
+# power plane, so the inner layers carry routed copper; GND is poured F+B.)
 pcb = pcbnew.NewBoard("voicebuddy.kicad_pcb")
-brd = Board(pcb, C)
+brd = Board(pcb, C, copper_layers=4, min_track=0.15, min_clearance=0.15,
+            min_hole=0.2)   # 0.2mm reaches the WROOM belly-via drill (JLC-capable)
 
 
 def put(cl, lib_name, ref, **kw):
@@ -204,11 +210,20 @@ if fails:
     sys.exit(f"placement gate failed ({fails}) — fix before routing")
 
 # ============================ copper ============================
-import routing
-routing.route(brd, dict(u1=u1, u2=u2, u3=u3, u4=u4, u5=u5, u6=u6,
-                        j1=j1, j2=j2, j3=j3, sw1=sw1, sw2=sw2, sw3=sw3, d1=d1,
-                        **{k.lower(): v for k, v in brd.parts.items()
-                           if k[0] in "RCF" or k.startswith("MK")}))
+# Primary path: replay the accepted freerouting session (pcb/routing.ses) so the
+# routed board regenerates from committed sources. Fall back to the scripted
+# routes only if no session is committed yet (see autoroute.sh's accept step).
+_ses = os.path.join(HERE, "..", "routing.ses")
+if os.path.isfile(_ses):
+    apply_ses(brd, _ses)
+    print("routed by freerouting session replay (routing.ses)")
+else:
+    import routing
+    routing.route(brd, dict(u1=u1, u2=u2, u3=u3, u4=u4, u5=u5, u6=u6,
+                            j1=j1, j2=j2, j3=j3, sw1=sw1, sw2=sw2, sw3=sw3, d1=d1,
+                            **{k.lower(): v for k, v in brd.parts.items()
+                               if k[0] in "RCF" or k.startswith("MK")}))
+    print("routed by scripted routing.py (no routing.ses committed)")
 gnd_pours(brd)
 brd.save("voicebuddy.kicad_pcb")
 print("wrote voicebuddy.kicad_pcb")

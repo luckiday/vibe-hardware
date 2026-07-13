@@ -71,7 +71,9 @@ def _find_pretty(lib: str) -> str:
 class Board:
     """The board frame + everything drawn from the cad<->pcb contract."""
 
-    def __init__(self, pcb: "pcbnew.BOARD", constraints, origin=(100.0, 100.0)):
+    def __init__(self, pcb: "pcbnew.BOARD", constraints, origin=(100.0, 100.0),
+                 copper_layers: int = 2, min_track: float = 0.2,
+                 min_clearance: float = 0.2, min_hole: float = 0.3):
         self.pcb = pcb
         self.c = constraints
         self.ox, self.oy = origin           # KiCad-sheet mm of the board's TOP-left
@@ -79,9 +81,52 @@ class Board:
         self.W = constraints.outline_w      # y extent, mm
         self.parts: dict = {}
         self._nets: dict = {}
+        self.copper_layers = copper_layers
+        self._set_stackup(copper_layers)
+        self._set_design_rules(min_track, min_clearance, min_hole)
         self._draw_outline()
         self._draw_mount_holes()
         self._draw_keepouts()
+
+    def _set_design_rules(self, min_track: float, min_clearance: float,
+                          min_hole: float = 0.3):
+        """Board-wide min track width + clearance + through-hole drill (mm).
+        Fine-pitch parts (0.4mm QFN) need ~0.15mm track/clearance to fan out their
+        pads; modules with a stitched thermal pad (ESP32-S3-WROOM-1) ship 0.2mm
+        belly vias, so min_hole must reach 0.2mm or DRC flags the stock footprint.
+        Kept within JLCPCB standard capability."""
+        ds = self.pcb.GetDesignSettings()
+        ds.m_TrackMinWidth = MM(min_track)
+        ds.m_MinClearance = MM(min_clearance)
+        ds.m_MinThroughDrill = MM(min_hole)
+        # DRC enforces the (default) netclass clearance/width, not just m_MinClearance
+        # — set it too, or narrow routes flag against the stock 0.2mm netclass.
+        nc = ds.m_NetSettings.GetDefaultNetclass()
+        nc.SetClearance(MM(min_clearance))
+        nc.SetTrackWidth(MM(min_track))
+
+    def _set_stackup(self, n: int):
+        """Enable an n-layer copper stack (2 or 4). For 4-layer boards the two
+        inner layers (In1.Cu / In2.Cu) become power/GND planes — pour them with
+        route.plane_pours(). Antenna/belly keepouts (see _draw_keepouts) then
+        pull every copper layer back, inner planes included."""
+        if n <= 2:
+            return
+        if n not in (4,):
+            raise ValueError(f"copper_layers={n}: only 2 or 4 supported")
+        self.pcb.SetCopperLayerCount(n)
+        enabled = self.pcb.GetEnabledLayers()
+        for lyr in self._inner_copper():
+            enabled.AddLayer(lyr)
+        self.pcb.SetEnabledLayers(enabled)
+
+    def _inner_copper(self) -> list:
+        """The inner copper layer ids for the current stack (empty on 2-layer)."""
+        return [pcbnew.In1_Cu, pcbnew.In2_Cu][: max(0, self.copper_layers - 2)]
+
+    def _copper_layers(self) -> list:
+        """Every enabled copper layer id (F, inner…, B)."""
+        return [pcbnew.F_Cu, *self._inner_copper(), pcbnew.B_Cu]
 
     # --- frame mapping: the ONE place the y-flip lives ---
     def xy(self, x: float, y: float) -> VECTOR2I:
@@ -156,15 +201,17 @@ class Board:
                                | pcbnew.FP_EXCLUDE_FROM_POS_FILES)
 
     def _draw_keepouts(self):
-        """Structured contract keepouts -> copper rule areas on F+B (no tracks,
-        vias, or fills). DRC enforces them; gates.keepout_violations re-checks."""
+        """Structured contract keepouts -> copper rule areas on EVERY copper layer
+        (no tracks, vias, or fills). On a 4-layer board this is what pulls the
+        inner GND/power planes back under the antenna. DRC enforces them;
+        gates.keepout_violations re-checks."""
         from .route import _kicad_rule_area
+        layers = tuple(self._copper_layers())
         for name, (x0, y0, x1, y1) in self.c.keepout_boxes():
             a, b = self.xy(x0, y0), self.xy(x1, y1)
             box = (min(ToMM(a.x), ToMM(b.x)), min(ToMM(a.y), ToMM(b.y)),
                    max(ToMM(a.x), ToMM(b.x)), max(ToMM(a.y), ToMM(b.y)))
-            _kicad_rule_area(self.pcb, box,
-                             layers=(pcbnew.F_Cu, pcbnew.B_Cu), name=name)
+            _kicad_rule_area(self.pcb, box, layers=layers, name=name)
 
     def save(self, path: str):
         self.pcb.BuildConnectivity()

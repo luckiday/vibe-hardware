@@ -182,7 +182,7 @@ parts:
       B8: NC
       B9: +5V
       B12: GND
-      S1: GND
+      SH: GND
   J2:
     footprint: Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical
     value: SPK-4ohm-3W
@@ -196,17 +196,17 @@ parts:
 
   # ---------------- HMI ----------------
   SW1:
-    footprint: Button_Switch_SMD:SW_SPST_PTS645
+    footprint: Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92
     value: BOOT
     cluster: UI
     pins: { 1: BTN_BOOT, 2: GND }
   SW2:
-    footprint: Button_Switch_SMD:SW_SPST_PTS645
+    footprint: Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92
     value: VOL-
     cluster: UI
     pins: { 1: BTN_VOLDN, 2: GND }
   SW3:
-    footprint: Button_Switch_SMD:SW_SPST_PTS645
+    footprint: Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92
     value: VOL+
     cluster: UI
     pins: { 1: BTN_VOLUP, 2: GND }

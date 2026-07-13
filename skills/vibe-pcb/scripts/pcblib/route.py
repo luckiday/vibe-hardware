@@ -17,10 +17,12 @@ import pcbnew
 from pcbnew import VECTOR2I, FromMM as MM
 
 __all__ = [
-    "path", "wire", "via", "fanout_decoupling", "gnd_pours", "apply_ses",
+    "path", "wire", "via", "fanout_decoupling", "gnd_pours", "plane_pours",
+    "apply_ses",
 ]
 
-_LAYERS = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu}
+_LAYERS = {"F.Cu": pcbnew.F_Cu, "In1.Cu": pcbnew.In1_Cu,
+           "In2.Cu": pcbnew.In2_Cu, "B.Cu": pcbnew.B_Cu}
 
 
 # ------------------------------------------------------------------- waypoint DSL
@@ -106,6 +108,21 @@ def gnd_pours(board, net: str = "GND"):
            pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom()))
     for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
         _kicad_pour(board.pcb, layer, board.net(net), box)
+
+
+def plane_pours(board, mapping: dict):
+    """Solid inner-layer planes on a 4-layer board: mapping {layer: net}, e.g.
+    {"In1.Cu": "GND", "In2.Cu": "+3V3"}. Add these on the PLACED board (before the
+    STAGE=place save) so ExportSpecctraDSN emits them as Specctra planes — then
+    freerouting drops GND/power pads straight to the plane with a via instead of
+    routing them as tracks on the outer layers, which is what makes a dense board
+    routable. The pour is clipped to the board edge and honours the antenna/belly
+    keepouts already drawn on every copper layer (see Board._draw_keepouts)."""
+    bb = board.pcb.GetBoardEdgesBoundingBox()
+    box = (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+           pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom()))
+    for layer, net in mapping.items():
+        _kicad_pour(board.pcb, _LAYERS[layer], board.net(net), box)
 
 
 def apply_ses(board, ses_path: str):

@@ -4,8 +4,14 @@
 A xiaozhi-style AI-speaker carrier: ESP32-S3-WROOM-1-N16R8 + ES8311 (mono DAC →
 NS4150B → 4 Ω/3 W rear speaker) + ES7210 (2 analog MEMS mics + amp echo
 reference for AEC) + SSD1306 OLED on a socket + 3 buttons + WS2812. 70 × 70 mm,
-2-layer, USB-C 5 V powered. Front (F) faces the enclosure front panel; the two
+4-layer, USB-C 5 V powered. Front (F) faces the enclosure front panel; the two
 mics are on B, listening through PCB port holes.
+
+Stackup note: started 2-layer but the dual-codec bus (I2S ×5 + I2C) plus the
+analog mic nets do not fit — freerouting stalled at 58 unrouted, and adding two
+layers alone did NOT help (still 58): the true bottleneck is fanning out the
+0.4 mm-pitch QFN codecs, which needs 0.15 mm track/clearance, not more layers.
+Now 4-layer (all signal) + 0.15/0.15 rules; GND poured F+B.
 
 Reference design lineage: `78/xiaozhi-esp32` `lichuang-dev` board (MIT), minus
 its PCA9557 expander (PA_EN is a direct GPIO) and with the OLED sharing the
@@ -61,8 +67,9 @@ file and exports `placement.json` as evidence; plm_check compares them.
 - QFN 0.4 mm fanout: 0.2 mm stubs straight out of the pad row.
 
 ## 9. Process & ordering
-JLCPCB 2-layer 1.6 mm, min track/clearance 0.2/0.2 (we use ≥0.2/0.2), NPTH
-mount holes. `fab_export.sh voicebuddy` builds gerbers/CPL/BOM. LCSC parts are
+JLCPCB 4-layer 1.6 mm, min track/clearance 0.15/0.15, min through-drill 0.2 mm
+(the WROOM belly-via array), NPTH mount holes — all within JLC standard
+capability. `fab_export.sh voicebuddy` builds gerbers/CPL/BOM. LCSC parts are
 tagged in parts.yaml (`lcsc:`).
 
 ## 10. EST / verify-before-ordering checklist

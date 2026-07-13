@@ -73,6 +73,18 @@ if BELLY:
 if not pcbnew.ExportSpecctraDSN(board, DSN):
     sys.exit("ExportSpecctraDSN failed")
 
+# Retype any plane-bearing copper layer signal->power. KiCad exports every copper
+# layer as (type signal), even the inner GND/power planes; freerouting would then
+# route signal traces through the plane's gaps. Marking a plane layer (type power)
+# keeps signals off it — freerouting only makes plane connections there. No-op on a
+# 2-layer board (no planes), so this is safe for every project.
+s = open(DSN).read()
+plane_layers = set(re.findall(r'\(plane \S+ \(polygon (\S+)', s))
+for lyr in plane_layers:
+    s = re.sub(rf'(\(layer {re.escape(lyr)}\s*\(type )signal(\))',
+               r'\1power\2', s)
+open(DSN, "w").write(s)
+
 # Split the single (class kicad_default ...) into power + signal classes for per-net widths.
 s = open(DSN).read()
 m = re.search(r'\(use_via "[^"]+"\)', s)

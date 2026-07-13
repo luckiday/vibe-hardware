@@ -6,11 +6,26 @@ Notable changes to vibe-hardware. Format follows
 
 ## [Unreleased]
 
+### Changed
+- `vibe-pcb`: **`Board` gains `copper_layers` / `min_track` / `min_clearance` /
+  `min_hole`** — multi-layer stackup (2 or 4) and per-board DRC rules (netclass
+  clearance via `m_NetSettings.GetDefaultNetclass()`, drill via `m_MinThroughDrill`),
+  with contract keepouts now spanning every copper layer. `export_dsn.py` retypes
+  plane-bearing layers signal→power; `route.plane_pours()` added. voice-buddy is now
+  **4-layer at 0.15 mm track/clearance** — the dual-codec board is unroutable on 2
+  layers, and the real bottleneck was fine-pitch (0.4 mm QFN) escape width, not layer
+  count. `gen_pcb.py`'s full stage replays the accepted `routing.ses` via `apply_ses`.
+
+### Fixed
+- `examples/voice-buddy`: two `parts.yaml` footprint/pad-name drifts that blocked
+  regeneration entirely (J1 USB-C shield pad `S1`→`SH`; SW1-3 `SW_SPST_PTS645`→
+  `SW_SPST_PTS645Sx43SMTR92`).
+
 ### Added
 - **`examples/voice-buddy`** — the first end-to-end worked example across all four
   skills: a xiaozhi-style AI speaker (ESP32-S3-WROOM-1 + ES8311/ES7210 duplex audio +
-  NS4150B + SSD1306 + rear-firing 4 Ω speaker). Generated 2-layer KiCad board
-  (placement gates green; scripted routing in progress), contract-driven printed
+  NS4150B + SSD1306 + rear-firing 4 Ω speaker). Generated 4-layer KiCad board
+  (placement gates green; freerouting-routed, DRC tail in progress), contract-driven printed
   enclosure with a 0 mm³ fit-check, a drop-in board port for the MIT-licensed `78/xiaozhi-esp32`
   firmware plus a minimal selftest app, and a `product.yaml` whose contracts are
   content-verified.
