@@ -6,42 +6,14 @@ Notable changes to vibe-hardware. Format follows
 
 ## [Unreleased]
 
-### Changed
-- `vibe-pcb`: **`Board` gains `copper_layers` / `min_track` / `min_clearance` /
-  `min_hole` / `edge_clearance`** — multi-layer stackup (2 or 4) and per-board DRC
-  rules (netclass clearance via `m_NetSettings.GetDefaultNetclass()`, drill via
-  `m_MinThroughDrill`, min-via + copper-edge clearance), contract keepouts spanning
-  every copper layer. `export_dsn.py` retypes plane-bearing layers signal→power.
-- `vibe-pcb`: **fanout-first routing** — `route.fanout()` (collision-checked locked
-  stubs+vias escaping every plane-net pad, EP thermal-via grids), `route.bridge_pads()`,
-  `route.plane_pours()`, and `wire()/via(lock=)`. Locked copper exports to Specctra as
-  `(type fix)`; `autoroute.sh` gains `FR_INC`/`FR_MP` so freerouting runs `-inc power`
-  and only routes signals. This is the documented workaround for freerouting 2.2.x
-  having **deleted its own SMD→plane fanout pass** (PR #605) — the real cause of the
-  dual-codec stall, not layer count. `gen_pcb.py` replays the accepted `routing.ses`.
-- `examples/voice-buddy`: **v2 respin** (revision v2026-07-13) — one **ES8388** duplex
-  codec (QFN-28, 0.45 mm) replaces the ES8311+ES7210 pair (two 0.4 mm QFNs); L-ADC =
-  the single analog mic, R-ADC = amp echo reference for hardware AEC (the xiaozhi
-  `yunliao-s3` pattern). GPIO map is now **placement-driven** (ESP32-S3 GPIO-matrix
-  pin-swap frees the IO45/46/3 straps). Firmware switched to `Es8388AudioCodec`;
-  `pinmap.yaml`↔`config.h` verified in sync (plm_check). Routing loop reaches a near-
-  clean state — see `examples/voice-buddy/TODO.md` for the remaining silk pass and the
-  `routing.ses` acceptance step.
-
-### Fixed
-- `examples/voice-buddy`: J1 USB-C was rotated pin-row-**outward** (v1 `rot=270`),
-  putting every USB pad ~0.3 mm past the board edge — the source of ~21
-  copper_edge_clearance violations and every unroutable USB net. Now `rot=90`
-  (pin row inboard) + `edge_clearance=0.3`. Earlier `parts.yaml` drifts (J1 shield
-  pad `S1`→`SH`; SW `SW_SPST_PTS645`→`…Sx43SMTR92`) also fixed.
-
 ### Added
 - **`examples/voice-buddy`** — the first end-to-end worked example across all four
-  skills: a xiaozhi-style AI speaker (ESP32-S3-WROOM-1 + ES8311/ES7210 duplex audio +
+  skills: a xiaozhi-style AI speaker (ESP32-S3-WROOM-1 + one ES8388 duplex codec +
   NS4150B + SSD1306 + rear-firing 4 Ω speaker). Generated 4-layer KiCad board
-  (placement gates green; freerouting-routed, DRC tail in progress), contract-driven printed
-  enclosure with a 0 mm³ fit-check, a drop-in board port for the MIT-licensed `78/xiaozhi-esp32`
-  firmware plus a minimal selftest app, and a `product.yaml` whose contracts are
+  (placement gates green; fanout-first freerouting, DRC tail tracked in
+  `examples/voice-buddy/TODO.md`), contract-driven printed enclosure with a 0 mm³
+  fit-check, a drop-in board port for the MIT-licensed `78/xiaozhi-esp32` firmware
+  plus a minimal selftest app, and a `product.yaml` whose contracts are
   content-verified.
 - `vibe-pcb`: **`scripts/pcblib/`** — the relational layout library ("relations in,
   coordinates out"): contract loaders (`constraints.yaml`/`pinmap.yaml`/`parts.yaml` —
@@ -72,12 +44,39 @@ Notable changes to vibe-hardware. Format follows
   `constraints.yaml` port-contract shape. Linked from the SKILL's enclosure conventions.
 
 ### Changed
+- `vibe-pcb`: **`Board` gains `copper_layers` / `min_track` / `min_clearance` /
+  `min_hole` / `edge_clearance`** — multi-layer stackup (2 or 4) and per-board DRC
+  rules (netclass clearance via `m_NetSettings.GetDefaultNetclass()`, drill via
+  `m_MinThroughDrill`, min-via + copper-edge clearance), contract keepouts spanning
+  every copper layer. `export_dsn.py` retypes plane-bearing layers signal→power.
+- `vibe-pcb`: **fanout-first routing** — `route.fanout()` (collision-checked locked
+  stubs+vias escaping every plane-net pad, EP thermal-via grids), `route.bridge_pads()`,
+  `route.plane_pours()`, and `wire()/via(lock=)`. Locked copper exports to Specctra as
+  `(type fix)`; `autoroute.sh` gains `FR_INC`/`FR_MP` so freerouting runs `-inc power`
+  and only routes signals. This is the documented workaround for freerouting 2.2.x
+  having **deleted its own SMD→plane fanout pass** (PR #605) — the real cause of the
+  dual-codec stall, not layer count. `gen_pcb.py` replays the accepted `routing.ses`.
+- `examples/voice-buddy`: **v2 respin** (revision v2026-07-13) — one **ES8388** duplex
+  codec (QFN-28, 0.45 mm) replaces the ES8311+ES7210 pair (two 0.4 mm QFNs); L-ADC =
+  the single analog mic, R-ADC = amp echo reference for hardware AEC (the xiaozhi
+  `yunliao-s3` pattern). GPIO map is now **placement-driven** (ESP32-S3 GPIO-matrix
+  pin-swap frees the IO45/46/3 straps). Firmware switched to `Es8388AudioCodec`;
+  `pinmap.yaml`↔`config.h` verified in sync (plm_check). Routing loop reaches a near-
+  clean state — see `examples/voice-buddy/TODO.md` for the remaining silk pass and the
+  `routing.ses` acceptance step.
 - `vibe-pcb` docs rewritten library-first: the `Cluster`/gates prose sketches are now
   shipped code, the raw-coordinate `place(x,y)`/`trk([…])` vocabulary is retired, and
   the worked reference is `examples/voice-buddy/pcb/`.
 - `autoroute.sh` documents the accept-by-committing-`routing.ses` flow;
   `export_dsn.py` derives net classes from `parts.yaml`; `import_ses.py` shares one
   pour/rule-area implementation with `pcblib.route`.
+
+### Fixed
+- `examples/voice-buddy`: J1 USB-C was rotated pin-row-**outward** (v1 `rot=270`),
+  putting every USB pad ~0.3 mm past the board edge — the source of ~21
+  copper_edge_clearance violations and every unroutable USB net. Now `rot=90`
+  (pin row inboard) + `edge_clearance=0.3`. Earlier `parts.yaml` drifts (J1 shield
+  pad `S1`→`SH`; SW `SW_SPST_PTS645`→`…Sx43SMTR92`) also fixed.
 
 ## [0.1.0] — Initial public release
 
