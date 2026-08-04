@@ -35,6 +35,15 @@ another's code — and a `revision` bumps when a change crosses a boundary so al
 versioned together. vibe-plm is the layer *above* the three; it owns the contracts, not the
 work inside any domain.
 
+Sitting *beside* all four is **`vibe-voice`** — not a domain but a **channel**. Every loop
+above eventually stops and needs a human to do something physical (hold reset while
+flashing, probe a test point on a fresh board, test-fit a print, run the real-hardware
+test that gates an OTA). At that moment the user's hands and eyes are on the hardware, so
+a written instruction is never received. vibe-voice speaks the action and prints the
+detail, and prefers polling a machine-observable signal — a serial-log line — over asking
+"did you press it?". Like the domains, it couples only through prose hand-offs; no skill
+calls its code.
+
 ## Two principles
 
 1. **Generate by script, not by GUI.** The sources of truth are generators /
@@ -90,6 +99,8 @@ monitor → OTA).
 - **KiCad 10** — `kicad-cli` + its bundled python (`pcbnew`). Not pip-installable.
 - **build123d** — a venv (`requirements.txt`).
 - **Firmware toolchain** — pinned per platform (ESP-IDF/PlatformIO/Arduino-CLI).
+- **Voice** — none. `vibe-voice/scripts/speak.py` is stdlib-only and drives the OS speech
+  engine (macOS `say` verified; Linux/Windows are skeletons to fill in on first use).
 - **Interactive 3D / CAD Viewer** — vendored from
   [`earthtojake/text-to-cad`](https://github.com/earthtojake/text-to-cad)
   (`npx skills install …`); the PCB 2D viewer uses [KiCanvas](https://kicanvas.org) and

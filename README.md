@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <img alt="skills: 4" src="https://img.shields.io/badge/skills-4-8a2be2">
+  <img alt="skills: 5" src="https://img.shields.io/badge/skills-5-8a2be2">
   <img alt="PCB: KiCad 10" src="https://img.shields.io/badge/PCB-KiCad%2010-2ea44f">
   <img alt="CAD: build123d" src="https://img.shields.io/badge/CAD-build123d-orange">
   <img alt="firmware: ESP32" src="https://img.shields.io/badge/firmware-ESP32-lightgrey">
@@ -41,10 +41,16 @@ so you never open a heavyweight GUI just to look.
 | [**vibe-firmware**](skills/vibe-firmware/) | a reproducible firmware build that flashes + runs | pinned-toolchain (Docker) builds, config-as-code, OTA, the "test on real hardware before release" rule *(framework — fill in your platform)* |
 | [**vibe-pcb**](skills/vibe-pcb/) | an ERC/DRC-clean KiCad board + a JLCPCB/LCEDA order | generate KiCad **by script** (never the GUI files), severity-aware DRC gate, module-belly keep-out, **interactive web viewer** (2D layers + 3D, one page) |
 | [**vibe-cad**](skills/vibe-cad/) | a parametric build123d enclosure + STEP/STL | one parametric file, **CAD Viewer** review, board↔shell interference check (0 mm³), printability lessons |
+| [**vibe-voice**](skills/vibe-voice/) | the agent *talking you through* the hands-on steps | speak the action, print the command; preflight the voice channel (a mute TTS still exits 0); poll a serial line instead of asking "did you press it?" |
 
 The three domains (firmware · PCB · CAD) share **one set of fit numbers** (board outline,
 stack height, mount holes, connector exits) — vibe-plm owns the contracts that hold them:
 change a number once and firmware pins, board, and shell stay in sync.
+
+**vibe-voice** is the odd one out: not a domain, a *channel*. It turns on at the moments
+the other loops hand control back to a human — flashing and probing, first power-up,
+test-fitting a print — where your hands are on the hardware and nothing is left for the
+keyboard.
 
 ## Install
 
@@ -68,6 +74,7 @@ idea ─► spec (prose) ─►  firmware   +   PCB        +   enclosure   ─�
                                         │                      │
                                         └─ shared fit numbers ─┘
                               interactive browser review at every step (no GUI)
+                              vibe-voice speaks the steps your hands are busy for
 ```
 
 Start at [**docs/getting-started.md**](docs/getting-started.md).

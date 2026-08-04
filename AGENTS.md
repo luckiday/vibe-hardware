@@ -10,6 +10,8 @@ method and gotchas for any task live in the relevant skill's `SKILL.md` +
 skills/          the agent skills (one per dir):
   vibe-plm              the integration layer: product manifest + interface contracts
   vibe-firmware · vibe-pcb · vibe-cad   the three domains (each a self-contained loop)
+  vibe-voice            the human channel: speak the hands-on steps (bring-up, probing,
+                        test-fitting) instead of writing them where they won't be read
   <skill>/SKILL.md      frontmatter (name + "use when…") + the method
   <skill>/references/   deep lessons / gotchas, loaded on demand
   <skill>/scripts/      portable bash/python tools (plm_check, pcb_check, pcb_view, cad_viewer, …)
@@ -49,6 +51,9 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
 - **Viewers** — the interactive CAD Viewer is vendored:
   `npx skills install earthtojake/text-to-cad` (lands in the gitignored
   `.agents/`/`.claude/`).
+- **Voice** — system `python3` (stdlib only, nothing to install) + the OS speech
+  engine. macOS `say` is implemented and verified; Linux/Windows backends are
+  skeletons — implement on first use, then fix the status table.
 
 ## Checks (run the skill's own scripts; smallest first)
 
@@ -59,6 +64,10 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
   0 unconnected (+ `BELLY_BOX=…` for the module belly keep-out). On kicad-cli < 8
   the ERC step SKIPs loudly (`PASS*`) — rerun on a ≥ 8 host before fab.
 - CAD: `python check_fit.py` → board↔shell interference must be **0 mm³**.
+- Voice: `python3 skills/vibe-voice/scripts/speak.py --check --lang <en|zh|ja|ko>` before
+  the *first* spoken procedure on a machine — a TTS that exits 0 can still be mute, so it
+  measures the rendered audio, then speaks and waits for the user to confirm they heard it
+  (`--confirm-heard`). Cached per machine/language; don't re-run it every session.
 - Review with the launchers (`scripts/pcb_view.sh`, `scripts/cad_viewer.sh`) — let them
   pick the port and serve locally; don't hand-pick ports or serve files publicly.
 
@@ -82,5 +91,6 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
 | Designs | **Never** commit a proprietary design into a skill; generic examples only |
 | Builds | **Never** treat a host firmware build as authoritative; use the pinned toolchain |
 | Release | **Never** ship an OTA / fielded firmware update without a real-hardware test first |
-| Secrets | **Never** commit credentials; gitignore + a `.example` |
+| Secrets | **Never** commit credentials; gitignore + a `.example` — and **never speak** them aloud, speech broadcasts to the room |
+| Voice | **Never** start a spoken procedure on an un-preflighted channel; a mute one fails silently |
 | Artifacts | **Never** commit regenerated outputs; they rebuild from source |

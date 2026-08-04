@@ -7,6 +7,18 @@ Notable changes to vibe-hardware. Format follows
 ## [Unreleased]
 
 ### Added
+- **`vibe-voice`** — a fifth skill, and the first that is a *channel* rather than a domain:
+  the agent **speaks** the hands-on steps (bring-up, flashing, probing a test point,
+  test-fitting a print) for the moments the other loops hand control back to a human and
+  the terminal is not being read. Encodes the dual-channel split (speak the action and the
+  timing; print the commands, hex IDs, and expected output), a **preflight** that renders
+  and *measures* a sample because a text-to-speech command that exits 0 can still be mute
+  (an English voice fed Chinese text exits 0 and emits 0.4 s of noise), blocking utterances
+  for pacing with an explicit-`sleep` rule for real durations, and confirmation by
+  **polling a machine-observable signal** (a serial-log line) over asking "did you press
+  it?" — always capped, with a turn-end fallback. Ships `scripts/speak.py` (stdlib-only,
+  pluggable backends: macOS `say` verified, Linux/Windows honest skeletons) plus
+  `references/confirm-channels.md` and `references/platforms.md`.
 - `vibe-pcb`: **`scripts/pcblib/`** — the relational layout library ("relations in,
   coordinates out"): contract loaders (`constraints.yaml`/`pinmap.yaml`/`parts.yaml` —
   the latter is the single net source both generators derive from), `Board` drawn from
