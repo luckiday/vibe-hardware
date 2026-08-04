@@ -39,6 +39,10 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
 - **Living docs.** When a real build teaches a new gotcha/fix/better-practice, fold it
   back into the skill and commit it *with* the work. Compounding the experience is the
   point.
+- **Global by default.** Non-English text is fine where it belongs — language fixtures
+  in code, quoted strings, log excerpts, translated docs. Keep the *shared* docs
+  readable in English, and put a translation in a `*.<lang>.md` beside its original
+  rather than in place of it.
 
 ## Environments
 

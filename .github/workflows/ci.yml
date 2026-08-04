@@ -28,22 +28,56 @@ jobs:
           [ -z "$files" ] || python3 -m py_compile $files
           echo "OK: python scripts compile"
 
-      - name: English-only code & docs (CJK only in localized *.<lang>.md)
+      - name: Docs are global-developer friendly (translations welcome)
         run: |
-          # Default language is English: code/scripts (*.py, *.sh) and normal docs
-          # (*.md) must be English. Translations are allowed, but only in files with a
-          # language suffix — *.zh.md / *.ja.md / *.ko.md (e.g. docs/manual.zh.md).
-          hits=$(grep -rIlP '[\x{4e00}-\x{9fff}]' \
-                   --include='*.md' --include='*.sh' --include='*.py' \
-                   --exclude-dir=.git . \
-                 | grep -vP '\.(zh|ja|ko)\.md$' || true)
-          if [ -n "$hits" ]; then
-            echo "::error::non-English (CJK) text in non-localized files:"
-            echo "$hits"
-            echo "Fix: keep code/scripts/docs English, or move the translation into a *.<lang>.md file (e.g. README.zh.md)."
-            exit 1
-          fi
-          echo "OK: code & docs English; CJK only in localized *.<lang>.md"
+          # This repo is built by developers all over the world, and non-English text is
+          # NOT banned. Legitimate uses are common: a pronunciation fixture in code (see
+          # vibe-voice's zh/ja/ko preflight samples), a quoted user-facing string, a
+          # transcript in an example, or a full translation of a doc.
+          #
+          # What we do keep is a shared entry point. English is the lingua franca of the
+          # top-level docs so any contributor can get oriented; a translation lives BESIDE
+          # its English original with a language suffix — README.zh.md, docs/manual.ja.md —
+          # rather than silently replacing it.
+          #
+          # Hard failure: a localized doc whose English original is missing.
+          # Advisory: a normal doc that reads as mostly non-English — it probably wants to
+          # be a *.<lang>.md sitting next to an English one.
+          python3 - <<'PY'
+          import re, sys
+          from pathlib import Path
+
+          LOCALIZED = re.compile(r"\.[a-z]{2}(-[A-Za-z]{2,4})?\.md$")
+          CJK = re.compile(r"[぀-ヿ一-鿿가-힯]")
+          LATIN = re.compile(r"[A-Za-z]")
+
+          docs = [p for p in Path(".").rglob("*.md") if ".git" not in p.parts]
+          fail = False
+
+          for p in docs:
+              if not LOCALIZED.search(p.name):
+                  continue
+              original = p.with_name(LOCALIZED.sub(".md", p.name))
+              if not original.exists():
+                  print(f"::error::{p} is a translation with no English original at {original}")
+                  fail = True
+
+          for p in docs:
+              if LOCALIZED.search(p.name):
+                  continue
+              text = p.read_text(encoding="utf-8", errors="replace")
+              cjk, latin = len(CJK.findall(text)), len(LATIN.findall(text))
+              # A CJK character carries far more than a latin letter, so weight it ~4x
+              # before calling a doc "mostly non-English".
+              if cjk and cjk * 4 > latin:
+                  print(f"::warning file={p}::mostly non-English -- consider naming it "
+                        f"{p.with_suffix('')}.<lang>.md beside an English original")
+
+          if not fail:
+              print("OK: every translation has an English original; "
+                    "non-English text is welcome elsewhere")
+          sys.exit(1 if fail else 0)
+          PY
 
       - name: Shellcheck (advisory)
         continue-on-error: true
