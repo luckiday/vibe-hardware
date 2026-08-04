@@ -34,6 +34,21 @@ place to start (its **net map** is the single source of truth firmware also read
 Each skill's `SKILL.md` has the exact loop; its `references/` carry the gotchas that
 cost a debugging session. **Read the gotchas before you trust the happy path.**
 
+### When your hands are on the hardware
+
+Flashing, probing a test point, first power-up, test-fitting a print — at those moments
+you are not reading the terminal, so [`vibe-voice`](../skills/vibe-voice/) has the agent
+**speak** the step and print the command. Ask for it ("talk me through the bring-up") and
+it will preflight the voice channel once on this machine first:
+
+```bash
+python3 skills/vibe-voice/scripts/speak.py --check --lang en
+```
+
+A speech command that exits 0 can still be silent, which is why it measures the audio and
+then asks whether you actually heard it. Nothing to install — stdlib python plus your OS's
+speech engine.
+
 ## 3. Fabricate
 
 - **Board:** `fab_export.sh` → upload the gerber `.zip` to JLCPCB (or the LCEDA
