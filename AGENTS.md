@@ -10,6 +10,7 @@ method and gotchas for any task live in the relevant skill's `SKILL.md` +
 skills/          the agent skills (one per dir):
   vibe-plm              the integration layer: product manifest + interface contracts
   vibe-firmware · vibe-pcb · vibe-cad   the three domains (each a self-contained loop)
+  vibe-uiflow           firmware's cheaper operating point: UIFlow2/MicroPython UI devices
   vibe-voice            the human channel: speak the hands-on steps (bring-up, probing,
                         test-fitting) instead of writing them where they won't be read
   <skill>/SKILL.md      frontmatter (name + "use when…") + the method
