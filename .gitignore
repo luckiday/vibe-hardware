@@ -3,6 +3,7 @@
 
 # Local scratch / experiments (never committed)
 _scratch/
+tmp/
 
 # Python
 __pycache__/

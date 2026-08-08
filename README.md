@@ -39,9 +39,14 @@ so you never open a heavyweight GUI just to look.
 |---|---|---|
 | [**vibe-plm**](skills/vibe-plm/) | one manifest + interface contracts that keep the three domains in sync | `product.yaml` (identity + revision), the shared fit-number contracts, a `plm_check.py` gate, the cross-domain release checklist |
 | [**vibe-firmware**](skills/vibe-firmware/) | a reproducible firmware build that flashes + runs | pinned-toolchain (Docker) builds, config-as-code, OTA, the "test on real hardware before release" rule *(framework — fill in your platform)* |
+| [**vibe-uiflow**](skills/vibe-uiflow/) | a screen-and-buttons device on UIFlow2/MicroPython, in seconds per iteration | host simulator over an `M5.Lcd` stub with **device-dumped font metrics**, a bounded on-board self-test, the **ghost check**, and UIFlow2 on **non-M5 ESP32-S3 boards** |
 | [**vibe-pcb**](skills/vibe-pcb/) | an ERC/DRC-clean KiCad board + a JLCPCB/LCEDA order | generate KiCad **by script** (never the GUI files), severity-aware DRC gate, module-belly keep-out, **interactive web viewer** (2D layers + 3D, one page) |
 | [**vibe-cad**](skills/vibe-cad/) | a parametric build123d enclosure + STEP/STL | one parametric file, **CAD Viewer** review, board↔shell interference check (0 mm³), printability lessons |
 | [**vibe-voice**](skills/vibe-voice/) | the agent *talking you through* the hands-on steps | speak the action, print the command; preflight the voice channel (a mute TTS still exits 0); poll a serial line instead of asking "did you press it?" |
+
+`vibe-firmware` and `vibe-uiflow` are the same domain at two operating points: C/ESP-IDF
+when you need determinism, power discipline and OTA; UIFlow2/MicroPython when you want the
+screen to change in seconds and can trade those away. Both close the UI loop on the host.
 
 The three domains (firmware · PCB · CAD) share **one set of fit numbers** (board outline,
 stack height, mount holes, connector exits) — vibe-plm owns the contracts that hold them:
