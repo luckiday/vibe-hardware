@@ -161,12 +161,18 @@ Method + the traps: [`references/non-m5-boards.md`](references/non-m5-boards.md)
 
 ## Worked example
 
-**[`ToyWorks/op-cp`](https://github.com/ToyWorks/op-cp)** — OP-CP, an OP-1 flavoured step
-sequencer for the M5Stack Cardputer-ADV: a PCM synth rendered on the host, eight save
-slots, a ctrl key layer, four animated views, and an ESP-NOW broadcast. It carries the
-whole method in working form — `make check` (compile + upload + on-device self-test),
-`make shots` (host render + ghost check), `make probe`, and a `CLAUDE.md` of the rules
-that keep both loops honest. Every measurement quoted in this skill came off that board.
+**[`ToyWorks/op-cp`](https://github.com/ToyWorks/op-cp)** carries the whole method in
+working form — `make check` (compile + upload + on-device self-test), `make shots` (host
+render + ghost check), `make probe`, and a `CLAUDE.md` of the rules that keep both loops
+honest. Every measurement quoted in this skill came off those boards.
+
+- **OP-CP** (repo root) — an OP-1 flavoured step sequencer for the M5Stack Cardputer-ADV:
+  a PCM synth rendered on the host, eight save slots, a ctrl key layer, four animated
+  views, and an ESP-NOW broadcast. The flicker and profiling numbers above are from here.
+- **[`dance/`](https://github.com/ToyWorks/op-cp/tree/main/dance)** — the same program on
+  two very different machines, split at deploy time by `make BOARD=…`, one of which is a
+  non-M5 board running UIFlow2 by the route in
+  [`references/non-m5-boards.md`](references/non-m5-boards.md).
 
 ## When to leave for `vibe-firmware`
 
