@@ -28,7 +28,7 @@ board on 10 silk warnings — `pcb_check.sh` now splits the two.)
 **Verify the gate parser against the actual report format before trusting a 0.**
 kicad-cli ends violation lines with `; error`, but pcbnew's `WriteDRCReport` (the
 KiCad-7 fallback) writes GUI-style `Severity: error` lines — a grep for the former
-read **444 real violations as zero** on the voice-buddy board, and two routing
+read **444 real violations as zero** on a real board, and two routing
 sessions built copper on top of phantom-clean DRC. `drc_report.py` now normalizes
 its output to match; if you ever add another report source, run one DELIBERATE
 short through it first and watch the number move.
@@ -98,8 +98,8 @@ worked on xiao-carrier (example):
 The model is weak at one-shot absolute-coordinate geometry — it thinks in **relations**,
 but raw `place(x,y)` / point lists throw the relations away and keep only the numbers, so
 layouts are brittle and look amateur. Don't auto-solve ③; **change the representation +
-close a visual loop**. All of this is SHIPPED CODE now — `scripts/pcblib/` — proven on
-`examples/voice-buddy/pcb/kicad/gen_pcb.py` (the worked generator). Three moves:
+close a visual loop**. All of this is SHIPPED CODE now — `scripts/pcblib/` — proven on a
+four-layer ESP32-S3 build. Three moves:
 
 **1 — Clusters as first-class objects: a TWO-LEVEL floorplan** (`pcblib.Cluster`).
 - **MACRO** — `Cluster(brd, "AUDIO", (16, 30))`: the origin is the ONLY tuned number;
@@ -114,7 +114,7 @@ close a visual loop**. All of this is SHIPPED CODE now — `scripts/pcblib/` —
   cluster-overlap gate; the courtyard gate still covers their real collisions.
 
 **2 — Stage the generator; render the skeleton; read it back.** `gen_pcb.py` honors
-`STAGE=floorplan|place|full` (see the voice-buddy generator's exact shape) and
+`STAGE=floorplan|place|full` and
 `scripts/pcb_skeleton.sh <proj> <stage>` renders each stage to a PDF+PNG you READ.
 The loop: floorplan → read → nudge origins → place → read → route → full → read.
 Perception-in-the-loop, not one blind shot.
@@ -132,7 +132,7 @@ the body box, keep the antenna rule as a contract keepout), and KiCad 7's
 `GetCourtyard()` is empty off-board (`BuildCourtyardCaches()` segfaults there).
 
 **4 — Placement serves routing: reserve channels.** Before routing, name the bus
-channels in comments and keep support passives OUT of them (voice-buddy keeps
+channels in comments and keep support passives OUT of them (one board kept
 x≈9.5–13.5 clear for the I²S/I²C trunks down both codecs' left flanks; ref/bias caps
 live in one row above the codec instead of scattered around it). A route that fights
 means a part should move — placement is cheaper than copper. QFN 0.4 mm pitch: 0.2 mm
@@ -150,8 +150,8 @@ ones that cost real time: `kicad-cli` has **no** Specctra subcommand (go through
 `pcblib.route.apply_ses` replays it in the full stage, so the routed board regenerates from
 committed sources. When no JRE/jar is available, route by script with the pad-anchored
 vocabulary (`wire(brd, net, [a.pad(3), b.pad(1)], bend="x")` / `via` / `path` — endpoints are
-pad lookups, waypoints relative; GND via `gnd_pours()` + stitching, never point-to-point) as
-voice-buddy's `routing.py` does. Either way the model's job is to **read the routed render and
+pad lookups, waypoints relative; GND via `gnd_pours()` + stitching, never point-to-point) in a
+scripted `routing.py`. Either way the model's job is to **read the routed render and
 DRC report and accept/reject**, not to place copper blind.
 
 **Read routing per layer — the copper plot is the review of record.** The 3D render hides

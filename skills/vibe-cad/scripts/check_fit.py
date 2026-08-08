@@ -16,7 +16,7 @@ Why a tolerance at all: coincident design faces (a board resting on a boss)
 intersect to ~0, so a small threshold separates "touching" from a real clash.
 build123d returns an empty Compound for a no-op `&` — treated as 0 here.
 
-Compound trap (bit the voice-buddy build): a raw import_step() Compound can
+Compound trap (seen on a real build): a raw import_step() Compound can
 intersect (`&`) to silently-empty even when it DOES overlap — a vacuous pass.
 Both sides are therefore exploded to their solids and intersected pairwise;
 an input that contains no solids at all is reported loudly.

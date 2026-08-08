@@ -3,8 +3,7 @@
 The bridge between language and geometry: a generator names RELATIONS
 ("beside", "at the contract's USB port", "on the IC's supply pad") and
 CONTRACTS (constraints.yaml, pinmap.yaml, parts.yaml); this library computes
-the coordinates. See skills/vibe-pcb/SKILL.md for the method and
-examples/voice-buddy/pcb/ for the worked generator.
+the coordinates. See skills/vibe-pcb/SKILL.md for the method.
 
 Import split: `contract` is stdlib-only (usable anywhere); `layout`/`gates`/
 `route` need pcbnew, `sch` is stdlib-only again. Importing the package pulls

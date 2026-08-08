@@ -17,8 +17,8 @@ description: >-
   upload, NEVER importing the KiCad project into EasyEDA; a flush-soldered module
   needs the belly keep-out gate (`scripts/belly_check.py` — DRC can't see it).
   Review the routed board INTERACTIVELY in the browser via `scripts/pcb_view.sh`.
-  The worked, gate-clean reference is `examples/voice-buddy/pcb/`. For the
-  enclosure around the board, hand off to `vibe-cad` (see `references/fab-and-3d.md`).
+  For the enclosure around the board, hand off to `vibe-cad`
+  (see `references/fab-and-3d.md`).
 ---
 
 # Text → PCB (beginner + Claude Code → fab order)
@@ -28,9 +28,9 @@ tiles). You write the intent in prose; Claude Code emits KiCad **by script**,
 drives ERC/DRC to clean, reviews it, fits it in 3D, and packages the fab order.
 You never hand-place a track in a GUI.
 
-**Worked reference:** [`examples/voice-buddy/pcb/`](../../examples/voice-buddy/pcb/)
-— a 70×70 ESP32-S3 + dual-codec speaker board, generated end-to-end with the
-method below (contracts → relations → gates → scripted route → DRC 0/0).
+**Proven on** a 70×70 mm ESP32-S3 + dual-codec speaker board, generated end to
+end with the method below (contracts → relations → gates → scripted route →
+DRC 0/0). The war stories throughout are from that build.
 
 ## Why "by script", not the KiCad GUI
 
@@ -85,9 +85,9 @@ spec (prose)  ──►  generate  ──►  validate  ──►  review  ─�
    datasheet pin table and record every guessed number as **EST** in the brief's
    §10 checklist. A guessed land has caused both a bench-dead miswire and an
    unsolderable footprint (war stories in `references/design-rules.md`). When no
-   stock footprint exists, generate it from source like
-   `examples/voice-buddy/pcb/kicad/gen_footprints.py` (QFN-32 4×4 + a MEMS mic
-   land) — regenerated at build time, never hand-drawn.
+   stock footprint exists, generate it from source in a `gen_footprints.py` of
+   your own — a QFN-32 4×4 and a bottom-port MEMS mic land were built that way —
+   regenerated at build time, never hand-drawn.
 1. **Spec** — write/update `<proj>_brief.md` (`references/spec-template.md`) and
    the three data files. The heart is the **net map** (`parts.yaml` +
    `pinmap.yaml`); the enclosure interlock numbers go in `constraints.yaml`
@@ -134,8 +134,8 @@ representation + feedback, both shipped in `pcblib`:
 3. **Perception in the loop.** Read the stage renders; the numeric gates catch
    what eyeballs miss (a 0.1 mm courtyard graze) and the render catches what
    numbers miss (signal flow, antenna orientation, ugly).
-4. **Placement serves routing.** Reserve explicit **channels** (the voice-buddy
-   board keeps x≈9.5–13.5 clear as the I²S/I²C trunk down to both codecs);
+4. **Placement serves routing.** Reserve explicit **channels** (one board kept
+   x≈9.5–13.5 clear as the I²S/I²C trunk down to both codecs);
    support passives go in rows/columns beside their IC, never scattered into
    future bus paths. If a route fights, move a part — placement is cheaper than
    copper. QFN 0.4 mm pitch: 0.2 mm stubs straight out of the pad row.
@@ -168,7 +168,7 @@ $S/fab_export.sh <proj> A1 J1                 # JLCPCB gerber zip + CPL + BOM
 
 ## Scaffolding a new board
 
-Copy the voice-buddy layout (don't start from a blank KiCad project):
+Lay it out like this — don't start from a blank KiCad project:
 
 ```
 <product>/pcb/
