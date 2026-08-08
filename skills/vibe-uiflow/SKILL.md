@@ -159,15 +159,14 @@ with **`M5.UserDisplay`**, and reach for `machine.I2S` when `M5.Mic` returns a D
 Pin maps for many cheap boards already exist in `xiaozhi-esp32`'s `main/boards/*/config.h`.
 Method + the traps: [`references/non-m5-boards.md`](references/non-m5-boards.md).
 
-## Worked examples
+## Worked example
 
-Both in [`31-yunqi-utility`](../../../31-yunqi-utility/), with a report at
-[`REPORT.md`](../../../31-yunqi-utility/REPORT.md):
-
-- **`exp/cardputer-adv-uiflow2`** — OP-CP, a step sequencer with a PCM synth, save slots,
-  a ctrl key layer and four animated views. The flicker/profiling work above is from here.
-- **`exp/stackchan-dance`** — one program, two machines (CoreS3 + StackChan base, and a
-  non-M5 xiaozhi-cube), split at deploy time by `make BOARD=…`.
+**[`ToyWorks/op-cp`](https://github.com/ToyWorks/op-cp)** — OP-CP, an OP-1 flavoured step
+sequencer for the M5Stack Cardputer-ADV: a PCM synth rendered on the host, eight save
+slots, a ctrl key layer, four animated views, and an ESP-NOW broadcast. It carries the
+whole method in working form — `make check` (compile + upload + on-device self-test),
+`make shots` (host render + ghost check), `make probe`, and a `CLAUDE.md` of the rules
+that keep both loops honest. Every measurement quoted in this skill came off that board.
 
 ## When to leave for `vibe-firmware`
 

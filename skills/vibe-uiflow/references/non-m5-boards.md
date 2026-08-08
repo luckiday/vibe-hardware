@@ -150,4 +150,9 @@ The module answers for the screen, the microphone, the controls and whatever bod
 runtime asks which machine it is on — and the two boards are free to have genuinely
 different layouts rather than one scaled, which for a 320×240 and a 240×240 they should.
 
-Worked example: `31-yunqi-utility/exp/stackchan-dance/`.
+This shape is what let one beat-detecting app run on both a CoreS3 with servos and LEDs
+and a bodiless 240×240 cube: the board module answers for the screen, the microphone, the
+controls and the body, and `app.py` never learns which it got. The published sequencer at
+[`ToyWorks/op-cp`](https://github.com/ToyWorks/op-cp) targets a single board and so has no
+`boards/` directory — but its `Makefile`, host simulator and self-test are the same ones,
+and are the easiest place to read the surrounding method.
