@@ -12,10 +12,10 @@ power_out pin) so ERC's power-driven check stays meaningful. Optional
 `pin_types: {pad: erc_type}` in a parts.yaml entry refines ERC further
 (default: passive; power rails auto-type power_in on IC pads).
 
-Usage (see the worked example's gen_sch.py):
-    sheet = Sheet("voicebuddy", title="voice-buddy carrier")
+Usage (from a project's gen_sch.py):
+    sheet = Sheet("myboard", title="myboard carrier")
     for spec in parts: sheet.symbol(spec, netmap)
-    sheet.write("voicebuddy.kicad_sch")
+    sheet.write("myboard.kicad_sch")
 """
 
 from __future__ import annotations

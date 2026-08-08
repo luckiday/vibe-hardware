@@ -28,7 +28,7 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
   (no real half-holes, guessed row pitch). EST is only the fallback for a part with **no**
   published reference — then datasheet-read it (next bullet). Worked example: the TC5.1-Xiao
   carrier pulls the exact Seeed `XIAO-14P-Add-On` land + 3D transform from
-  the vendor reference dir of the module (the `vibe-parts` companion repo hosts worked ones; a bare-chip example is `examples/voice-buddy/pcb/kicad/gen_footprints.py`).
+  the vendor reference dir of the module (the `vibe-parts` companion repo hosts worked ones).
 - **Gate 4 — IPC-7351 is for *standard* parts.** A custom module/connector land (a castellated
   XIAO footprint, a breakout landing) is **not** IPC-7351 by definition — derive it from the
   vendor reference (above) or mark it **EST** and put it on the brief's verify-against-datasheet

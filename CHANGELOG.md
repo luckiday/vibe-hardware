@@ -57,8 +57,7 @@ Notable changes to vibe-hardware. Format follows
   mostly non-English. Also rewritten in `python3` so it no longer depends on GNU
   `grep -P`. `CONTRIBUTING.md`, `AGENTS.md`, and the PR template updated to match.
 - `vibe-pcb` docs rewritten library-first: the `Cluster`/gates prose sketches are now
-  shipped code, the raw-coordinate `place(x,y)`/`trk([…])` vocabulary is retired, and
-  the worked reference is `examples/voice-buddy/pcb/`.
+  shipped code and the raw-coordinate `place(x,y)`/`trk([…])` vocabulary is retired.
 - `autoroute.sh` documents the accept-by-committing-`routing.ses` flow;
   `export_dsn.py` derives net classes from `parts.yaml`; `import_ses.py` shares one
   pour/rule-area implementation with `pcblib.route`.
