@@ -95,6 +95,90 @@ a StampS3-firmware board, UIFlow2 v2.5.0 (MicroPython v1.27).
   cannot use a board's own speaker to test its own microphone**; play sound from the host
   instead.
 
+- **A microphone can "work" and capture nothing, and everything will report success.**
+  On a Cardputer-ADV, `M5.Mic.begin()` returns True, `record()` fills buffers of exactly
+  the right length, and every sample in them is the same constant (−8, across 364k
+  samples of real recordings). The ES8311 codec is alive — it answers at 0x18 on the
+  internal bus (scl 9 / sda 8) and `Speaker.tone()` is audible — but nothing drives its
+  ADC path, and scanning `machine.I2S` RX across a dozen candidate data pins found no pin
+  carrying audio. `M5.Mic` appears to be configured for the original Cardputer's mic
+  (i2s_port 0, data_in 46, no MCLK) rather than the ADV's codec (Speaker is on i2s_port
+  1, data_out 42).
+
+  Before spending an afternoon on it: the official mic example on the docs site is
+  written for a *different board*, and running it verbatim here changes nothing.
+  Neither does the three-argument `record(buf, rate, stereo)`, sharing the
+  speaker's `i2s_port`, setting `pin_mck`, or calling the firmware's own
+  `es8311.microphone_config()`. `use_adc = True` looks like a hit — the first
+  take shows a big span — but the samples are a smooth monotonic ramp, a DC
+  settling curve rather than sound, and the next take is flat again. **A large
+  span is not evidence of audio unless it RESPONDS to something**; play a tone
+  and check.
+
+  **Test for span, not level.** A DC constant has a large peak and zero
+  max-minus-min; a live mic dithers even in silence. Any program that saves recordings
+  should refuse a take whose span never rises off the floor, and say so *during* the
+  recording — a saved file of nothing is indistinguishable from a real memo you cannot
+  hear. Put the check in the on-device self-test too, so the day a firmware update fixes
+  it, the test tells you.
+
+## Keyboards (Cardputer / Cardputer-ADV)
+
+**Read the keymap out of the firmware. Do not reconstruct it from keypresses.**
+`hardware/keyboard.py` is plain Python on the device, and `asciimap` holds the constants:
+
+```python
+from hardware.keyboard import asciimap      # importing ONE submodule is safe;
+                                            # it is dir(hardware) that wedges
+print([(n, getattr(asciimap, n)) for n in dir(asciimap) if n.startswith("KEY_")])
+```
+
+On a Cardputer-ADV, UIFlow2 v1.27.0, that returns:
+
+| constant | value | constant | value |
+|---|---|---|---|
+| `KEY_LEFT` | 180 (0xB4) | `KEY_ENTER` | 40 (0x28) |
+| `KEY_UP` | 181 (0xB5) | `KEY_ESC` | 41 (0x29) |
+| `KEY_DOWN` | 182 (0xB6) | `KEY_BACKSPACE` | 42 (0x2A) |
+| `KEY_RIGHT` | 183 (0xB7) | `KEY_TAB` | 43 (0x2B) |
+| `KEY_LEFT_CTRL` | 128 (0x80) | `KEY_FN` | 255 (0xFF) |
+
+This is worth more than any amount of careful pressing. Working it out by asking a human
+to press keys in a stated order and matching that order to the codes that arrived put the
+fallible step on the human, and it produced a wrong mapping twice before anyone thought to
+look for the table. There is also a `kb_asciimap` bytes object next to it — the full
+scancode → value table, if you need the rest.
+
+**`get_key()` does not return that table.** It returns ASCII where one exists and the raw
+keycode where none does: enter → 10, backspace → 8, backtick → 0x60, but the arrows come
+through as 180–183 and tab as 43. So the constants tell you what the keys ARE; a short
+press test tells you what `get_key()` hands you for them. Both, not either.
+
+Then the traps:
+
+- **`tick()` drops the event if no callback is installed.** The working pattern is
+  `kb.set_callback(fn)` and then `kb.tick()` in the loop, with the callback calling
+  `kb.get_key()`. A probe that calls `tick()` and then polls `get_key()` directly captures
+  **nothing at all** — which reads as "the keyboard is dead" and sends you debugging
+  hardware that is fine.
+
+- **Arrow keys are outside the printable range.** Any dispatch shaped like
+  `ch = chr(code) if 0x20 <= code <= 0x7E else ""` followed by `if not ch: return`
+  swallows all four, and the arrows appear dead while every letter still works. Test the
+  raw code before narrowing it to a character.
+
+- **`fn` + anything reports `0x00` from `get_key()`**, so fn combinations cannot be told
+  apart — including `fn + \``, which is where **esc** is printed on the keycap. A program
+  that needs a cancel key should take the plain backtick (0x60) instead, at the cost of
+  not being able to type one.
+
+- **The ADV is not the original Cardputer.** It replaced the GPIO key matrix with a
+  **TCA8418 I²C controller at 0x34**. Keycodes from the original board, and from the
+  Arduino `M5Cardputer` library, do not transfer — that library reports **USB HID usage
+  codes** (arrows 0x4F–0x52). The keys with arrows silkscreened on them (`; , . /`) still
+  send their own characters when pressed plainly, so accepting those as aliases costs
+  nothing and gives a one-handed fallback.
+
 ## Audio (`playRaw`, measured)
 
 - **It interprets any buffer as int16**, whatever type you pass — `bytearray`,
