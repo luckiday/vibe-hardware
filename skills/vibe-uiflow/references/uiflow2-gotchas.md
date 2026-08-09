@@ -105,6 +105,16 @@ a StampS3-firmware board, UIFlow2 v2.5.0 (MicroPython v1.27).
   (i2s_port 0, data_in 46, no MCLK) rather than the ADV's codec (Speaker is on i2s_port
   1, data_out 42).
 
+  Before spending an afternoon on it: the official mic example on the docs site is
+  written for a *different board*, and running it verbatim here changes nothing.
+  Neither does the three-argument `record(buf, rate, stereo)`, sharing the
+  speaker's `i2s_port`, setting `pin_mck`, or calling the firmware's own
+  `es8311.microphone_config()`. `use_adc = True` looks like a hit — the first
+  take shows a big span — but the samples are a smooth monotonic ramp, a DC
+  settling curve rather than sound, and the next take is flat again. **A large
+  span is not evidence of audio unless it RESPONDS to something**; play a tone
+  and check.
+
   **Test for span, not level.** A DC constant has a large peak and zero
   max-minus-min; a live mic dithers even in silence. Any program that saves recordings
   should refuse a take whose span never rises off the floor, and say so *during* the
