@@ -150,6 +150,15 @@ that bite hardest:
 - **An ST7789 holds its last image without being refreshed.** So a program that never
   started does not show a blank screen — it shows the previous frame, frozen, which reads
   as a hang. Combined with the two above, this is a very convincing wrong diagnosis.
+- **The keymap is readable from the firmware — never reconstruct it from keypresses.**
+  `from hardware.keyboard import asciimap` gives `KEY_UP`/`KEY_DOWN`/`KEY_LEFT`/`KEY_RIGHT`
+  and friends as plain integers. Inferring them instead, by asking someone to press keys in
+  a stated order and matching that order against the codes that arrived, puts the fallible
+  step on the human — it produced a wrong mapping twice here before anyone looked for the
+  table. Two related traps: `tick()` drops the event when no `set_callback()` is installed,
+  so a polling probe captures nothing and the keyboard looks dead; and the arrows (0xB4–
+  0xB7 on the ADV) are outside the printable range, so the usual `chr(code)` filter
+  swallows them while every letter still works.
 
 ## Non-M5 boards
 
