@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <img alt="skills: 5" src="https://img.shields.io/badge/skills-5-8a2be2">
+  <img alt="skills: 7" src="https://img.shields.io/badge/skills-7-8a2be2">
   <img alt="PCB: KiCad 10" src="https://img.shields.io/badge/PCB-KiCad%2010-2ea44f">
   <img alt="CAD: build123d" src="https://img.shields.io/badge/CAD-build123d-orange">
   <img alt="firmware: ESP32" src="https://img.shields.io/badge/firmware-ESP32-lightgrey">
@@ -42,6 +42,7 @@ so you never open a heavyweight GUI just to look.
 | [**vibe-uiflow**](skills/vibe-uiflow/) | a screen-and-buttons device on UIFlow2/MicroPython, in seconds per iteration | host simulator over an `M5.Lcd` stub with **device-dumped font metrics**, a bounded on-board self-test, the **ghost check**, and UIFlow2 on **non-M5 ESP32-S3 boards** |
 | [**vibe-pcb**](skills/vibe-pcb/) | an ERC/DRC-clean KiCad board + a JLCPCB/LCEDA order | generate KiCad **by script** (never the GUI files), severity-aware DRC gate, module-belly keep-out, **interactive web viewer** (2D layers + 3D, one page) |
 | [**vibe-cad**](skills/vibe-cad/) | a parametric build123d enclosure + STEP/STL | one parametric file, **CAD Viewer** review, board↔shell interference check (0 mm³), printability lessons |
+| [**vibe-industrial-design**](skills/vibe-industrial-design/) | the product's *look*: a parametric three.js appearance model, a fixed-camera contact sheet, Blender Cycles finals, and a versioned ID/CMF report | **measure the AI look image** into tagged numbers (px/mm, corner R, hole pitch, colours), one `params.js` with provenance tags, browser review + URL-driven export (raster / path traced), GLB → Blender with a **reusable hand-tuned `studio.blend`**, md-authority report + generated .docx with a change log per version |
 | [**vibe-voice**](skills/vibe-voice/) | the agent *talking you through* the hands-on steps | speak the action, print the command; preflight the voice channel (a mute TTS still exits 0); poll a serial line instead of asking "did you press it?" |
 
 `vibe-firmware` and `vibe-uiflow` are the same domain at two operating points: C/ESP-IDF
@@ -51,6 +52,11 @@ screen to change in seconds and can trade those away. Both close the UI loop on 
 The three domains (firmware · PCB · CAD) share **one set of fit numbers** (board outline,
 stack height, mount holes, connector exits) — vibe-plm owns the contracts that hold them:
 change a number once and firmware pins, board, and shell stay in sync.
+
+**vibe-industrial-design** sits before/alongside `vibe-cad`: it decides *what the thing
+looks like* (proportion, split lines, CMF, control placement) from a brief and AI look
+images, and hands the outer numbers to the enclosure model. `vibe-cad` decides how it
+holds together.
 
 **vibe-voice** is the odd one out: not a domain, a *channel*. It turns on at the moments
 the other loops hand control back to a human — flashing and probing, first power-up,

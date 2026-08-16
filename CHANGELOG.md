@@ -7,6 +7,23 @@ Notable changes to vibe-hardware. Format follows
 ## [Unreleased]
 
 ### Added
+- **`vibe-industrial-design`** — a seventh skill, for the product's *appearance* (ID/CMF)
+  before or beside `vibe-cad`. Encodes the loop that took a wall-mounted device through
+  three ID versions with an owner iterating by AI look images: **measure the image into
+  tagged numbers** (px/mm from one anchor, brightness scans for edges/seams, a circle fit
+  for corner radius, run-length pitch for perforation with hex-vs-square from the row/column
+  ratio, patch means for CMF start values — `scripts/measure_ref.py`); a single `params.js`
+  with provenance tags (`[ref]/[std]/[eye]/[own]/[vN]`); a script-generated three.js scene
+  (outline × profile body, true plates with real holes, one material per part, procedural
+  textures) reviewed in the browser and exported by URL (`?sheet=1&save=1`, `&pt=1` for the
+  path tracer); GLB → Blender Cycles with a **hand-tuned `studio.blend` that is extracted
+  and reused** across regenerations, materials re-attached by object name
+  (`scripts/blender_render.py` / `blender_extract_studio.py` / `blender_shots.py`); and a
+  report method (markdown authority + generated .docx snapshot + per-version change list
+  and open questions). `references/threejs-scene-gotchas.md` carries the 25 gotchas — the
+  headline one: **pause the interactive rAF loop during export**, or the path tracer's
+  yields let the frame loop re-sync it to another camera and tiles come out looking like
+  material-index corruption (random per run, only when the tab is visible).
 - **`vibe-voice`** — a fifth skill, and the first that is a *channel* rather than a domain:
   the agent **speaks** the hands-on steps (bring-up, flashing, probing a test point,
   test-fitting a print) for the moments the other loops hand control back to a human and
