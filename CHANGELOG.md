@@ -7,6 +7,33 @@ Notable changes to vibe-hardware. Format follows
 ## [Unreleased]
 
 ### Added
+- `vibe-industrial-design`: **the outbound leg of the look loop, and the constraints that
+  outrank the picture.** Two new references plus a new `SKILL.md` §0.
+  `references/ai-image-iteration.md` — driving an image model instead of only receiving
+  from one: get the current render to disk without a human (`POST /save`; two nested rAFs
+  after moving the camera or you capture the previous view; always send **two** angles or
+  the model guesses the depth generously); **`edit` refines within the form, `generate`
+  leaves it** — reaching for `edit` after the brief moved returns the same box with a
+  different button and the review calls it exploration; **three prompts beat `-n 3`**
+  (three samples of one prompt are lighting accidents, not directions) sharing a literal
+  `BASE`/`STYLE` so the comparison is controlled; enumerate every feature that must
+  survive *and where it sits*, because the model simplifies silently; and always exclude
+  text, or you get invented brand marks and a screen on a device with no display.
+  `references/appearance-vs-physics.md` — requirement archaeology before the first image
+  (an algorithm spec's mounting assumption, an antenna keep-out, a power LED the MCU
+  cannot switch off), then the physics that overrides appearance: ordinary plastic and
+  glass are **opaque to LWIR**, so a handsome dark "filter" panel is a blind sensor; a
+  window sunk `t` mm needs `2·t·tan(FOV/2)` of extra clear width per edge or the shell
+  clips the field and only the far corners of the room quietly stop being detected; a
+  self-heating die reads 36.7 °C in a 28 °C room; an attenuating window is a
+  **calibration item**, not a user-removable cover. Worked failure: a desktop form that
+  silently invalidated a regression-tested detector whose thresholds all came from
+  "wall-mounted at 1.5 m".
+  `references/threejs-scene-gotchas.md` gains a *reading depth* section (26–28): the
+  blanking part behind a hole must be **unlit** or fill light turns a vent field into
+  white tiles printed on the shell; darken the hole's **side wall**, which is what you
+  actually see off-axis; and position the *group* of a sub-assembly so it follows its
+  aperture instead of leaving a crescent of bare cavity that reads as a lighting bug.
 - **`vibe-industrial-design`** — a seventh skill, for the product's *appearance* (ID/CMF)
   before or beside `vibe-cad`. Encodes the loop that took a wall-mounted device through
   three ID versions with an owner iterating by AI look images: **measure the image into
