@@ -57,7 +57,7 @@ between versions.
    the params comments; add a `[vN]` tag description at the top of the file.
 3. Change only what the picture shows. Faces not in the picture keep v(n−1) and the
    report says so.
-4. Re-render sheet (raster + path traced) and the Blender shot set; keep finals in
+4. Re-render the raster sheet and the Blender shot set; keep finals in
    `renders/`, everything else in the ignored `out/`.
 5. Report: add the change list (§0.1), update the tables, update/append open questions
    (a picture that shrinks the button re-opens the finger question; a picture that adds
