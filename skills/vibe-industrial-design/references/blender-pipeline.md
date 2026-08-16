@@ -65,6 +65,20 @@ parts show up in the log the first render after the rename.
   material and `set_emissive` paints the whole device black-pearl.
 - **Filter by material name** (`name_prefix='lightbar'`) once the front carries lit
   indicator dots — "lights off" means the bottom bar only.
+- **Light bar material** (`lightbar_material` / `apply_lightbar` / `set_lightbar`):
+  swap the GLB's black-base emissive for a milky-PMMA Principled whose Emission
+  Strength is `Is Camera Ray ? cam : light` × `lit` (Light Path node). Camera ~7,
+  bounce ~160, warm ~2700 K. Cycles importance-samples mesh lights, so the wall pool
+  is real. Tune with `ID_LIGHTBAR_CAM= ID_LIGHTBAR_LIGHT=` at low samples, then bake
+  the numbers into the constants.
+- **Bloom is post** (`enable_bloom` / `set_bloom`): compositor Glare → Bloom, threshold
+  1.0, size ~0.7, strength ~0.6; muted on unlit shots. Blender 5.x: Glare params are
+  input sockets and menu values are display names (`'Bloom'`, `'High'`); the tree is
+  `scene.compositing_node_group`; the output node is `NodeGroupOutput` with an `Image`
+  socket declared on `nt.interface` (`CompositorNodeComposite` no longer exists).
+- **Dim-room pair** (`set_ambient(scene, 0.15)`, shots `hero-dim-off/on`,
+  `front-dim-on`): World strength and every lamp scaled together. Lit under the studio
+  HDRI a bar barely registers; in a dim room the pool on the wall *is* the design.
 - HDRI direction: check the first render — the bright side of an environment map is
   often behind the product; rotate the World `Mapping` node 180° in Z and re-shoot.
 
@@ -72,7 +86,8 @@ parts show up in the log the first render after the rename.
 
 - Blender CLI: `/Applications/Blender.app/Contents/MacOS/Blender --background
   --python <script> -- <args>`; parse `sys.argv` after `--`.
-- Cycles 128 samples + denoise is enough for review; ~40 s per 1920×1280 frame on an
-  Apple GPU; a 7-shot set is ~5 min — run it in the background and keep writing.
+- Cycles 128 samples + denoise is enough for review; ~1–2 min per 1920×1280 frame on
+  an Apple GPU with a real HDRI studio; a 10-shot set is ~15 min — run it in the
+  background and keep writing. Tune materials at 32–48 samples on one shot.
 - Convert PNG shots to JPEG q90 for the report / repo (`renders/shots/`); keep PNGs in
   the ignored `out/`.

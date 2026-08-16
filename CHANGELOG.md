@@ -6,6 +6,19 @@ Notable changes to vibe-hardware. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **`vibe-industrial-design`** — light bars and finals. The in-browser path tracer is
+  **retired** from the method (finals come from Blender/Cycles; the browser stays raster;
+  its gotchas 22–24 are kept as generic multi-frame-renderer lessons). New in the Blender
+  scripts: a **purpose-built light-bar material** (`lightbar_material` — Light Path splits
+  camera-ray strength ≈7 from bounce strength ≈160, so the bar reads as a lamp *and* really
+  lights the wall; milky PMMA base so unlit is `lit=0`), **compositor bloom**
+  (`enable_bloom`; Blender 5.x Glare facts recorded — socket-driven params, display-name
+  menu values, `NodeGroupOutput` instead of `CompositorNodeComposite`), a **studio dimmer**
+  (`set_ambient`) and a **dim-room shot pair** (`hero-dim-off/on`, `front-dim-on`) — the
+  honest way to show what a light bar looks like. `ID_LIGHTBAR_CAM/LIGHT` env overrides for
+  tuning at low samples.
+
 ### Added
 - **`vibe-industrial-design`** — a seventh skill, for the product's *appearance* (ID/CMF)
   before or beside `vibe-cad`. Encodes the loop that took a wall-mounted device through

@@ -95,11 +95,13 @@ if os.path.exists(STUDIO):
     scene = bpy.context.scene
     _, imported = lib.import_device(scene, GLB)
     lib.apply_overrides(imported)
+    lib.apply_lightbar(imported)
     print('studio: hand-tuned', STUDIO)
 else:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
-    lib.import_device(scene, GLB)
+    _, imported = lib.import_device(scene, GLB)
+    lib.apply_lightbar(imported)
     build_programmatic_studio(scene)
     print('studio: programmatic fallback (no studio.blend)')
 

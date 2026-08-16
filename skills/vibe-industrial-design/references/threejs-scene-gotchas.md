@@ -48,7 +48,7 @@ light rig + backdrop) · `pathtrace.js` (final quality) · `main.js` (UI, export
     holes become light leaks on the wall. Also blank a dark plate behind any through
     hole.
 12. **Light-emitting parts: black base + emissive, `toneMapped = false`.** Basic
-    materials look unlit to a path tracer; tone-mapped emissive never reads as light.
+    materials look unlit to any physically based renderer; tone-mapped emissive never reads as light.
 13. **Name emissive materials** (`lightbar`, `dots`) — the name travels through GLB and
     lets Blender scripts toggle *one* of them.
 14. **Several decals, one canvas.** Label + icon share a texture via UV sub-rects; a
@@ -64,7 +64,7 @@ light rig + backdrop) · `pathtrace.js` (final quality) · `main.js` (UI, export
     recovers (all tiles blank, console clean).
 17. **Strip views: drop grain maps + steepen the key light** (raster only). Grazing
     light + 10× minification aliases noise into diagonal stripes; shadow acne adds
-    another set. Under the path tracer keep the maps.
+    another set. (A path tracer would keep the maps — it doesn't alias that way.)
 18. **Third-angle projection for top/bottom strips.** Bottom: front edge up, left/right
     as the front. A tilt of 1° pulls the mirrored back silk into the frame.
 19. **Elevation 0.3° for front/back once the top carries a lamp** — 1.2° pokes a red
@@ -77,6 +77,9 @@ light rig + backdrop) · `pathtrace.js` (final quality) · `main.js` (UI, export
     `load`.
 21. **`serve.py` sends `Cache-Control: no-store`.** Otherwise Chrome caches modules
     and you edit the wrong file for an hour.
+*(22–24 come from the in-browser path tracer, since retired in favour of Blender;
+they hold for any multi-frame renderer you put in the page.)*
+
 22. **Pause the interactive rAF loop during export.** The path tracer yields to the
     event loop every N samples; the frame loop sees `needsRender`, re-applies the
     *interactive* camera and re-syncs the tracer; the rest of the samples accumulate
