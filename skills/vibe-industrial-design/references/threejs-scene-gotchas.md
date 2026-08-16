@@ -94,3 +94,25 @@ light rig + backdrop) · `pathtrace.js` (final quality) · `main.js` (UI, export
     engine sizes its target from `clientWidth`; otherwise the front squashes to a band.
 25. **`?fresh=1` for automation.** localStorage deltas from a slider session
     otherwise leak into "reference" renders.
+
+## Reading depth (holes, recesses, vents)
+
+A perforated panel only reads as *holes* if what shows through is darker than the panel at
+every angle. Two ways it silently stops being darker:
+
+26. **The blanking part behind a hole must be unlit** (`MeshBasicMaterial`, or basic +
+    a fixed dark colour). With a lit material, the fill or rim light reaches it from the
+    far side and each hole fills with a pale square — a vent field that renders as *white
+    tiles printed on the shell*. It looks like the holes were never cut, so the instinct
+    is to go check the geometry, which is fine.
+27. **Darken the hole's side wall, not just the cavity.** Off-axis you mostly see the
+    wall of the hole, not the space behind it: at 45° a 3 mm-thick wall covers a 3 mm-wide
+    hole completely. A body-coloured wall catches the key light and reads as a raised
+    white square. Give the wall its own darker material (`ExtrudeGeometry` puts caps in
+    material slot 0 and walls in slot 1, so this is free) — which is also what the real
+    part does, with a dark liner behind the panel.
+28. **A sub-assembly must follow the opening it sits in.** When the aperture is a
+    parameter (`driverX/Y`), the parts behind it — basket, cone, light guide, gasket —
+    have to move with it. Miss it and the assembly stays at the origin while the hole
+    moves: you get a crescent of bare cavity on one side of the opening that looks like a
+    lighting bug, not a positioning one. Position the *group*, never the members.
