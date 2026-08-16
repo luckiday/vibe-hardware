@@ -54,7 +54,7 @@ The method has three sources of truth and one loop:
 ```
 constraints ─► AI look image(s) ─► MEASURE ─► params.js ─► three.js scene ─► contact sheet ─► GLB ─► Blender shots ─► report vN
  + brief       (Midjourney/       px/mm,      [tag] each   outline×profile   6 fixed views     mm→m   studio.blend     md + docx
-               Imagen/gpt-image)  ratios      value        + plates w/ holes  raster / PT              (reused)         + change log
+               Imagen/gpt-image)  ratios      value        + plates w/ holes  raster                   (reused)         + change log
                   ▲   ▲                                          │                                                          │
                   │   └───── you send the current render back ───┘  (edit = refine the form, generate = leave it)            │
                   └──────────── owner sends a new image ("v+1: more like this") ◄─────────────────────────────────────────────┘
