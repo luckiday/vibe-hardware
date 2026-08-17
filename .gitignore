@@ -4,6 +4,8 @@
 # Local scratch / experiments (never committed)
 _scratch/
 tmp/
+# freerouting writes logs/freerouting.log into whatever dir it was started from
+logs/
 
 # Python
 __pycache__/

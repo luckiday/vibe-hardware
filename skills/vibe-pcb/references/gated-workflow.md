@@ -57,6 +57,12 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
   logs `Unknown settings property: …` for a misspelt or too-new `--setting` and then routes with
   the default, exit 0. `autoroute.sh` fails on that string; if you drive freerouting by hand,
   read its log before believing the constraint held (`references/autorouting.md`, gotchas 4–5).
+- **Gate 6/7 — the autorouter's own summary is not the gate.** freerouting counts one DSN pin
+  per pad *instance*, so a castellated module land (pad 5 present on F.Cu, B.Cu and the
+  half-hole) makes it report `A1-5@2 -> A1-5@1` as an *unrouted connection* and score the
+  overlapping same-net copper as violations — "4 unrouted and 84 violations" on a board KiCad
+  then imports at **0 unconnected, 0 DRC errors**. Check whether the unrouted list names the
+  same pad or different pads before believing it; the DRC report decides.
 - **Gate 7 — DRC must run on FILLED zones.** Unfilled-zone DRC silently skips pour clearance.
   `pcb_check.sh` passes `--refill-zones` so the gate checks the real copper.
 - **Don't claim a gate you didn't run.** If `cross_analysis`/EMC (gate 4/8) weren't run this

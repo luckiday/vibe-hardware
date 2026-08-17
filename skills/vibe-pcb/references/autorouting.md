@@ -5,6 +5,9 @@ you hand to freerouting**. This is the validated, fully-headless recipe — and 
 that the one-line "freerouting runs headless" claim hides. Validated on a XIAO module-carrier
 (5 nets, 2 layer, flush module + belly keep-out): the autorouted board matched the
 hand-routed one exactly — **DRC 0/0/0, 0 unconnected, belly PASS, power 0.4 / signal 0.3 mm**.
+Re-validated end to end on that board with **2.3.0 + JDK 25**: 18 tracks, 0 vias, power 400 /
+signal 300 µm, **0 DRC errors · 0 unconnected · belly PASS** (the one warning is a cosmetic
+`silk_edge_clearance`), and nothing appeared in the Dock for the length of the run.
 
 Since **2.3.0** freerouting also ships agent-facing front ends (REST API, MCP server, A2A
 card). They route the *same board with the same engine* — see
@@ -173,14 +176,36 @@ context window as base64.
 7. **`-help` under-reports the CLI.** It lists ~10 flags and omits `-drc`, `-inc`, `-da` and the
    entire `--setting=value` surface. `docs/command_line_arguments.md` in the freerouting repo is
    the real list. (`-inc <net classes>` was a no-op on both 2.2.4 and 2.3.0 in our test — verify
-   it on your jar before relying on it, and see gotcha 10 for why you don't want it for GND.)
+   it on your jar before relying on it, and see gotcha 12 for why you don't want it for GND.)
 
-8. **freerouting saves the `.ses` LATE.** It logs `session completed` ~10–15 s **before** it
+8. **freerouting's own "unrouted connections" and violation counts LIE on a castellated
+   land — KiCad's DRC is the gate.** On the XIAO carrier the router ended with *"4 unrouted
+   and 84 violations"* and printed a scary block:
+   ```
+   Net 'SDA' (1 unrouted connection):
+       - A1-5@2  ->  A1-5@1
+   ```
+   `A1-5@2 → A1-5@1` is **the same pad**. KiCad's Specctra export emits one DSN pin per pad
+   *instance*, so a module land whose pad number repeats (castellated pads exist on F.Cu, on
+   B.Cu, and in the half-hole) becomes `A1-5 A1-5@1 A1-5@2 A1-5@3` in the net — four points
+   freerouting believes it must wire together, and whose overlapping copper it then scores as
+   clearance violations. On import KiCad knows they are one pad: **0 unconnected, 0 DRC
+   errors**. So read the router's summary as advisory only; `pcb_check.sh` / the DRC report is
+   what accepts the board. (If the unrouted list names *different* pads, that's a real failure.)
+
+9. **`autoroute.sh` regenerates the PCB only — never the schematic.** The DSN is exported from
+   the placed `.kicad_pcb` and never reads the schematic, so a `gen_sch.py` call here is pure
+   side effect. It used to be one, and on a project that **commits** its `.kicad_*` (against
+   this skill's convention) the schematic regen also rewrote `.kicad_pro` and dropped 332 lines
+   of board design settings — net classes and DRC rules — out of a clean checkout. ERC owns the
+   schematic; it regenerates it in `pcb_check.sh`, where that is the point.
+
+10. **freerouting saves the `.ses` LATE.** It logs `session completed` ~10–15 s **before** it
    actually writes the output file. Run java in the **foreground** (the process stays alive
    until the save) or poll for the file — never read the `.ses` the instant you see
    "completed", or you'll import an empty board.
 
-9. **The belly keep-out must be a REAL keepout for the router.** `gen_pcb.py` P6 only does
+11. **The belly keep-out must be a REAL keepout for the router.** `gen_pcb.py` P6 only does
    `SetDoNotAllowZoneFills(True)` — enough to hold the GND *pour* out of the belly, but the
    autorouter will happily run F.Cu and drop vias there. For the DSN you must also:
    ```python
@@ -193,7 +218,7 @@ context window as base64.
    every wire came back on `B.Cu`). Useful for a single-sided carrier; too blunt when you need
    F.Cu everywhere *except* under the module.
 
-10. **A GND pour over routed GND trips `[starved_thermal]`.** freerouting routes GND as
+12. **A GND pour over routed GND trips `[starved_thermal]`.** freerouting routes GND as
    copper; if the pour then connects the same pads with the default THERMAL relief, KiCad
    flags incomplete thermals. Pour GND with **solid** connection so it merges with the
    routed copper:
@@ -207,11 +232,11 @@ context window as base64.
    worse — so you drop GND *and* deal with the islands this warning correctly predicts. See
    "Freerouting at scale" below, and `scripts/zone_islands.py` for finding them.)
 
-11. **Per-net widths.** The exported DSN uses one default class width. Split it into
+13. **Per-net widths.** The exported DSN uses one default class width. Split it into
     power/signal classes (post-process the DSN text) so the router matches `gen_pcb.py`'s
     `NET_W` (e.g. power 0.4 mm / signal 0.3 mm) — see `export_dsn.py`.
 
-12. **MCP tool arguments are not flat.** The tools that mirror a REST endpoint take the HTTP
+14. **MCP tool arguments are not flat.** The tools that mirror a REST endpoint take the HTTP
     shape — `{"path": {"jobId": "…"}, "body": {…}}` — while the local-file helpers
     (`upload_job_input_from_local_file`, `download_job_output_to_local_file`) take flat
     arguments. Upstream `docs/API/MCP.md` shows `update_job_settings` as flat
@@ -220,7 +245,7 @@ context window as base64.
     Read `tools/list` rather than the prose. Every tool result is an envelope —
     `{"status": 200, "contentType": …, "body": {…}}` — so unwrap `body` before reading `id`.
 
-13. **The MCP *HTTP* transport still needs a profile header even with auth off.** With
+15. **The MCP *HTTP* transport still needs a profile header even with auth off.** With
     `--mcp_server.authentication.enabled=false`, `POST /v1/mcp` without
     `Freerouting-Profile-ID` returns `-32602 Authentication failed`, and `tools/list` then
     reports **0 tools** — which reads like an empty server rather than a rejected caller. The
@@ -229,7 +254,7 @@ context window as base64.
     **CLI arg** (or `FREEROUTING__MCP_SERVER__STDIO=true`) — setting it in `freerouting.json`
     is ignored, because the stdout redirect has to happen before logging starts.
 
-14. **The jar phones home for a version check on every run** (`New version available: v2.3.0`).
+16. **The jar phones home for a version check on every run** (`New version available: v2.3.0`).
     `-da` disables *analytics*, not that check. Harmless, but don't mistake it for the router
     reaching the network with your board — and on an air-gapped host expect the delay.
 

@@ -104,6 +104,18 @@ Notable changes to vibe-hardware. Format follows
   with auth off, reporting **0 tools** when it's missing. `autoroute.sh` picks the headless +
   quiet-JVM flags from the detected jar version, captures the router log, gates on ignored
   settings, and takes extra settings via `FR_ARGS`.
+  Then run end to end on a real board (the TC5.1-Xiao carrier, 2.3.0 + JDK 25): **18 tracks,
+  0 vias, power 400 / signal 300 µm, 0 DRC errors · 0 unconnected · belly PASS**, nothing in
+  the Dock for the whole run. That run surfaced two more things. **`autoroute.sh` no longer
+  regenerates the schematic** — the DSN comes from the placed `.kicad_pcb` and never reads the
+  sch, so the `gen_sch.py` call was pure side effect, and on a project that *commits* its
+  `.kicad_*` it rewrote `.kicad_pro` and dropped 332 lines of board design settings out of a
+  clean checkout. And **the router's own summary lies on a castellated land**: KiCad's Specctra
+  export emits one DSN pin per pad *instance*, so `A1-5 A1-5@1 A1-5@2 A1-5@3` become four
+  points freerouting thinks it must wire, reporting "4 unrouted and 84 violations" on a board
+  KiCad imports at 0 unconnected / 0 errors — the DRC report is the gate, not the router log.
+  A failed settings gate now also deletes the `.ses` it produced, so an unconstrained route
+  can't be accepted as `routing.ses` later.
 - **`vibe-industrial-design`** — light bars and finals. The in-browser path tracer is
   **retired** from the method (finals come from Blender/Cycles; the browser stays raster;
   its gotchas 22–24 are kept as generic multi-frame-renderer lessons). New in the Blender

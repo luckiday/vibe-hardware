@@ -41,7 +41,11 @@ WORK="$(pwd)/autoroute-work"; mkdir -p "$WORK"
 [ -f gen_pcb.py ] || { echo "run me from the project kicad/ dir (no gen_pcb.py here)"; exit 1; }
 
 echo "-> 1. placement-only board (STAGE=place)"
-python3 gen_sch.py >/dev/null
+# Only the PCB is regenerated: the DSN is exported from the placed .kicad_pcb and
+# never reads the schematic, so touching gen_sch.py here would be pure side effect
+# -- and on a project that COMMITS its .kicad_* (against this skill's convention)
+# a schematic regen also rewrites .kicad_pro, dropping its design settings. ERC
+# owns the schematic; that runs in pcb_check.sh, which regenerates it there.
 STAGE=place "$PY" gen_pcb.py >/dev/null
 PLACE="$PWD/$PROJ.place.kicad_pcb"
 
@@ -56,8 +60,11 @@ echo "-> 3. freerouting (headless)"
 #   2.x : -Djava.awt.headless=true      -> the process registers no app at all
 #   1.9 : -Dapple.awt.UIElement=true    -> registers as an accessory (no Dock icon);
 #         forcing headless there throws HeadlessException and writes no .ses
+# -help itself prints the version before touching AWT, so probe it forced-headless on
+# BOTH majors -- that keeps even the probe from registering an app.
+FR_VER="$("$JAVA" -Djava.awt.headless=true -jar "$FR_JAR" -help 2>&1 \
+          | sed -n 's/.*Freerouting v\([0-9][0-9]*\)\..*/\1/p' | head -1)"
 JVM_QUIET="-Dapple.awt.UIElement=true"
-FR_VER="$("$JAVA" $JVM_QUIET -jar "$FR_JAR" -help 2>&1 | sed -n 's/.*Freerouting v\([0-9][0-9]*\)\..*/\1/p' | head -1)"
 HEADLESS=""
 if [ "${FR_VER:-0}" -ge 2 ] 2>/dev/null; then
   HEADLESS="--gui.enabled=false"
@@ -73,8 +80,8 @@ set -o pipefail   # ... so a java crash isn't masked by tee
 # -mt 1: freerouting's own log calls the multi-threaded optimizer broken
 # ("Multi-threaded route optimization is broken and it is known to generate
 # clearance violations"), and a 27-part board came back with clearance
-# violations under the default thread pool that vanished at -mt 1. It goes
-# before FR_ARGS so an explicit override still wins.
+# violations under the default thread pool that vanished at -mt 1. FR_ARGS comes
+# after it; whether a later -mt N overrides this one is untested.
 ( cd "$WORK" && "$JAVA" $JVM_QUIET -jar "$FR_JAR" $HEADLESS -da -mt 1 \
     ${FR_ARGS:-} -de "$PROJ.dsn" -do "$PROJ.ses" 2>&1 | tee "$LOG" )
 set +o pipefail
@@ -84,6 +91,9 @@ if grep -qE "Unknown settings property|Failed to apply CLI" "$LOG"; then
   echo "!! freerouting ignored a setting -- it routed with defaults:"
   grep -E "Unknown settings property|Failed to apply CLI" "$LOG" | sed 's/^/   /'
   echo "   (settings resolve by snake_case name, e.g. --router.copper_to_edge_clearance_um)"
+  # Bin the .ses too: it IS a complete route, just an unconstrained one, and leaving
+  # it on disk invites someone to accept it as routing.ses later.
+  rm -f "$WORK/$PROJ.ses"
   exit 1
 fi
 [ -f "$WORK/$PROJ.ses" ] || { echo "no .ses produced"; exit 1; }
