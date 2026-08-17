@@ -53,6 +53,9 @@ product's `product.yaml` (vibe-plm owns it), never by one skill calling another'
 
 - **PCB** — KiCad 10: `kicad-cli` + its **bundled** python (the one with `pcbnew`),
   not system python. Override paths via `KICAD_CLI` / `KICAD_PY` on non-mac.
+- **Routing** — a freerouting jar (not vendored; 2.3.x + JDK 25) via `FREEROUTING_JAR`.
+  Its CLI / REST API / MCP server are one engine; only `autoroute.sh` (CLI) carries the
+  keep-outs and gates, so that is the path that produces the committed `routing.ses`.
 - **CAD** — a build123d venv: `python3 -m venv .venv && .venv/bin/pip install build123d`.
   Run model/check/export scripts with `.venv/bin/python`.
 - **Firmware** — a **pinned** toolchain (Docker image at a fixed SDK tag / locked

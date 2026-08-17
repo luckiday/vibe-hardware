@@ -179,10 +179,14 @@ hallucination.** Placement has no auto tool (→ the loop above); routing you ha
 The validated headless recipe + every gotcha that bit lives in **`references/autorouting.md`**,
 driven by `scripts/autoroute.sh` — **read that, don't reconstruct the pipeline from memory.** The
 ones that cost real time: `kicad-cli` has **no** Specctra subcommand (go through pcbnew
-`ExportSpecctraDSN`/`ImportSpecctraSES`); the freerouting version ↔ JRE ↔ display pick is a trap
-(1.9.0 plain on a workstation vs 2.x + JDK 25 for headless CI); the belly keep-out must block
-**tracks**, not just zone fills, or the router lays F.Cu under the module; and the `.ses` saves
-~10 s *after* "completed". **Accept a route by committing the `.ses` as `routing.ses`** —
+`ExportSpecctraDSN`/`ImportSpecctraSES`); headless means **`--gui.enabled=false`** on 2.x + JDK 25
+(1.9.0 has no such switch and needs a display session); a misspelt `--setting` only WARNs and
+routes with the **default**, so a silently unconstrained board reaches the gates looking like a
+success; the belly keep-out must block **tracks**, not just zone fills, or the router lays F.Cu
+under the module; and the `.ses` saves ~10 s *after* "completed". freerouting's REST API and MCP
+server (2.3.0+) drive the same engine to a byte-identical `.ses`, but they route a bare `.dsn` —
+**they skip the keep-out, the widths, the pour and the gates**, so they explore, they don't
+produce. **Accept a route by committing the `.ses` as `routing.ses`** —
 `pcblib.route.apply_ses` replays it in the full stage, so the routed board regenerates from
 committed sources. When no JRE/jar is available, route by script with the pad-anchored
 vocabulary (`wire(brd, net, [a.pad(3), b.pad(1)], bend="x")` / `via` / `path` — endpoints are
