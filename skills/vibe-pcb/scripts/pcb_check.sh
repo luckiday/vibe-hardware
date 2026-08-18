@@ -66,7 +66,7 @@ printf '  DRC warnings (cosmetic): %s   (silk/edge — see references/design-rul
 belly_ok=skip
 if [ -n "${BELLY_BOX:-}" ]; then
   echo; echo "-> belly keep-out ($BELLY_BOX)"
-  if "$PY" "$S/belly_check.py" "$PROJ.kicad_pcb" $(echo "$BELLY_BOX" | tr ',' ' '); then
+  if belly_check_box "$PROJ.kicad_pcb"; then
     belly_ok=pass; else belly_ok=FAIL; fi
 fi
 echo

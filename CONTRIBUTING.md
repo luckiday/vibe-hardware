@@ -41,6 +41,16 @@ non-English gets a nudge to become a `*.<lang>.md`, not an error.
 Write in the English you have. A clear idea in imperfect English beats a missing one, and
 we would much rather fix your grammar than lose your gotcha.
 
+## CI
+
+PRs and pushes to `main` run `.github/workflows/ci.yml`: skill frontmatter, `py_compile`
+over `skills/` `examples/` `tools/`, `plm_check.py` on every `examples/*/product.yaml`,
+the pager-buddy bridge smoke test, a docs-translation gate, and shellcheck. Firmware
+builds only on a release tag (`<example>-v<version>`) or a manual **Run workflow**.
+
+PCB ERC/DRC and CAD fit-check stay local — they need KiCad / build123d, which the
+GitHub-hosted runner does not ship. Run those with the skill scripts before a fab cut.
+
 ## Add an example
 
 `examples/<name>/` is a complete small build that exercises one or more skills. Give it

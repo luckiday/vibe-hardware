@@ -5,28 +5,56 @@ on:
     branches: [main]
     tags: ['*-v*']        # release tags: <example>-v<version> (e.g. pager-buddy-v1.2.3)
   pull_request:
+  workflow_dispatch:
+    inputs:
+      example:
+        description: Example directory under examples/ to firmware-build
+        required: false
+        default: pager-buddy
+
+# Least privilege. The firmware job re-grants actions:write for artifact upload.
+permissions:
+  contents: read
+
+# Cancel stale PR runs; never cancel a tag / manual firmware build mid-upload.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Skill structure (each skill has SKILL.md + a name:)
+      - name: "Skill structure (SKILL.md + name: + use when)"
         run: |
           fail=0
           for d in skills/*/; do
             [ -f "$d/SKILL.md" ] || { echo "::error::missing SKILL.md in $d"; fail=1; continue; }
             grep -q '^name:' "$d/SKILL.md" || { echo "::error::no 'name:' frontmatter in $d/SKILL.md"; fail=1; }
+            grep -qi 'use when' "$d/SKILL.md" || { echo "::error::no 'use when' in $d/SKILL.md"; fail=1; }
           done
-          [ "$fail" = 0 ] && echo "OK: every skill has SKILL.md + name:"
+          [ "$fail" = 0 ] && echo "OK: every skill has SKILL.md + name: + use when"
           exit $fail
 
       - name: Python scripts compile
         run: |
-          files=$(find skills -name '*.py')
-          [ -z "$files" ] || python3 -m py_compile $files
+          find skills examples tools -name '*.py' -print0 \
+            | xargs -0 -r python3 -m py_compile
           echo "OK: python scripts compile"
+
+      - name: PLM gate (every example product.yaml)
+        run: |
+          fail=0
+          shopt -s nullglob
+          found=0
+          for f in examples/*/product.yaml; do
+            found=1
+            python3 skills/vibe-plm/scripts/plm_check.py "$f" || fail=1
+          done
+          [ "$found" = 1 ] || { echo "::error::no examples/*/product.yaml found"; fail=1; }
+          exit $fail
 
       - name: Docs are global-developer friendly (translations welcome)
         run: |
@@ -79,43 +107,72 @@ jobs:
           sys.exit(1 if fail else 0)
           PY
 
-      - name: Shellcheck (advisory)
-        continue-on-error: true
-        run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
-          find skills -name '*.sh' -print0 | xargs -0 -r shellcheck -S warning
+      - name: pager-buddy bridge smoke
+        run: examples/pager-buddy/bridge/smoke.sh
 
-  # Build an example's firmware ONLY on a release tag named "<example>-v<version>"
-  # (e.g. pager-buddy-v1.2.3). Never on branch pushes or PRs — firmware builds are slow and
-  # only meaningful for a cut release. Runs in the SAME pinned ESP-IDF Docker image the
+      - name: Shellcheck
+        run: |
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y shellcheck
+          fi
+          find skills examples tools docs -name '*.sh' -print0 \
+            | xargs -0 -r shellcheck -S warning
+
+  # Build an example's firmware on a release tag named "<example>-v<version>"
+  # (e.g. pager-buddy-v1.2.3), or via workflow_dispatch. Never on branch pushes
+  # or PRs — firmware builds are slow and only meaningful for a cut release /
+  # a deliberate check. Runs in the SAME pinned ESP-IDF Docker image the
   # example's idf.sh uses, so CI artifacts match a local reproducible build.
   firmware:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Resolve example from the tag
+      - name: Resolve example from the tag or dispatch input
         id: ex
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_EXAMPLE: ${{ inputs.example }}
         run: |
-          tag="$GITHUB_REF_NAME"            # e.g. pager-buddy-v1.2.3
-          name="${tag%-v*}"                 # strip -v<version> -> pager-buddy
-          dir="examples/$name/firmware"
-          if [ "$name" = "$tag" ] || [ -z "$name" ]; then
-            echo "::error::tag '$tag' is not of the form '<example>-v<version>'"; exit 1
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            name="$INPUT_EXAMPLE"
+            tag="dispatch"
+          else
+            tag="$GITHUB_REF_NAME"            # e.g. pager-buddy-v1.2.3
+            name="${tag%-v*}"                 # strip -v<version> -> pager-buddy
+            if [ "$name" = "$tag" ] || [ -z "$name" ]; then
+              echo "::error::tag '$tag' is not of the form '<example>-v<version>'"; exit 1
+            fi
           fi
+          # Keep the path under examples/<name>/firmware — no slashes, dots, or empties.
+          if ! [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            echo "::error::invalid example name '$name'"; exit 1
+          fi
+          dir="examples/$name/firmware"
           if [ ! -d "$dir" ]; then
             echo "::error::no firmware for example '$name' (expected $dir)"; exit 1
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "dir=$dir"   >> "$GITHUB_OUTPUT"
-          echo "Building '$name' firmware ($dir) for tag $tag"
+          echo "tag=$tag"   >> "$GITHUB_OUTPUT"
+          echo "Building '$name' firmware ($dir) for $tag"
 
       - name: Build firmware (pinned ESP-IDF Docker)
         run: |
-          docker run --rm -v "$PWD/${{ steps.ex.outputs.dir }}":/project -w /project \
-            espressif/idf:v5.5 idf.py build
+          # Same image + user mapping as examples/<name>/firmware/idf.sh.
+          # No -t: GitHub-hosted runners have no TTY.
+          TAG="${IDF_DOCKER_TAG:-v5.5}"
+          docker run --rm \
+            -v "$PWD/${{ steps.ex.outputs.dir }}":/project -w /project \
+            -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            "espressif/idf:$TAG" \
+            idf.py build
 
       - name: Size report
         run: ls -l "${{ steps.ex.outputs.dir }}/build/"*.bin
@@ -123,7 +180,7 @@ jobs:
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.ex.outputs.name }}-${{ github.ref_name }}
+          name: ${{ steps.ex.outputs.name }}-${{ steps.ex.outputs.tag }}
           path: |
             ${{ steps.ex.outputs.dir }}/build/*.bin
             ${{ steps.ex.outputs.dir }}/build/bootloader/bootloader.bin

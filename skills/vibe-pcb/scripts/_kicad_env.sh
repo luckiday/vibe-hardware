@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared KiCad tool resolution for the vibe-pcb scripts (sourced, not run).
 #
 # Resolves, in order: env override -> mac app bundle -> PATH:
@@ -30,8 +31,23 @@ else
   echo "no python with pcbnew found (set KICAD_PY)"; exit 1
 fi
 
+export CLI PY
+
 cli_has() {  # cli_has pcb drc  -> subcommand exists on this kicad-cli
   "$CLI" "$1" "$2" --help >/dev/null 2>&1
+}
+
+# BELLY_BOX="x0,y0,x1,y1" → belly_check.py (no unquoted $(tr) split).
+belly_check_box() {
+  local pcb="$1" x0 y0 x1 y1 extra
+  IFS=',' read -r x0 y0 x1 y1 extra <<EOF
+${BELLY_BOX-}
+EOF
+  if [ -z "$x0" ] || [ -z "$y0" ] || [ -z "$x1" ] || [ -z "$y1" ] || [ -n "${extra:-}" ]; then
+    echo "BELLY_BOX must be x0,y0,x1,y1 (got: ${BELLY_BOX:-empty})" >&2
+    return 1
+  fi
+  "$PY" "$_VS/belly_check.py" "$pcb" "$x0" "$y0" "$x1" "$y1"
 }
 
 # render_top <board> <out.png> — 3D render on v8+; 2D svg fallback on v7

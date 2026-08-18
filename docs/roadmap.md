@@ -58,4 +58,5 @@ Prove the whole loop on a real, public build.
 - **Generate by script, review in the browser** — never require the heavyweight GUI.
 - **Encode the gotchas** — every skill carries the failures, not just the happy path.
 - **Living docs** — fold each new lesson back into the skill (see each `SKILL.md`).
-- **Generic & English-only** — skills teach the method; designs stay in `examples/`.
+- **Generic, shared docs in English** — skills teach the method; designs stay in
+  `examples/`. Translations live beside an English original as `*.<lang>.md`.

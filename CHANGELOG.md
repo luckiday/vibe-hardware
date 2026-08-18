@@ -6,6 +6,16 @@ Notable changes to vibe-hardware. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- **CI** — the `checks` job was a lint-only scaffold that did not run the gates the
+  docs tell you to run. It now compiles Python under `examples/` and `tools/` as well
+  as `skills/`, runs `plm_check.py` on every `examples/*/product.yaml`, and runs the
+  pager-buddy `bridge/smoke.sh`. Shellcheck is a real gate (it used to `continue-on-error`
+  while failing every run on `_kicad_env.sh` SC2148). Firmware builds can be triggered
+  with **Run workflow** so the Docker job is exercisable without cutting a tag; the
+  container flags now match `idf.sh` (`-u` / `HOME=/tmp`). Actions get `permissions:` /
+  `concurrency:` and Dependabot for `github-actions`.
+
 ### Changed
 - **`vibe-industrial-design`** — light bars and finals. The in-browser path tracer is
   **retired** from the method (finals come from Blender/Cycles; the browser stays raster;

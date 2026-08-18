@@ -54,7 +54,7 @@ echo "   DRC errors   : $(grep -cE '; *error' "$WORK/$PROJ-drc.rpt" || true)"
 echo "   DRC warnings : $(grep -cE '; *warning' "$WORK/$PROJ-drc.rpt" || true)"
 grep -E "Found [0-9]+ (unconnected|Footprint)" "$WORK/$PROJ-drc.rpt" | sed 's/^/   /'
 if [ -n "${BELLY_BOX:-}" ]; then
-  "$PY" "$S/belly_check.py" "$ROUTED" $(echo "$BELLY_BOX" | tr ',' ' ')
+  belly_check_box "$ROUTED"
 fi
 echo "done -> $ROUTED"
 echo "accept: cp $WORK/$PROJ.ses routing.ses   (then gen_pcb.py full replays it; commit routing.ses)"
