@@ -25,7 +25,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: "Skill structure (SKILL.md + name: + use when)"
         run: |
@@ -132,7 +132,7 @@ jobs:
       contents: read
       actions: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Resolve example from the tag or dispatch input
         id: ex
@@ -178,7 +178,7 @@ jobs:
         run: ls -l "${{ steps.ex.outputs.dir }}/build/"*.bin
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.ex.outputs.name }}-${{ steps.ex.outputs.tag }}
           path: |
