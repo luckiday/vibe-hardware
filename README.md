@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/luckiday/vibe-hardware/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/luckiday/vibe-hardware/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="skills: 7" src="https://img.shields.io/badge/skills-7-8a2be2">
   <img alt="PCB: KiCad 10" src="https://img.shields.io/badge/PCB-KiCad%2010-2ea44f">
