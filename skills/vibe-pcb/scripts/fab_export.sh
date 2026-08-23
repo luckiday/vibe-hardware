@@ -61,13 +61,36 @@ for r in rows:
 with open(f"{out}/{proj}-CPL-jlcpcb.csv","w",newline="") as f:
     w=csv.writer(f); w.writerow(["Designator","Mid X","Mid Y","Layer","Rotation"]); w.writerows(cpl)
 
+# LCSC numbers come from the project's parts.yaml (`lcsc:` per ref) -- the same
+# file the netlist comes from, so a part number cannot drift from its footprint.
+lcsc={}
+for cand in ("parts.yaml", "../parts.yaml", "../../parts.yaml"):
+    if os.path.isfile(cand):
+        ref=None
+        for line in open(cand):
+            m=re.match(r"^\s{0,4}(\w+):\s*$", line)
+            if m: ref=m.group(1)
+            m=re.search(r"^\s+lcsc:\s*(\S+)", line)
+            if m and ref: lcsc[ref]=m.group(1)
+            m=re.match(r"^(\w+):\s*\{.*?lcsc:\s*([^,}\s]+)", line)   # inline form
+            if m: lcsc[m.group(1)]=m.group(2)
+        break
+
 grp=collections.OrderedDict()
 for r in placed: grp.setdefault((r["Val"], jlc_fp(r["Package"])), []).append(r["Ref"])
+missing=[]
 with open(f"{out}/{proj}-BOM-jlcpcb.csv","w",newline="") as f:
     w=csv.writer(f); w.writerow(["Comment","Designator","Footprint","LCSC Part #"])
-    for (val,fp),refs in grp.items(): w.writerow([val, ",".join(sorted(refs)), fp, ""])
+    for (val,fp),refs in grp.items():
+        codes={lcsc[r] for r in refs if r in lcsc}
+        if len(codes)>1: sys.exit(f"BOM: {sorted(refs)} share a line but different LCSC #s: {codes}")
+        code=codes.pop() if codes else ""
+        if not code: missing.append(",".join(sorted(refs)))
+        w.writerow([val, ",".join(sorted(refs)), fp, code])
 
-print(f"   CPL: {len(cpl)} SMT placement(s) · BOM: {len(grp)} line(s)  (fill LCSC #s before an SMT order)")
+print(f"   CPL: {len(cpl)} SMT placement(s) · BOM: {len(grp)} line(s), "
+      f"{len(grp)-len(missing)} with an LCSC #")
+if missing: print(f"   NO LCSC # yet (add `lcsc:` in parts.yaml): {'; '.join(missing)}")
 if excl:        print(f"   hand-soldered (excluded): {', '.join(sorted(excl))}")
 PY
 rm -f "$OUT/_pos.csv"

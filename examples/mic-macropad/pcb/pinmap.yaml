@@ -1,0 +1,47 @@
+# pinmap.yaml — pcb -> firmware interface contract (the net map)
+#
+# Every signal was assigned by hand, one board side at a time, so that it
+# LEAVES THE MODULE ON THE SIDE FACING ITS DESTINATION. That is the whole
+# routing strategy in one table: keys exit the bottom pad row in key order,
+# the mic bus exits the right column opposite the mic, USB is fixed by
+# silicon on the left. Bump `revision` in ../product.yaml on any change here.
+
+mcu: esp32-s3-wroom-1-n8r8        # 8 MB flash, 8 MB OCTAL PSRAM (GPIO33-37 gone)
+board: mic-macropad               # this board is the reference device
+
+bus:
+  i2s:                            # ICS-43434 MEMS mic, mic-in only
+    bclk: GPIO40
+    lrck: GPIO41
+    din:  GPIO42
+  uart0:                          # ROM log, on the pogo test pads
+    tx: GPIO43
+    rx: GPIO44
+
+pins:
+  # three MX keys — all RTC-capable (GPIO0-21), so any key can wake from deep
+  # sleep; in key order left->right along the module's bottom pad row
+  - { signal: KEY1, gpio: GPIO9,  dir: in, to: switch, notes: "left key, internal pull-up" }
+  - { signal: KEY2, gpio: GPIO12, dir: in, to: switch, notes: "middle key" }
+  - { signal: KEY3, gpio: GPIO21, dir: in, to: switch, notes: "right key" }
+  # I2S microphone — the right pad column, opposite the part
+  - { signal: MIC_SCK, gpio: GPIO40, dir: out, to: mic, notes: "bit clock; JTAG MTDO repurposed" }
+  - { signal: MIC_WS,  gpio: GPIO41, dir: out, to: mic, notes: "word select; JTAG MTDI repurposed" }
+  - { signal: MIC_SD,  gpio: GPIO42, dir: in,  to: mic, notes: "data in; JTAG MTMS repurposed" }
+  # native USB — fixed by silicon
+  - { signal: USB_DM, gpio: GPIO19, dir: io, to: usb_c, notes: "native USB D-" }
+  - { signal: USB_DP, gpio: GPIO20, dir: io, to: usb_c, notes: "native USB D+" }
+  # status LED — IO1 rather than IO2 so an unused pad separates it from TXD0's
+  # escape (an IO2 assignment grazed the TX exit by 0.03 mm; DRC caught it)
+  - { signal: LED_DRV, gpio: GPIO1, dir: out, to: led }
+  # bring-up controls
+  - { signal: BOOT, gpio: GPIO0,  dir: in, to: button, strap_ok: true, notes: "boot-mode strap, used AS the boot button + 10k pull-up" }
+  - { signal: TX,   gpio: GPIO43, dir: out, to: testpoint, notes: "UART0 ROM log -> pogo pad TP3" }
+  - { signal: RX,   gpio: GPIO44, dir: in,  to: testpoint, notes: "UART0 -> pogo pad TP4" }
+
+# Deliberately unused, and why — the pools a pin assignment may not touch:
+#   GPIO3 / GPIO45 / GPIO46   strapping
+#   GPIO26-32                 SPI flash (not brought out on the module)
+#   GPIO33-37                 octal PSRAM on an -N8R8
+# Pin-based JTAG is given up to the microphone; USB-Serial-JTAG (GPIO19/20)
+# still flashes and debugs the chip, so nothing is actually lost.

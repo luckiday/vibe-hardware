@@ -148,6 +148,15 @@ the render + DRC to accept/reject** — never hand-draws copper blind.
 Details + the shipped gate/enforcer mapping: `references/design-rules.md`,
 `references/gated-workflow.md`, `references/professional-standards.md`.
 
+## Worked reference
+
+[`examples/mic-macropad`](../../examples/mic-macropad) is a filled-in template
+for everything below: contracts (`constraints.yaml` / `parts.yaml` /
+`pinmap.yaml`) that the generator never re-types, a placement laid out as a
+product, and a reproducible autoroute — a locked skeleton plus an accepted
+`.ses`, gated at DRC 0 error-severity / 0 unconnected. Read its README for the
+before/after on placement and for what the vendor land patterns corrected.
+
 ## Run it
 
 The launchers auto-resolve tools (`KICAD_CLI`/`KICAD_PY` env override → mac
@@ -163,6 +172,8 @@ $S/autoroute.sh <proj>                        # freerouting (if a jar is availab
 $S/pcb_check.sh <proj>                        # gen → ERC → DRC → render; the gate
 BELLY_BOX="x0,y0,x1,y1" $S/pcb_check.sh <proj>    # + belly gate (flush module)
 $S/pcb_view.sh <proj> &                       # interactive web review (no KiCad GUI)
+$S/zone_islands.py <board>.kicad_pcb --net GND --strict   # why a pour is "unconnected"
+$S/power_check.py <board>.kicad_pcb --net VBUS --from J1 --amps 0.6   # width + IR drop
 $S/fab_export.sh <proj> A1 J1                 # JLCPCB gerber zip + CPL + BOM
 ```
 

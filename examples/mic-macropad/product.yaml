@@ -1,0 +1,34 @@
+# product.yaml — mic-macropad product manifest
+#
+# The vibe-plm single source of truth: product identity, per-domain status,
+# and the INTERFACE CONTRACTS the domains must agree on. Validate with:
+#   python3 ../../skills/vibe-plm/scripts/plm_check.py product.yaml
+#
+# Bump `revision` on ANY cross-domain change (a pin move, an outline change, a
+# shared fit-number change).
+
+product: mic-macropad
+revision: v2026-08-23            # vYYYY-MM-DD — bump on any cross-domain change
+summary: "Three MX keys and an I2S microphone on an ESP32-S3-WROOM-1, USB-C powered."
+
+# --- the three domains ---
+firmware:                        # vibe-firmware
+  dir: firmware/
+  status: stub                   # stub | wip | clean | released
+  toolchain: "esp-idf (not started; the pinmap contract is ready for it)"
+  board: mic-macropad
+pcb:                             # vibe-pcb
+  dir: pcb/
+  status: clean
+  gate: "DRC 0 error-severity / 0 unconnected, freerouting over a locked skeleton"
+cad:                             # vibe-cad
+  dir: cad/
+  status: stub
+  gate: "fit-check 0 mm^3 board<->shell interference (not modelled yet)"
+
+# --- interface contracts: the files TWO domains must agree on ---
+# Producer -> consumer. plm_check checks each path resolves and cross-checks
+# their contents.
+interfaces:
+  pinmap: pcb/pinmap.yaml                       # pcb  -> firmware  (signal <-> GPIO)
+  enclosure_constraints: cad/constraints.yaml   # cad <-> pcb       (outline, holes, ports, keepouts)

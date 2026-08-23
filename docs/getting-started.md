@@ -62,4 +62,6 @@ speech engine.
 When a build teaches you something the skill didn't warn you about, **edit the skill and
 commit it**. That's the point — each project makes the next one easier.
 
-See [`examples/pager-buddy`](../examples/pager-buddy/) for a worked target.
+See [`examples/pager-buddy`](../examples/pager-buddy/) for a worked target spanning
+firmware + bridge, and [`examples/mic-macropad`](../examples/mic-macropad/) for a board
+carried all the way to a DRC-clean, reproducibly routed layout.

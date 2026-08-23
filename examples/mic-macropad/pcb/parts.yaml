@@ -1,0 +1,246 @@
+# parts.yaml — THE net source (vibe-pcb: every net lives once, here).
+#
+# ref -> footprint / value / pad->net map, plus this project's placement.
+# gen_pcb.py derives the netlist AND the placement from this file; nothing is
+# re-typed into the generator (one number, one place).
+#
+# `at:` is in the DESIGN frame — centre origin, +y up — because the layout was
+# reasoned about symmetrically (key row centred, module on the back edge).
+# gen_pcb.py converts to the contract's board frame (origin bottom-left) with
+# one helper, so cad/constraints.yaml stays the authority on the outline.
+#
+# `center:` marks a footprint whose KiCad origin is NOT the part centre we
+# placed (the Cherry MX land's origin is its pin 1).
+#
+# Pad numbers follow the OFFICIAL KiCad lands — three disagree with what a
+# from-memory land would have had (see README, "what the vendor references
+# corrected").
+
+power_nets: [V3V3, VBUS, GND]
+
+parts:
+  U1:
+    footprint: RF_Module:ESP32-S3-WROOM-1
+    value: ESP32-S3-WROOM-1-N8R8
+    at: [0, 16.5]
+    lcsc: C2913201        # Espressif ESP32-S3-WROOM-1-N8R8 — Standard PCBA only
+    pins: {"1": GND, "2": V3V3, "3": EN, "13": USB_DM, "14": USB_DP, "17": KEY1, "20": KEY2, "23": KEY3, "27": BOOT, "33": MIC_SCK, "34": MIC_WS, "35": MIC_SD, "36": RX, "37": TX, "39": LED_DRV, "40": GND, "41": GND}
+
+  SW1:
+    footprint: Button_Switch_Keyboard:SW_Cherry_MX_1.00u_PCB
+    value: MX
+    at: [-19.05, -13]
+    center: [-2.54, 5.08]
+    pins: {"1": KEY1, "2": GND}
+
+  SW2:
+    footprint: Button_Switch_Keyboard:SW_Cherry_MX_1.00u_PCB
+    value: MX
+    at: [0, -13]
+    center: [-2.54, 5.08]
+    pins: {"1": KEY2, "2": GND}
+
+  SW3:
+    footprint: Button_Switch_Keyboard:SW_Cherry_MX_1.00u_PCB
+    value: MX
+    at: [19.05, -13]
+    center: [-2.54, 5.08]
+    pins: {"1": KEY3, "2": GND}
+
+  J1:
+    footprint: Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12
+    value: TYPE-C-31-M-12
+    at: [-35, 8]
+    rot: 270
+    lcsc: C165948        # Korean Hroparts TYPE-C-31-M-12 — the part this KiCad land is named for
+    pins: {"A1": GND, "A4": VBUS, "A5": CC1, "A6": USB_DP, "A7": USB_DM, "A9": VBUS, "A12": GND, "B1": GND, "B4": VBUS, "B5": CC2, "B6": USB_DP, "B7": USB_DM, "B9": VBUS, "B12": GND, "SH": GND}
+
+  D1:
+    footprint: Package_TO_SOT_SMD:SOT-23-6
+    value: USBLC6-2SC6
+    at: [-27, 8]
+    lcsc: C7519        # ST USBLC6-2SC6
+    pins: {"1": USB_DP, "2": GND, "3": USB_DM, "4": USB_DM, "5": VBUS, "6": USB_DP}
+
+  R9:
+    footprint: Resistor_SMD:R_0402_1005Metric
+    value: 5.1k
+    at: [-33.8, 17]
+    lcsc: C25905        # UNI-ROYAL 0402WGF5101TCE 5.1k 1% — Basic, 8.4M stock
+    pins: {"1": CC1, "2": GND}
+
+  R10:
+    footprint: Resistor_SMD:R_0402_1005Metric
+    value: 5.1k
+    at: [-31, 14.5]
+    rot: 180
+    lcsc: C25905        # UNI-ROYAL 0402WGF5101TCE 5.1k 1% — Basic, 8.4M stock
+    pins: {"1": CC2, "2": GND}
+
+  C3:
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    value: 1uF
+    at: [-23.5, 12]
+    lcsc: C52923        # Samsung CL05A105KA5NQNC 1uF 25V X5R — Basic; 25 V because C3 sits on VBUS
+    pins: {"1": VBUS, "2": GND}
+
+  U3:
+    footprint: Package_TO_SOT_SMD:SOT-23-5
+    value: AP2112K-3.3TRG1
+    at: [-20, 12]
+    lcsc: C51118        # Diodes AP2112K-3.3TRG1
+    pins: {"1": VBUS, "2": GND, "3": VBUS, "5": V3V3}
+
+  C4:
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    value: 1uF
+    at: [-16, 12]
+    lcsc: C52923        # Samsung CL05A105KA5NQNC 1uF 25V X5R — Basic
+    pins: {"1": V3V3, "2": GND}
+
+  C10:
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    value: 22uF
+    at: [-12.5, 20.5]
+    rot: 180
+    lcsc: C45783        # Samsung CL21A226MAQNNNE 22uF 25V X5R — Basic; 25 V not 6.3 V, see BRIEF §7 on DC bias
+    pins: {"1": V3V3, "2": GND}
+
+  C11:
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    value: 100nF
+    at: [-12.5, 17.5]
+    lcsc: C1525        # Samsung CL05B104KO5NNNC 100nF 16V X7R — Basic, 54M stock
+    pins: {"1": V3V3, "2": GND}
+
+  # SW4/SW5 were briefly side-actuated (Panasonic EVQ-P7C) so a shell button on
+  # the right wall could press them horizontally. That part is not sourceable
+  # through JLCPCB assembly, and neither is any other side-actuated switch that
+  # survives scrutiny -- see BRIEF.md section 7. Sourcing beat elegance: these
+  # are TS-1187A, TOP-actuated, in JLCPCB's library for BOTH Economic and
+  # Standard PCBA, in stock at ~$0.01, with a stock KiCad land.
+  # They stay by the right edge so the shell can still reach them. A true side
+  # press now comes from the ENCLOSURE -- a flexure tab in the right wall that
+  # converts a side push into a down push. That is a shell feature, not a board
+  # one, and cad/constraints.yaml says so.
+  SW4:
+    footprint: Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A
+    value: RESET
+    at: [34, -4]
+    lcsc: C318884        # XKB TS-1187A-B-A-B, Economic+Standard PCBA
+    pins: {"1": EN, "2": GND}
+
+  R1:
+    footprint: Resistor_SMD:R_0402_1005Metric
+    value: 10k
+    at: [-13.9, 15.5]
+    lcsc: C25744        # UNI-ROYAL 0402WGF1002TCE 10k 1% — Basic, 20.7M stock
+    pins: {"1": V3V3, "2": EN}
+
+  C7:
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    value: 1uF
+    at: [-26, 19]
+    lcsc: C52923        # Samsung CL05A105KA5NQNC 1uF 25V X5R — Basic
+    pins: {"1": EN, "2": GND}
+
+  SW5:
+    footprint: Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A
+    value: BOOT
+    at: [34, -11]
+    lcsc: C318884        # XKB TS-1187A-B-A-B, Economic+Standard PCBA
+    pins: {"1": BOOT, "2": GND}
+
+  R2:
+    footprint: Resistor_SMD:R_0402_1005Metric
+    value: 10k
+    at: [19.5, 9.2]
+    lcsc: C25744        # UNI-ROYAL 0402WGF1002TCE 10k 1% — Basic, 20.7M stock
+    pins: {"1": V3V3, "2": BOOT}
+
+  U4:
+    footprint: Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm
+    value: ICS-43434
+    at: [30.5, -19.5]
+    rot: 180
+    lcsc: C5656610        # TDK InvenSense ICS-43434
+    pins: {"1": MIC_WS, "2": GND, "3": GND, "4": MIC_SCK, "5": V3V3, "6": MIC_SD}
+
+  C9:
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    value: 100nF
+    at: [30.5, -15]
+    lcsc: C1525        # Samsung CL05B104KO5NNNC 100nF 16V X7R — Basic, 54M stock
+    pins: {"1": V3V3, "2": GND}
+
+  # 330R, not 1k, sized against the LED's WORST-CASE Vf rather than a typical
+  # one: (3.3 - 2.6) / 330 = 2.1 mA at the top of the red LED's 1.6-2.6 V
+  # range, and 5.2 mA at the bottom. 1k would have given 0.7 mA worst case.
+  R5:
+    footprint: Resistor_SMD:R_0402_1005Metric
+    value: 330R
+    at: [25, -25.5]
+    lcsc: C25104        # UNI-ROYAL 0402WGF3300TCE 330R 1% — Basic; sized for the LED below
+    pins: {"1": LED_DRV, "2": LED_A}
+
+  # RED, not green, and that is a supply-rail decision rather than taste: the
+  # green 0603s JLCPCB stocks are InGaN with Vf specified 2.6-3.6 V, so on a
+  # 3.3 V rail a worst-case part cannot light AT ALL. This red is 1.6-2.6 V,
+  # which leaves 0.7 V of headroom even at the top of its range.
+  # Pad 1 is the CATHODE on KiCad's LED_0603 land.
+  D4:
+    footprint: LED_SMD:LED_0603_1608Metric
+    value: LED_RED
+    at: [28.5, -25.5]
+    rot: 180
+    lcsc: C84263        # NCD0603R1 red, Vf 1.6-2.6 V, 4.1M stock — Extended
+    pins: {"1": GND, "2": LED_A}
+
+  TP1:
+    footprint: TestPoint:TestPoint_Pad_D1.5mm
+    value: V3V3
+    at: [34, 15]
+    pins: {"1": V3V3}
+
+  TP2:
+    footprint: TestPoint:TestPoint_Pad_D1.5mm
+    value: GND
+    at: [34, 11]
+    pins: {"1": GND}
+
+  TP3:
+    footprint: TestPoint:TestPoint_Pad_D1.5mm
+    value: TX
+    at: [34, 7]
+    pins: {"1": TX}
+
+  TP4:
+    footprint: TestPoint:TestPoint_Pad_D1.5mm
+    value: RX
+    at: [34, 3]
+    pins: {"1": RX}
+
+  H1:
+    footprint: MountingHole:MountingHole_2.2mm_M2_DIN965
+    value: M2
+    at: [-34, -24]
+    pins: {}
+
+  H2:
+    footprint: MountingHole:MountingHole_2.2mm_M2_DIN965
+    value: M2
+    at: [34, -24]
+    pins: {}
+
+  H4:
+    footprint: MountingHole:MountingHole_2.2mm_M2_DIN965
+    value: M2
+    at: [-34, 24]
+    pins: {}
+
+  H5:
+    footprint: MountingHole:MountingHole_2.2mm_M2_DIN965
+    value: M2
+    at: [34, 24]
+    pins: {}
+

@@ -49,6 +49,13 @@ module" is mechanical, not electrical, so it passes DRC even when violated. Run
 | **Belly short** | a flush-soldered module has exposed back-pads (thermal/JTAG/BAT/USB) that short to any carrier copper under its body | **no F.Cu and no vias under the module footprint**; route under-belly nets on **B.Cu**, keep front copper + vias in the margins; relocate passives out of the belly box. Put the keep-out box (x/y) in a comment in `gen_pcb.py`. |
 | **Value mismatch** | schematic vs PCB component values diverge as you edit two generators | keep `gen_sch.py` and `gen_pcb.py` values in lockstep; `cross_analysis` verifies |
 | **Silk DRC** | silk text too small / module ref-des & outline clipping pads or board edge | text height **≥ 0.8 mm**; module body outline on **F.Fab** (not silk); **hide model-only / placement refs**; keep silk off pads and the edge |
+| **LED Vf vs the rail** | an indicator LED picked for colour and a dropper picked from habit (1k on 3V3), before either is a real part — then the stocked green 0603s turn out to be InGaN with Vf specified as a **range**, e.g. 2.6–3.6 V, and on a 3.3 V rail the worst-case part **cannot light at any resistor value**. Sizing against the *typical* Vf ships a board that passes on the bench and fails on part of the reel | check the datasheet Vf **range** against the rail before colour is a design decision. On 3.3 V that rules out green/blue/white InGaN behind a series resistor and points at red or yellow (Vf ~1.6–2.6 V); size the dropper at the **top** of the range. Nothing in ERC or DRC performs this subtraction, and the BOM pass is where it surfaces — which is an argument for filling the BOM early |
+| **Mechanically special = sourcing risk** | choosing a part for its mechanics (side-actuated, right-angle, odd height) and only checking availability at BOM time — then finding the whole category is thin: obsolete, 4 in stock, or in the assembly library with no published land | check the **assembly library** before the mechanics are designed around a part, not after. A part needs THREE things to survive: stocked, orderable through your assembler's service tier, and a published land you can draw. If the category fails, **move the mechanism into the enclosure** — a flexure tab over a commodity top-actuated switch costs nothing in the mould and keeps the BOM boring |
+| **Rotation is not actuation** | wanting a side-pressed button (the M5Stack arrangement) and rotating a tactile switch to face the edge — rotation turns the PADS; a top-actuated part is still pressed from **+Z** no matter how it is turned, so the shell ends up needing a lever | use a **side-actuated** part (Panasonic EVQ-P7, Alps SKRK…), sit its tip on the board edge, and prefer a version with **mechanical anchor pads** — a side-pressed button spends its life trying to peel itself off. Find the actuator direction by MEASURING the courtyard: it is asymmetric, and the long side is the actuator (EVQ-P7: 2.39 mm vs 1.75 mm). Then the shell hole is in a **wall**, not the top face, so it belongs in `constraints.yaml` `windows:` with that stated |
+| **Stitching-via drift** | vias added one at a time to chase pour islands, kept across a re-placement, until the board carries a constellation nobody can justify | **measure it**: leave-one-out (drop a via, refill, re-run DRC) separates load-bearing from leftover. On the worked example that was **25 of 27 doing nothing** — rescue vias for pockets that stopped existing when the parts moved. Then place a deliberate set: connectivity vias where the sweep says they are needed, plus **return-path** vias beside every signal via that changes layer (DRC never asks for those, so they only exist if you put them there on purpose) |
+| **Same-net pins split by a third** | two pins of one net on the same package side with a DIFFERENT net between them (an LDO's VIN+EN either side of GND is the classic) — the router wraps the far side of the part, threading the gap between the middle pad and the opposite pins at near-minimum clearance, and runs the input net alongside the output at the regulator's own pins | feed both pins from the incoming trace **on the near side** instead: surface the net at the outer pin's own height, one straight run past the part, tee off to the other pin. Put it in the locked skeleton — it is placement-dependent, and the router has no reason to prefer it |
+| **Courtyard-less land** | a hand-drawn or generated footprint with no F.CrtYd makes `courtyard_overlaps()` a **no-op** — the gate passes because there is nothing to intersect, and a part ends up under a connector or switch body | draw a courtyard in every `gen_footprints.py` land, and treat "part has no courtyard" as a gate failure, not a skip. A stock KiCad land is not automatically safe either: the Cherry MX courtyard is 13.29 mm across a **14 mm** housing, so leave margin near tall mechanical parts |
+| **Wire-length ≠ routability** | optimising a placement for total wire length and watching routing get *worse* | measured on a 37-part board: 1292 mm → 591 mm of wire took unroutable traces from 14 to **22**, because packing removes the channels the router needs. Score placements on the **router's actual output**; keep `hpwl` as a regression tracker, not a target. Clearance is the lever with a real optimum (0.5/2/3.5/5/6.5 mm → 22/18/12/12/33 failures on that board) |
 | **Pull-up double-fit** | fitting pull-ups the module/sensor already has → parallel value too low | **DNP** pull-ups by default; fit only for a bare sensor. Same logic for decoupling. |
 
 ## Findings that are NOT defects (accept + document, don't "fix")
@@ -92,6 +99,35 @@ worked on xiao-carrier (example):
   then remove from *both* generators (and re-mark the module pin no-connect).
 - **Route, regen, DRC, repeat** — and check the belly gate each loop. A reroute that
   looks fine often crosses a cluster trace; let DRC find it rather than eyeballing.
+
+## Place for the product, then for the router
+
+A layout that passes every gate can still read as an engineering board. The
+recurring shape of the mistake: the parts a USER touches get placed wherever
+routing was convenient, and the board's "face" ends up being whatever was left
+over. Worked before/after: [`examples/mic-macropad`](../../../examples/mic-macropad).
+
+Ask these before the placement gates, because none of them is a DRC question:
+
+- **What is the face?** Whatever the user looks at or touches (a key row, a
+  display, a knob) is the composition; centre it and give it an even bezel.
+  Everything else serves it.
+- **Which way does the cable leave?** A connector on the edge facing the user
+  is a cable across the desk. Ports belong on the edge away from the hands —
+  and the port position is a `constraints.yaml` number, so the shell agrees.
+- **Is this control for the user or for me?** Reset and boot buttons are
+  bring-up hardware; tuck them beside the module. A debug header is *never*
+  product hardware — four pogo pads cost nothing and leave a flat surface.
+- **What does this part need to be near, physically?** A MEMS mic wants the
+  user and the enclosure port, and wants distance from the USB switching edge;
+  an ESD array wants to be at the connector, before the protected line goes
+  anywhere. If a part sits somewhere odd, the reason is usually a routing
+  workaround that a ground pour has since made unnecessary.
+
+The test that catches most of it costs one command: render the board in 3D
+(`kicad-cli pcb render --perspective`) and ask whether it looks like a product
+someone would pick up. Copper-level gates cannot answer that, and a courtyard
+gate cannot see a part tucked under a 14 mm switch housing.
 
 ## Layered layout & the feedback loop (beating "③ place & route")
 

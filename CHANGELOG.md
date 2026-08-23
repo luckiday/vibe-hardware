@@ -6,6 +6,72 @@ Notable changes to vibe-hardware. Format follows
 
 ## [Unreleased]
 
+### Added
+- **`examples/mic-macropad`** — a second worked example, and the first whose **board** is
+  finished: three MX keys + an I2S mic on an ESP32-S3-WROOM-1, 76 x 56 mm, two layers,
+  **DRC 0 error-severity / 0 unconnected**. Contracts (`constraints.yaml` / `parts.yaml` /
+  `pinmap.yaml`) that the generator never re-types, a placement laid out as a *product*
+  (key row as the face, USB away from the hands, ESD at the connector, pogo pads instead
+  of a header), and a reproducible autoroute: a **locked skeleton** (`SetLocked` ->
+  Specctra `(type fix)`) plus an **accepted `.ses`** replayed by default, because
+  freerouting is nondeterministic.
+- **`vibe-pcb/scripts/zone_islands.py`** — answers "why is this pour unconnected?". DRC
+  reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
+  corner; this prints every island with the pads and vias of that net inside it, so the
+  fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+- **`vibe-pcb/scripts/power_check.py`** — answers the two questions DRC never asks about a
+  power net: is the **narrowest** segment wide enough for the current (IPC-2221 closed form,
+  with an explicit note on why not IPC-2152), and what is the **IR drop** to each load
+  (shortest-resistance path, splitting segments at T-junctions so a branch is not reported
+  unreachable). Reads widths off the routed board, which is how the example found that 61 %
+  of its VBUS is 0.25 mm and not the 0.5 mm its docs claimed.
+- **`vibe-pcb/scripts/fab_export.sh`** — the JLCPCB BOM now carries **LCSC part numbers
+  read from `parts.yaml`'s `lcsc:` field** (the schema always had it; the exporter did not
+  use it), refuses to emit a BOM line whose refs disagree about their part number, and
+  names the exact lines still missing one instead of a blanket "fill LCSC #s".
+- **`vibe-pcb/references/design-rules.md`** — an **LED Vf vs the rail** finding: the green
+  0603s JLCPCB stocks are InGaN with Vf specified as a *range* (2.6–3.6 V), so on a 3.3 V
+  rail a worst-case part cannot light at any resistor value. Check the range, not the
+  typical value, before colour is a design decision.
+- **`examples/mic-macropad`** — a complete JLCPCB order package and
+  [`pcb/ORDER.md`](examples/mic-macropad/pcb/ORDER.md): what to upload, board options, the
+  hand-soldered refs, and a generated **pin-1 orientation table** to check the CPL rotations
+  against in JLCPCB's preview.
+- **`vibe-pcb/references/design-rules.md`** — a **mechanically special = sourcing risk**
+  finding: check the assembly library BEFORE designing mechanics around a part. Five
+  side-actuated switches were evaluated for the example and all five failed differently
+  (not carried, obsolete, 4 in stock, no published land); the fix was to move the
+  mechanism into the enclosure and keep a commodity switch on the board.
+- **`vibe-pcb/references/design-rules.md`** — a **rotation is not actuation** finding: a
+  side-pressed button needs a side-actuated part, not a rotated top-actuated one, and its
+  shell hole belongs in a wall — so it is a `constraints.yaml` window with that stated.
+  Find the actuator direction by measuring the (asymmetric) courtyard.
+- **`vibe-pcb/references/design-rules.md`** — a **stitching-via drift** finding: vias added
+  one at a time to chase pour islands survive a re-placement and become a constellation
+  nobody can justify. Measure with leave-one-out (drop a via, refill, re-run DRC) — on the
+  worked example 25 of 27 were doing nothing — then place a deliberate set: connectivity
+  vias where the sweep says, plus **return-path** vias beside every signal via that changes
+  layer, which DRC never asks for.
+- **`vibe-pcb/references/design-rules.md`** — a **same-net pins split by a third** finding:
+  two pins of one net on the same package side with a different net between them (an LDO's
+  VIN + EN either side of GND) makes the router wrap the far side of the part at
+  near-minimum clearance. Feed both from the near side and lock it.
+
+### Changed
+- **`vibe-pcb`** — `autoroute.sh` now passes `-mt 1` (freerouting's own log: the
+  multi-threaded optimizer "is known to generate clearance violations"; a 27-part board
+  saw its optimization stage go 16 -> 17 violations). `references/autorouting.md` gains a
+  **"Freerouting at scale"** section: the locked-skeleton pattern, the accepted-session
+  convention, why a *dense* board must export a **GND-less** DSN (and how that squares
+  with gotcha 5, which is now cross-referenced rather than contradicted), netless vias
+  vanishing from the export, and netclasses as a simpler alternative to `export_dsn.py`'s
+  regex class rewrite. `references/design-rules.md` gains a **"place for the product,
+  then for the router"** section plus two findings: a footprint with **no courtyard**
+  makes `courtyard_overlaps()` a silent no-op (and a stock land is not automatically
+  safe — the Cherry MX courtyard is 13.29 mm across a 14 mm housing), and **wire length
+  does not predict routability** (1292 -> 591 mm of wire took unroutable traces from 14
+  to 22 on a measured board), which argues against treating the `hpwl` budget as a target.
+
 ### Fixed
 - **CI** — the `checks` job was a lint-only scaffold that did not run the gates the
   docs tell you to run. It now compiles Python under `examples/` and `tools/` as well
