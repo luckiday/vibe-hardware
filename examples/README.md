@@ -7,6 +7,7 @@ skill produced.
 | Example | Skills used | What it is |
 |---|---|---|
 | [**pager-buddy**](pager-buddy/) | plm · firmware · pcb · cad | a desk "pager" that signals **Claude Code session status / notifications** — firmware + Mac bridge working on an M5StickC S3; custom pcb/cad still stubs |
+| [**mic-macropad**](mic-macropad/) | pcb | three MX keys + an I2S mic on an ESP32-S3-WROOM-1, USB-C — a product-shaped placement and a reproducible freerouting flow, **DRC 0/0** |
 
 ## Add your own
 

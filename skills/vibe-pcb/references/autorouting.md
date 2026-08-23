@@ -92,6 +92,92 @@ FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
    power/signal classes (post-process the DSN text) so the router matches `gen_pcb.py`'s
    `NET_W` (e.g. power 0.4 mm / signal 0.3 mm) — see `export_dsn.py`.
 
+## Freerouting at scale: the locked skeleton
+
+The gotchas above were learned on a 5-net carrier. On a denser board (30
+parts, 19 nets, a rotated USB-C whose pad column interleaves both differential
+pairs) freerouting still routes — but only if you stop treating it as a
+one-shot oracle. Worked reference: [`examples/mic-macropad`](../../../examples/mic-macropad).
+
+**Pre-place and LOCK everything that must hold across runs.** `SetLocked(True)`
+on a track or via exports as Specctra `(type fix)`, and freerouting honours it:
+it routes around the copper instead of ripping it up. Without locking, its
+optimizer moved a pre-placed CC line into a shield pad. So the shape that works
+is: the generator emits placement + pours + a **skeleton** (power tree, the
+connector fanout, GND stubs, stitching vias), and the router only fills in leaf
+signals — the ones it cannot get wrong.
+
+**Freerouting is nondeterministic — the accepted `.ses` is an INPUT.** Two runs
+of the same DSN leave different nets unrouted and fence off different pour
+pockets. Chasing those differences with hand-added vias never converges. Commit
+the session that passed the gate and replay it by default; re-route only
+deliberately (`FRESH=1` in the example's `route_fr.sh`).
+
+**`-mt 1`.** freerouting's own log says it: *"Multi-threaded route optimization
+is broken and it is known to generate clearance violations."* Now the default in
+[`autoroute.sh`](../scripts/autoroute.sh).
+
+**On a dense board, do not let the router see GND.** Gotcha 5 above warns
+against dropping GND from routing, and it is right about the consequence — the
+pour fences into islands. But the DSN has no plane concept, so on a board with
+a 16-pad connector a netted GND makes freerouting *wire ground pads together
+straight through the connector column*, which is worse. What works on both
+counts: export a **GND-less variant** (strip the net from GND *pads* only),
+keep the locked GND stubs and stitching vias so the router still sees them as
+obstacles, and replay the session onto the real board where the pours carry
+ground. Then fix the islands the warning predicts — with
+[`zone_islands.py`](../scripts/zone_islands.py), not by guessing.
+
+**Netless vias vanish from the DSN.** A via with no net is simply not exported
+(measured), so it stops being an obstacle and the router happily crosses it.
+Vias you place as obstacles must keep their net.
+
+**Per-net widths: a netclass beats a text rewrite.** `export_dsn.py` splits the
+class by post-processing the DSN text, which works but is regex-fragile. KiCad
+netclasses ride into the export natively — set them on the board and the widths
+are simply right:
+
+```python
+ds = board.GetDesignSettings()
+pwr = pcbnew.NETCLASS("PWR"); pwr.SetTrackWidth(pcbnew.FromMM(0.5))
+ds.m_NetSettings.SetNetclass("PWR", pwr)
+for n in ("VBUS", "V3V3"):
+    ds.m_NetSettings.SetNetclassPatternAssignment(n, "PWR")
+```
+
+Without any class, the router uses its own minimum: 22 `track_width`
+violations on a board whose power was supposed to be 0.5 mm.
+
+**Scripted zones need island removal switched on.** A GUI zone gets it by
+default; `pcbnew.ZONE()` does not. `z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)`
+deletes the orphan pockets at fill time instead of leaving them for DRC.
+
+## Reading a "Zone <-> Zone" unconnected item
+
+DRC reports a fenced-off pour as one line that points at the board corner:
+
+```
+Zone [GND] on B.Cu, priority 0  <->  Zone [GND] on F.Cu, priority 0
+```
+
+That can mean a pocket with nothing tying it down, or an **enclave** — a
+B-layer pocket plus an F-layer pocket plus the via joining them, connected to
+each other and to nothing else. [`scripts/zone_islands.py`](../scripts/zone_islands.py)
+prints every island with the pads and vias of that net inside it, so the fix is
+a coordinate you can read off rather than a guess:
+
+```bash
+zone_islands.py board.kicad_pcb --net GND --max-mm 70 --strict
+# F.Cu GND island x[  6.0, 18.6] y[  2.1,  9.0]  12.6 x  6.9 mm  pads 0 vias 0  << ORPHAN
+```
+
+Two pcbnew traps it exists to route around, both measured on KiCad 10.0.3:
+`ZONE.GetLayerName()` returns `"F.Cu"` for a B.Cu zone (`GetLayer()` and
+`GetLayerSet()` are both correct — only the *name* lies), and
+`GetFilledPolysList()` takes a layer, so passing the wrong one means analysing
+a fill that isn't there. A diagnostic dump using the name accessor is how one
+afternoon went into "fixing" a zone-layer bug that did not exist.
+
 ## When to autoroute vs hand-route with `trk`
 
 - **Autoroute** when there is more than a handful of nets, or when hand-coordinates would be

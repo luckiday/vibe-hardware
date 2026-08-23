@@ -1,0 +1,42 @@
+# constraints.yaml — cad <-> pcb interface contract (the shared fit numbers)
+#
+# The ONE set of numbers the board outline (vibe-pcb) and a future shell
+# (vibe-cad) both read. Units mm, board frame: origin BOTTOM-LEFT, +y up.
+# Bump `revision` in ../product.yaml on any change here.
+#
+# The enclosure is not modelled yet (cad status: stub), but every number a
+# shell needs already lives here rather than inside gen_pcb.py — which is the
+# point of the contract: the board generator reads its outline, its mount
+# holes and its antenna keepout from this file.
+
+board:
+  outline: { l: 76, w: 56, t: 1.6, corner_r: 0 }
+  mount_holes:
+    dia: 2.2                                  # M2 clearance
+    positions: [[4, 4], [72, 4], [4, 52], [72, 52]]
+
+stack:
+  standoff_h: 5                # board off the shell floor; keys need travel above
+  total_h: 24                  # closed shell internal height (MX body 14 + cap)
+
+ports:
+  # USB-C exits the LEFT edge so the cable leaves away from the typing hand.
+  usb_c: { edge: "-X", center_y: 36, w: 9.5, h: 3.5 }
+
+windows:
+  # The three MX stems come through the top face on 19.05 mm centres.
+  key1: { x: 18.95, y: 15, dia: 14 }
+  key2: { x: 38.00, y: 15, dia: 14 }
+  key3: { x: 57.05, y: 15, dia: 14 }
+  # Mic sound port: the ICS-43434 is a BOTTOM-port part, so this is a hole in
+  # the shell floor under U4, plus a gasket if the case is sealed.
+  mic_port: { x: 68.5, y: 8.5, dia: 1.5 }
+  led:      { x: 66.5, y: 2.5, dia: 2 }       # light-pipe bore, not a bare hole
+
+keepouts:
+  # Espressif's own antenna keepout, taken from the vendor land pattern (it
+  # ships as a rule area inside KiCad's ESP32-S3-WROOM-1 footprint): no copper
+  # on any layer, and no shell wall or metal above it. x,y = box CENTRE.
+  antenna: { x: 38, y: 54.375, w: 48, h: 3.25 }
+
+tolerance_mm: 0.5

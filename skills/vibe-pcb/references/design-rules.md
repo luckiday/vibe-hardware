@@ -49,6 +49,8 @@ module" is mechanical, not electrical, so it passes DRC even when violated. Run
 | **Belly short** | a flush-soldered module has exposed back-pads (thermal/JTAG/BAT/USB) that short to any carrier copper under its body | **no F.Cu and no vias under the module footprint**; route under-belly nets on **B.Cu**, keep front copper + vias in the margins; relocate passives out of the belly box. Put the keep-out box (x/y) in a comment in `gen_pcb.py`. |
 | **Value mismatch** | schematic vs PCB component values diverge as you edit two generators | keep `gen_sch.py` and `gen_pcb.py` values in lockstep; `cross_analysis` verifies |
 | **Silk DRC** | silk text too small / module ref-des & outline clipping pads or board edge | text height **≥ 0.8 mm**; module body outline on **F.Fab** (not silk); **hide model-only / placement refs**; keep silk off pads and the edge |
+| **Courtyard-less land** | a hand-drawn or generated footprint with no F.CrtYd makes `courtyard_overlaps()` a **no-op** — the gate passes because there is nothing to intersect, and a part ends up under a connector or switch body | draw a courtyard in every `gen_footprints.py` land, and treat "part has no courtyard" as a gate failure, not a skip. A stock KiCad land is not automatically safe either: the Cherry MX courtyard is 13.29 mm across a **14 mm** housing, so leave margin near tall mechanical parts |
+| **Wire-length ≠ routability** | optimising a placement for total wire length and watching routing get *worse* | measured on a 37-part board: 1292 mm → 591 mm of wire took unroutable traces from 14 to **22**, because packing removes the channels the router needs. Score placements on the **router's actual output**; keep `hpwl` as a regression tracker, not a target. Clearance is the lever with a real optimum (0.5/2/3.5/5/6.5 mm → 22/18/12/12/33 failures on that board) |
 | **Pull-up double-fit** | fitting pull-ups the module/sensor already has → parallel value too low | **DNP** pull-ups by default; fit only for a bare sensor. Same logic for decoupling. |
 
 ## Findings that are NOT defects (accept + document, don't "fix")
@@ -92,6 +94,35 @@ worked on xiao-carrier (example):
   then remove from *both* generators (and re-mark the module pin no-connect).
 - **Route, regen, DRC, repeat** — and check the belly gate each loop. A reroute that
   looks fine often crosses a cluster trace; let DRC find it rather than eyeballing.
+
+## Place for the product, then for the router
+
+A layout that passes every gate can still read as an engineering board. The
+recurring shape of the mistake: the parts a USER touches get placed wherever
+routing was convenient, and the board's "face" ends up being whatever was left
+over. Worked before/after: [`examples/mic-macropad`](../../../examples/mic-macropad).
+
+Ask these before the placement gates, because none of them is a DRC question:
+
+- **What is the face?** Whatever the user looks at or touches (a key row, a
+  display, a knob) is the composition; centre it and give it an even bezel.
+  Everything else serves it.
+- **Which way does the cable leave?** A connector on the edge facing the user
+  is a cable across the desk. Ports belong on the edge away from the hands —
+  and the port position is a `constraints.yaml` number, so the shell agrees.
+- **Is this control for the user or for me?** Reset and boot buttons are
+  bring-up hardware; tuck them beside the module. A debug header is *never*
+  product hardware — four pogo pads cost nothing and leave a flat surface.
+- **What does this part need to be near, physically?** A MEMS mic wants the
+  user and the enclosure port, and wants distance from the USB switching edge;
+  an ESD array wants to be at the connector, before the protected line goes
+  anywhere. If a part sits somewhere odd, the reason is usually a routing
+  workaround that a ground pour has since made unnecessary.
+
+The test that catches most of it costs one command: render the board in 3D
+(`kicad-cli pcb render --perspective`) and ask whether it looks like a product
+someone would pick up. Copper-level gates cannot answer that, and a courtyard
+gate cannot see a part tucked under a 14 mm switch housing.
 
 ## Layered layout & the feedback loop (beating "③ place & route")
 

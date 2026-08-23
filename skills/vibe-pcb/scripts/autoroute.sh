@@ -37,7 +37,11 @@ echo "-> 2. export DSN (belly keepout + per-net widths)"
 echo "-> 3. freerouting (headless)"
 # NB: freerouting logs 'session completed' ~10-15 s BEFORE it writes the .ses. Running java
 # in the foreground is enough -- the process stays alive until the save finishes.
-( cd "$WORK" && "$JAVA" -jar "$FR_JAR" -de "$PROJ.dsn" -do "$PROJ.ses" )
+# -mt 1: freerouting's own log calls the multi-threaded optimizer broken
+# ("Multi-threaded route optimization is broken and it is known to generate
+# clearance violations"), and a 27-part board came back with clearance
+# violations under the default thread pool that vanished at -mt 1.
+( cd "$WORK" && "$JAVA" -jar "$FR_JAR" -de "$PROJ.dsn" -do "$PROJ.ses" -mt 1 )
 [ -f "$WORK/$PROJ.ses" ] || { echo "no .ses produced"; exit 1; }
 
 echo "-> 4. import SES (+GND solid pour + silk fix)"
