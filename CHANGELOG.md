@@ -19,6 +19,12 @@ Notable changes to vibe-hardware. Format follows
   reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
   corner; this prints every island with the pads and vias of that net inside it, so the
   fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+- **`vibe-pcb/references/design-rules.md`** — a **stitching-via drift** finding: vias added
+  one at a time to chase pour islands survive a re-placement and become a constellation
+  nobody can justify. Measure with leave-one-out (drop a via, refill, re-run DRC) — on the
+  worked example 25 of 27 were doing nothing — then place a deliberate set: connectivity
+  vias where the sweep says, plus **return-path** vias beside every signal via that changes
+  layer, which DRC never asks for.
 - **`vibe-pcb/references/design-rules.md`** — a **same-net pins split by a third** finding:
   two pins of one net on the same package side with a different net between them (an LDO's
   VIN + EN either side of GND) makes the router wrap the far side of the part at

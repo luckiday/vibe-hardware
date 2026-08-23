@@ -336,9 +336,26 @@ via("GND", 32.8, -20.04)
 wire("GND", [("U4", 3), (29.84, -17.6)])
 via("GND", 29.84, -17.6)
 # stitching, plus two rescues for pockets the USB-area routing fences off
-for _gx, _gy in [(-22, 0.2), (12, -25), (29, 16), (0, -27), (-28, -12), (8, -10),
-                 (-12.9, -24.6), (-15.8, -17.5), (-17, -16), (20, -20),
-                 (-30, 18), (33, 0), (-18.5, -19.5), (-12.2, -16.9), (-34.5, 8), (-34.5, 13.5), (-15, 9), (17, -2), (-28, 11), (-26.3, 5), (12, 2.9), (0, 0.3), (24, 12), (-20, -20), (5, 12), (34, 12.7), (-28.85, 8)]:
+# ---- GND stitching -----------------------------------------------------------
+# Two jobs, and they are NOT the same job:
+#
+#   (a) connectivity -- tie pour regions the routing fences apart. Exactly two
+#       of these are load-bearing here, and that was MEASURED, not guessed: a
+#       leave-one-out sweep (remove a via, refill, re-run DRC) showed 25 of the
+#       27 vias this board used to carry were doing nothing at all. They were
+#       whack-a-mole leftovers from an earlier placement -- rescue vias for
+#       pockets that stopped existing when the parts moved.
+#
+#   (b) return path -- a signal that changes layer forces its return current to
+#       change layer too, and it can only do that through a nearby ground via.
+#       DRC never asks for these, so they must be placed on purpose. Here they
+#       accompany the USB pair's transitions (the fastest edges on the board)
+#       and the V3V3 spine's, ~1 mm off each signal via.
+_STITCH_CONNECTIVITY = [(12.0, 2.9), (34.0, 12.7)]
+_STITCH_RETURN = [(-23.15, 7.10), (-11.14, 6.77),   # USB_DM layer changes
+                  (-23.35, 9.15), (-23.00, 11.05),  # VBUS in/out of B.Cu
+                  (-15.28, 11.00), (-15.28, 1.60)]  # V3V3 spine transitions
+for _gx, _gy in _STITCH_CONNECTIVITY + _STITCH_RETURN:
     via("GND", _gx, _gy)
 
 # ---- save (zone fill happens in check.sh: ZONE_FILLER segfaults in headless

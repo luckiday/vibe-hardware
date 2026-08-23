@@ -87,6 +87,23 @@ signals. Two reasons this shape is worth copying:
 The gate is KiCad's DRC, never freerouting's own violation count — the two
 disagree, and only one of them ships boards.
 
+### Stitching vias, measured rather than accumulated
+
+An earlier revision carried 27 GND stitching vias, added one at a time to
+chase pour islands and kept through a re-placement. A leave-one-out sweep
+(drop a via, refill, re-run DRC) found **25 of them were doing nothing** —
+rescues for pockets that stopped existing when the parts moved. The board now
+carries a set with a reason behind each one:
+
+- **2 connectivity vias** — the ones the sweep proved load-bearing.
+- **6 return-path vias** — one beside each layer change on the USB pair, the
+  VBUS entry and the V3V3 spine. A signal that changes layer forces its return
+  current to change layer too, and it can only do that through a nearby ground
+  via. DRC never asks for these; they exist only because someone placed them.
+
+Their positions were searched rather than guessed: each candidate was tried at
+several offsets and kept only where the board still gated clean.
+
 ## What the vendor references corrected
 
 The design existed first as a browser-side sketch with hand-drawn footprints.
