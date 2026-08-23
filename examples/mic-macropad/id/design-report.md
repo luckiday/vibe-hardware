@@ -386,8 +386,23 @@ button bores, and the antenna keepout.
 
 ## §4 Open questions
 
-- **Q1 — the name.** The sheet says "MicroPad"; the repo says `mic-macropad`.
-  No wordmark is modelled until this is settled.
+- **Q1 — the name, and one reading of it is simply wrong.** `mic-macropad` is
+  **mic** (the microphone, U4) + **macropad**. It is not an abbreviation of
+  "micro". A macropad is a standalone keypad whose keys fire macros — "macro"
+  names what the keys *do*, not how big the device is, which is exactly why
+  "micro" feels intuitive for a 93 mm three-key object and is still wrong.
+  "Micropad" is not a term, it is redundant (macropads are small by definition),
+  and it deletes the one component that distinguishes this board.
+
+  The sheet's "MicroPad" is that substitution, made by an image model that heard
+  "mic" as "micro". The slug is right; the wordmark is not.
+
+  What is still open is the *product* name, which is a different question — a
+  spec string is not a name. Three directions: a TE-style model number (`MP-3`),
+  a functional name (`Listen`, `Cue`), or none at all, with the model silked on
+  the underside and the front face left to the colour blocks. **Recommendation:
+  none, for now** — firmware is a stub and Q2 is undecided, so etching anything
+  freezes a function nobody has chosen into a mould. No wordmark is modelled.
 - **Q2 — what are the three keys?** Firmware is a stub, so each cap carries a
   single coloured dot and nothing else. A dot commits to nothing; an icon
   freezes an undecided function into a mould.
