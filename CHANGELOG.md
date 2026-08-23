@@ -19,6 +19,10 @@ Notable changes to vibe-hardware. Format follows
   reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
   corner; this prints every island with the pads and vias of that net inside it, so the
   fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+- **`vibe-pcb/scripts/fab_export.sh`** — the JLCPCB BOM now carries **LCSC part numbers
+  read from `parts.yaml`'s `lcsc:` field** (the schema always had it; the exporter did not
+  use it), refuses to emit a BOM line whose refs disagree about their part number, and
+  names the exact lines still missing one instead of a blanket "fill LCSC #s".
 - **`vibe-pcb/references/design-rules.md`** — a **rotation is not actuation** finding: a
   side-pressed button needs a side-actuated part, not a rotated top-actuated one, and its
   shell hole belongs in a wall — so it is a `constraints.yaml` window with that stated.

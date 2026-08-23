@@ -23,6 +23,7 @@ parts:
     footprint: RF_Module:ESP32-S3-WROOM-1
     value: ESP32-S3-WROOM-1-N8R8
     at: [0, 16.5]
+    lcsc: C2913201        # Espressif ESP32-S3-WROOM-1-N8R8 — Standard PCBA only
     pins: {"1": GND, "2": V3V3, "3": EN, "13": USB_DM, "14": USB_DP, "17": KEY1, "20": KEY2, "23": KEY3, "27": BOOT, "33": MIC_SCK, "34": MIC_WS, "35": MIC_SD, "36": RX, "37": TX, "39": LED_DRV, "40": GND, "41": GND}
 
   SW1:
@@ -51,12 +52,14 @@ parts:
     value: TYPE-C-31-M-12
     at: [-35, 8]
     rot: 270
+    lcsc: C165948        # Korean Hroparts TYPE-C-31-M-12 — the part this KiCad land is named for
     pins: {"A1": GND, "A4": VBUS, "A5": CC1, "A6": USB_DP, "A7": USB_DM, "A9": VBUS, "A12": GND, "B1": GND, "B4": VBUS, "B5": CC2, "B6": USB_DP, "B7": USB_DM, "B9": VBUS, "B12": GND, "SH": GND}
 
   D1:
     footprint: Package_TO_SOT_SMD:SOT-23-6
     value: USBLC6-2SC6
     at: [-27, 8]
+    lcsc: C7519        # ST USBLC6-2SC6
     pins: {"1": USB_DP, "2": GND, "3": USB_DM, "4": USB_DM, "5": VBUS, "6": USB_DP}
 
   R9:
@@ -82,6 +85,7 @@ parts:
     footprint: Package_TO_SOT_SMD:SOT-23-5
     value: AP2112K-3.3TRG1
     at: [-20, 12]
+    lcsc: C51118        # Diodes AP2112K-3.3TRG1
     pins: {"1": VBUS, "2": GND, "3": VBUS, "5": V3V3}
 
   C4:
@@ -150,6 +154,7 @@ parts:
     value: ICS-43434
     at: [30.5, -19.5]
     rot: 180
+    lcsc: C5656610        # TDK InvenSense ICS-43434
     pins: {"1": MIC_WS, "2": GND, "3": GND, "4": MIC_SCK, "5": V3V3, "6": MIC_SD}
 
   C9:

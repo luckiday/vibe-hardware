@@ -59,3 +59,41 @@ python3 ../../../skills/vibe-plm/scripts/plm_check.py ../product.yaml
 | E7 | side-button actuator reach | **EST** — the EVQ-P7C tips sit flush with the board edge, but whether the shell button reaches them depends on wall thickness and standoff, and the part has only ~0.25 mm of travel. Settle it against the real shell (`cad/constraints.yaml` `windows.side_btn_*`) before ordering |
 
 E4–E7 are the pre-order checklist. Nothing here has been fabricated.
+
+## 7. Sourcing — can JLCPCB assemble this?
+
+Partly. The BOM line for every part is emitted by
+`skills/vibe-pcb/scripts/fab_export.sh`, which reads `lcsc:` out of
+`parts.yaml`, and it prints exactly which lines still have no part number.
+
+**Verified available** (looked up, not remembered):
+
+| ref | part | LCSC | note |
+|---|---|---|---|
+| J1 | TYPE-C-31-M-12 | `C165948` | SMD receptacle — machine-placeable, and KiCad's land is named for this exact part |
+| U1 | ESP32-S3-WROOM-1-N8R8 | `C2913201` | **Standard PCBA only**, not the Economic service |
+| U3 | AP2112K-3.3TRG1 | `C51118` | |
+| U4 | ICS-43434 | `C5656610` | |
+| D1 | USBLC6-2SC6 | `C7519` | |
+
+**Cannot be machine-assembled as drawn:**
+
+- **SW1–SW3, the MX key switches.** They are through-hole, and a Cherry-MX-style
+  switch is not in JLCPCB's assembly library. Hand-solder them — three joints,
+  and `fab_export.sh macropad-fr SW1 SW2 SW3` already keeps them out of the CPL.
+- **SW4/SW5, the side buttons.** The Panasonic EVQ-P7C could not be found at
+  LCSC/JLCPCB. A side-actuated part that IS stocked has to be chosen instead,
+  and **its land almost certainly differs from the EVQ-P7C's, so the footprint
+  changes with it** — this is a design change, not a BOM edit. One candidate to
+  evaluate: ROCPU TPC-21120LFS (`C2857635`), a side-actuated SMD tact switch
+  with an LCSC datasheet; confirm its dimensions, actuator direction and stock
+  before adopting.
+
+**Still to fill:** the passives (0402 R/C, the 0805 bulk cap, the 0603 LED)
+have no `lcsc:` yet. They are all commodity JLCPCB *Basic* parts — pick them
+from the Basic Parts filter so the order carries no per-part setup fee, and
+add the numbers to `parts.yaml`. `fab_export.sh` names the exact lines.
+
+So: an SMT order today assembles everything except the five switches. Closing
+the SW4/SW5 substitution and filling the passives makes it everything except
+the three MX keys, which are hand-soldered by design.

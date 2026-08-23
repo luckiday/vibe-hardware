@@ -6,5 +6,6 @@ kicad/macropad-fr.kicad_pcb
 kicad/macropad.dsn
 kicad/drc-fr.json
 kicad/*.png
+kicad/fab/
 kicad/*.kicad_pro
 kicad/*.kicad_prl
