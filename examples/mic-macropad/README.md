@@ -59,13 +59,14 @@ product instead:
 - **The mic is at the front-right corner**, port facing the user and as far
   from the USB switching edge as the outline allows.
 - **Four pogo test pads replace the debug header** — nothing protrudes.
-- **Reset and boot are side buttons on the right wall.** They are
-  side-actuated parts (Panasonic EVQ-P7C) with their actuator tips flush to
-  the board edge, so a shell button presses them horizontally — the M5Stack
-  arrangement. Rotating a top-actuated switch would not have achieved this:
-  rotation turns the pads, not the direction the part is pressed from. The
-  shell holes are in a wall rather than the top face, and
-  `constraints.yaml` says so.
+- **Reset and boot sit by the right edge**, where a shell can reach them.
+  They were briefly side-actuated parts so the shell could press them
+  horizontally — until sourcing said no: not one side-actuated switch is both
+  stocked and documented in JLCPCB's assembly library (the five that were
+  checked, and how each failed, are in [`pcb/BRIEF.md`](pcb/BRIEF.md) §7). They
+  are now top-actuated TS-1187A, and the side press — if the enclosure wants
+  one — comes from a flexure tab in the wall. The mechanism moved off the board
+  into the shell, which is where it costs nothing.
 
 ## How it is routed: a locked skeleton, then freerouting
 

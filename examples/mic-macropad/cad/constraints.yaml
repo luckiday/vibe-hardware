@@ -32,11 +32,14 @@ windows:
   # the shell floor under U4, plus a gasket if the case is sealed.
   mic_port: { x: 68.5, y: 8.5, dia: 1.5 }
   led:      { x: 66.5, y: 2.5, dia: 2 }       # light-pipe bore, not a bare hole
-  # Side buttons: holes in the RIGHT WALL, not the top face. The switches are
-  # side-actuated with their tips on the board edge (x = 76), so the shell
-  # button travels horizontally into the wall at board height.
-  side_btn_reset: { x: 76, y: 24, dia: 3.5 }
-  side_btn_boot:  { x: 76, y: 17, dia: 3.5 }
+  # Reset and boot: TOP-face bores over TOP-actuated switches. They were
+  # side-actuated for one revision, but no side-actuated switch is sourceable
+  # through JLCPCB assembly (BRIEF.md section 7), so the mechanism moved into
+  # the shell: press straight down here, OR mould a flexure tab in the RIGHT
+  # WALL that reaches over the button and turns a side press into a down press.
+  # The tab is the shell's problem; the board just presents a button.
+  btn_reset: { x: 72, y: 24, dia: 4 }
+  btn_boot:  { x: 72, y: 17, dia: 4 }
 
 keepouts:
   # Espressif's own antenna keepout, taken from the vendor land pattern (it

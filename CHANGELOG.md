@@ -23,6 +23,11 @@ Notable changes to vibe-hardware. Format follows
   read from `parts.yaml`'s `lcsc:` field** (the schema always had it; the exporter did not
   use it), refuses to emit a BOM line whose refs disagree about their part number, and
   names the exact lines still missing one instead of a blanket "fill LCSC #s".
+- **`vibe-pcb/references/design-rules.md`** — a **mechanically special = sourcing risk**
+  finding: check the assembly library BEFORE designing mechanics around a part. Five
+  side-actuated switches were evaluated for the example and all five failed differently
+  (not carried, obsolete, 4 in stock, no published land); the fix was to move the
+  mechanism into the enclosure and keep a commodity switch on the board.
 - **`vibe-pcb/references/design-rules.md`** — a **rotation is not actuation** finding: a
   side-pressed button needs a side-actuated part, not a rotated top-actuated one, and its
   shell hole belongs in a wall — so it is a `constraints.yaml` window with that stated.

@@ -56,7 +56,7 @@ python3 ../../../skills/vibe-plm/scripts/plm_check.py ../product.yaml
 | E4 | trace widths: 0.5 mm power / 0.25 mm signal | **EST** — sized by rule of thumb, not by a thermal calculation. VBUS carries ≤ 500 mA over ~25 mm; check against IPC-2152 before ordering |
 | E5 | MX switch part number | **EST** — footprint is generic Cherry MX PCB-mount; confirm the actual switch's pin positions |
 | E6 | USB-C receptacle part | **EST** — land is HRO TYPE-C-31-M-12; confirm the ordered part matches that land |
-| E7 | side-button actuator reach | **EST** — the EVQ-P7C tips sit flush with the board edge, but whether the shell button reaches them depends on wall thickness and standoff, and the part has only ~0.25 mm of travel. Settle it against the real shell (`cad/constraints.yaml` `windows.side_btn_*`) before ordering |
+| E7 | button access through the shell | **EST** — the TS-1187A is top-actuated, so the shell either bores straight down onto it (`windows.btn_*`) or reaches over it with a flexure tab from the right wall. Which one, and whether the tab has room, is settled with the real shell |
 
 E4–E7 are the pre-order checklist. Nothing here has been fabricated.
 
@@ -81,19 +81,31 @@ Partly. The BOM line for every part is emitted by
 - **SW1–SW3, the MX key switches.** They are through-hole, and a Cherry-MX-style
   switch is not in JLCPCB's assembly library. Hand-solder them — three joints,
   and `fab_export.sh macropad-fr SW1 SW2 SW3` already keeps them out of the CPL.
-- **SW4/SW5, the side buttons.** The Panasonic EVQ-P7C could not be found at
-  LCSC/JLCPCB. A side-actuated part that IS stocked has to be chosen instead,
-  and **its land almost certainly differs from the EVQ-P7C's, so the footprint
-  changes with it** — this is a design change, not a BOM edit. One candidate to
-  evaluate: ROCPU TPC-21120LFS (`C2857635`), a side-actuated SMD tact switch
-  with an LCSC datasheet; confirm its dimensions, actuator direction and stock
-  before adopting.
+### Why reset/boot are not side-actuated
+
+They were, for one revision. Sourcing killed it. Every side-actuated candidate
+failed a different way:
+
+| part | why not |
+|---|---|
+| Panasonic EVQ-P7C | not carried by LCSC/JLCPCB at all |
+| Alps SKRKAEE010 | obsolete lifecycle |
+| ROCPU TP40521116 (`C5289939`) | in JLCPCB's library, Economic+Standard — but **4 units** in stock, and no published land pattern |
+| JLCPCB JC-K1 (`C9900014703`) | in the library, but no datasheet and no dimensions published — nothing to draw a land from |
+| YIZHI YZA-022 (`C49108618`) | 360 in stock, assembly availability not stated, no land pattern |
+
+So SW4/SW5 are **XKB TS-1187A (`C318884`)**: top-actuated, in JLCPCB's library
+for **both Economic and Standard** PCBA, in stock at about $0.01, and with a
+stock KiCad land (`SW_Push_1P1T_XKB_TS-1187A`) so the footprint is not a
+guess. They sit by the right edge, and a side press — if the enclosure wants
+one — comes from a flexure tab in the right wall pressing down on the button.
+The mechanism moved from the board into the shell, which is where it is cheap.
 
 **Still to fill:** the passives (0402 R/C, the 0805 bulk cap, the 0603 LED)
 have no `lcsc:` yet. They are all commodity JLCPCB *Basic* parts — pick them
 from the Basic Parts filter so the order carries no per-part setup fee, and
 add the numbers to `parts.yaml`. `fab_export.sh` names the exact lines.
 
-So: an SMT order today assembles everything except the five switches. Closing
-the SW4/SW5 substitution and filling the passives makes it everything except
-the three MX keys, which are hand-soldered by design.
+So an SMT order today assembles everything except the three MX keys, which are
+through-hole and hand-soldered by design. Filling the passives' `lcsc:` fields
+is the only step left before the BOM is orderable.

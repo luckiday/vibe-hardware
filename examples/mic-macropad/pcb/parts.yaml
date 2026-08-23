@@ -107,21 +107,21 @@ parts:
     at: [-12.5, 17.5]
     pins: {"1": V3V3, "2": GND}
 
-  # SW4/SW5 are SIDE-ACTUATED (Panasonic EVQ-P7C): the actuator sticks out of
-  # the package instead of pointing up, so a shell button on the RIGHT WALL
-  # presses them horizontally -- the M5Stack side-button arrangement. Rotating
-  # a top-actuated part would NOT have done this: rotation turns the pads, not
-  # the direction it is pressed from.
-  # rot 90 aims the actuator at +x (measured: the EVQ-P7 courtyard is
-  # asymmetric, 2.39 mm on the actuator side vs 1.75 mm behind it), and
-  # x = 38 - 2.39 puts the tip exactly on the board edge.
-  # The two unnumbered pads are mechanical anchors -- a side-pressed button
-  # spends its life trying to peel itself off the board, and they stop it.
+  # SW4/SW5 were briefly side-actuated (Panasonic EVQ-P7C) so a shell button on
+  # the right wall could press them horizontally. That part is not sourceable
+  # through JLCPCB assembly, and neither is any other side-actuated switch that
+  # survives scrutiny -- see BRIEF.md section 7. Sourcing beat elegance: these
+  # are TS-1187A, TOP-actuated, in JLCPCB's library for BOTH Economic and
+  # Standard PCBA, in stock at ~$0.01, with a stock KiCad land.
+  # They stay by the right edge so the shell can still reach them. A true side
+  # press now comes from the ENCLOSURE -- a flexure tab in the right wall that
+  # converts a side push into a down push. That is a shell feature, not a board
+  # one, and cad/constraints.yaml says so.
   SW4:
-    footprint: Button_Switch_SMD:SW_SPST_EVQP7C
+    footprint: Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A
     value: RESET
-    at: [35.61, -4]
-    rot: 90
+    at: [34, -4]
+    lcsc: C318884        # XKB TS-1187A-B-A-B, Economic+Standard PCBA
     pins: {"1": EN, "2": GND}
 
   R1:
@@ -137,10 +137,10 @@ parts:
     pins: {"1": EN, "2": GND}
 
   SW5:
-    footprint: Button_Switch_SMD:SW_SPST_EVQP7C
+    footprint: Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A
     value: BOOT
-    at: [35.61, -11]
-    rot: 90
+    at: [34, -11]
+    lcsc: C318884        # XKB TS-1187A-B-A-B, Economic+Standard PCBA
     pins: {"1": BOOT, "2": GND}
 
   R2:
