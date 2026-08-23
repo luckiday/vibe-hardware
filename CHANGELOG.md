@@ -19,6 +19,10 @@ Notable changes to vibe-hardware. Format follows
   reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
   corner; this prints every island with the pads and vias of that net inside it, so the
   fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+- **`vibe-pcb/references/design-rules.md`** — a **same-net pins split by a third** finding:
+  two pins of one net on the same package side with a different net between them (an LDO's
+  VIN + EN either side of GND) makes the router wrap the far side of the part at
+  near-minimum clearance. Feed both from the near side and lock it.
 
 ### Changed
 - **`vibe-pcb`** — `autoroute.sh` now passes `-mt 1` (freerouting's own log: the

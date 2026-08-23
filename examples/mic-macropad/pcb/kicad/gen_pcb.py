@@ -301,6 +301,22 @@ wire("V3V3", [(28, 1.6), (28, -20.86), ("U4", 5)], W_SIG)
 wire("V3V3", [(28, -15), ("C9", 1)], W_SIG)
 wire("V3V3", [(32.7, 1.6), (32.7, 15), ("TP1", 1)], W_SIG)
 
+# The LDO's VIN (1) and EN (3) are both VBUS, but GND (2) sits BETWEEN them
+# on the same pad column -- the recurring 3-pin-side trap. Left to the router,
+# it wraps the FAR side of the part in eight segments, threading the gap
+# between the GND pad and the output pins at close to minimum clearance and
+# running VBUS alongside V3V3 at the regulator's own pins.
+#
+# Instead: surface VBUS on the input side at pad 3's own height, and the feed
+# is one straight run along the bottom with the input cap and VIN teed off it.
+# The via is placed HERE rather than left to the router -- anchoring a locked
+# trace to a via the router chose would move it on the next re-route.
+wire("VBUS", [(-24.2, 8.3), (-24.2, 11.05)], W_PWR, pcbnew.B_Cu)
+via("VBUS", -24.2, 11.05)
+wire("VBUS", [(-24.2, 11.05), ("U3", 3)], W_PWR)          # the bottom run
+wire("VBUS", [(-23.98, 11.05), ("C3", 1)], W_PWR)         # T up to the input cap
+wire("VBUS", [("C3", 1), (-23.98, 12.95), ("U3", 1)], W_PWR)
+
 wire("GND", [("J1", "A1"), (-29.5, 11.9)])
 via("GND", -29.5, 11.9)
 wire("GND", [("J1", "A12"), (-29.9, 3.6)])

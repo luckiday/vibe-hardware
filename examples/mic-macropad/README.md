@@ -71,7 +71,14 @@ signals. Two reasons this shape is worth copying:
    pour pockets and leave different nets unrouted. Anything that must be true
    across runs belongs in the skeleton; the router only gets what it can't get
    wrong.
-2. **The interleaved USB-C pad column is a planarity puzzle**, not a routing
+2. **Two pins of one net with another net between them** — the LDO's VIN (1)
+   and EN (3) sit either side of GND (2). Left alone, freerouting wrapped the
+   far side of the part in eight segments, squeezing between the ground pad
+   and the output pins. Surfacing VBUS at pin 3's own height turns it into one
+   straight run along the bottom with the input cap and VIN teed off it. Note
+   the via is placed by the generator, not the router: a locked trace anchored
+   to a router-chosen via moves on the next re-route.
+3. **The interleaved USB-C pad column is a planarity puzzle**, not a routing
    one. Rotated 90°, the column runs `B7, A6, A7, B6` — bridging DP on the
    **left** of the column and DM on the **right** makes both pairs planar with
    zero layer changes. Same-side bridging always costs a via. Count the
