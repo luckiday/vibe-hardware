@@ -103,6 +103,11 @@ Worked, end-to-end builds live in [`examples/`](examples/). Flagship:
   M5StickC S3) and the **Mac bridge** (Claude Code hooks → BLE) work today; the custom
   carrier **PCB** and 3D-printed **shell** are still stubs — the in-progress target for
   vibe-pcb / vibe-cad.
+- [**mic-macropad**](examples/mic-macropad/) — three MX keys and an I2S microphone on an
+  ESP32-S3-WROOM-1, USB-C powered. The **board** is the finished part: contracts the
+  generator never re-types, a placement laid out as a product, and a reproducible
+  autoroute (a locked skeleton + an accepted freerouting session) gated at **DRC 0/0**.
+  Firmware and shell are stubs. Read it for the vibe-pcb path end to end.
 
 Add your own build as `examples/<name>/` and point the skills' "worked reference" at it.
 

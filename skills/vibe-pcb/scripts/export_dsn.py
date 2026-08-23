@@ -6,6 +6,11 @@ keep-out as a REAL track/via keepout (not just a no-fill rule area) so the autor
 keeps front copper + vias off a flush module's belly, then rewrites the single exported
 net class into power/signal classes so freerouting honours per-net widths.
 
+Alternative worth knowing (references/autorouting.md, "Freerouting at scale"):
+KiCad netclasses ride into the export natively, so setting a PWR class with
+SetNetclassPatternAssignment() on the board gets the same result without this
+regex rewrite. This script stays for boards whose generator does not set them.
+
 Why this script exists: kicad-cli has NO Specctra export. The bundled pcbnew Python is the
 only headless way out -> pcbnew.ExportSpecctraDSN(board, file) (KiCad 10).
 

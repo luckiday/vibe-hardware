@@ -6,6 +6,35 @@ Notable changes to vibe-hardware. Format follows
 
 ## [Unreleased]
 
+### Added
+- **`examples/mic-macropad`** — a second worked example, and the first whose **board** is
+  finished: three MX keys + an I2S mic on an ESP32-S3-WROOM-1, 76 x 56 mm, two layers,
+  **DRC 0 error-severity / 0 unconnected**. Contracts (`constraints.yaml` / `parts.yaml` /
+  `pinmap.yaml`) that the generator never re-types, a placement laid out as a *product*
+  (key row as the face, USB away from the hands, ESD at the connector, pogo pads instead
+  of a header), and a reproducible autoroute: a **locked skeleton** (`SetLocked` ->
+  Specctra `(type fix)`) plus an **accepted `.ses`** replayed by default, because
+  freerouting is nondeterministic.
+- **`vibe-pcb/scripts/zone_islands.py`** — answers "why is this pour unconnected?". DRC
+  reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
+  corner; this prints every island with the pads and vias of that net inside it, so the
+  fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+
+### Changed
+- **`vibe-pcb`** — `autoroute.sh` now passes `-mt 1` (freerouting's own log: the
+  multi-threaded optimizer "is known to generate clearance violations"; a 27-part board
+  saw its optimization stage go 16 -> 17 violations). `references/autorouting.md` gains a
+  **"Freerouting at scale"** section: the locked-skeleton pattern, the accepted-session
+  convention, why a *dense* board must export a **GND-less** DSN (and how that squares
+  with gotcha 5, which is now cross-referenced rather than contradicted), netless vias
+  vanishing from the export, and netclasses as a simpler alternative to `export_dsn.py`'s
+  regex class rewrite. `references/design-rules.md` gains a **"place for the product,
+  then for the router"** section plus two findings: a footprint with **no courtyard**
+  makes `courtyard_overlaps()` a silent no-op (and a stock land is not automatically
+  safe — the Cherry MX courtyard is 13.29 mm across a 14 mm housing), and **wire length
+  does not predict routability** (1292 -> 591 mm of wire took unroutable traces from 14
+  to 22 on a measured board), which argues against treating the `hpwl` budget as a target.
+
 ### Fixed
 - **CI** — the `checks` job was a lint-only scaffold that did not run the gates the
   docs tell you to run. It now compiles Python under `examples/` and `tools/` as well

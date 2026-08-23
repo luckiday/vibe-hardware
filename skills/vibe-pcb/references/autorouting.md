@@ -85,8 +85,12 @@ FREEROUTING_JAR=/path/freerouting-2.2.4.jar JAVA=/path/jdk-25/bin/java \
    ```python
    z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
    ```
-   (Do NOT instead drop GND from the routing and rely on the pour alone: signal traces that
-   wrap a connector can fence the pour into islands and leave a GND pad unconnected.)
+   (On a small board, do NOT instead drop GND from the routing and rely on the pour alone:
+   signal traces that wrap a connector can fence the pour into islands and leave a GND pad
+   unconnected. On a DENSE board that trade flips — a netted GND makes the router wire
+   ground pads together through a connector's pad column, which is worse — so you drop GND
+   *and* deal with the islands this warning correctly predicts. See "Freerouting at scale"
+   below, and `scripts/zone_islands.py` for finding them.)
 
 6. **Per-net widths.** The exported DSN uses one default class width. Split it into
    power/signal classes (post-process the DSN text) so the router matches `gen_pcb.py`'s
@@ -114,7 +118,10 @@ the session that passed the gate and replay it by default; re-route only
 deliberately (`FRESH=1` in the example's `route_fr.sh`).
 
 **`-mt 1`.** freerouting's own log says it: *"Multi-threaded route optimization
-is broken and it is known to generate clearance violations."* Now the default in
+is broken and it is known to generate clearance violations."* Observed on a
+27-part board: the multi-threaded optimization stage took the router's own
+violation count from 16 to **17** (it optimised the board worse), while the
+single-threaded run held at 16. Now the default in
 [`autoroute.sh`](../scripts/autoroute.sh).
 
 **On a dense board, do not let the router see GND.** Gotcha 5 above warns
@@ -148,9 +155,13 @@ for n in ("VBUS", "V3V3"):
 Without any class, the router uses its own minimum: 22 `track_width`
 violations on a board whose power was supposed to be 0.5 mm.
 
-**Scripted zones need island removal switched on.** A GUI zone gets it by
-default; `pcbnew.ZONE()` does not. `z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)`
-deletes the orphan pockets at fill time instead of leaving them for DRC.
+**Do not attribute a fix to your last edit while the router is in the loop.**
+Freerouting's nondeterminism makes the obvious inference unsafe: change one
+thing, re-route, see the count drop, conclude the change did it. Twice that
+inference was wrong here — once about a zone-layer call and once about island
+removal (`pcbnew.ZONE()` already defaults to `ISLAND_REMOVAL_MODE_ALWAYS`;
+setting it was a no-op). Verify a mechanism against a *minimal* board, not
+against a full re-route.
 
 ## Reading a "Zone <-> Zone" unconnected item
 
