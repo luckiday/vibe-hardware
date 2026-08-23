@@ -28,6 +28,19 @@ all override the defaults; the script fails loudly if a tool is missing.
 python3 ../../skills/vibe-plm/scripts/plm_check.py product.yaml   # contracts
 ```
 
+## Industrial design
+
+The shell's appearance is designed in [`id/`](id/) — 93 × 62 × 18 mm, milky
+white PC, Mondrian primary blocks, the three MX switches left exposed in a black
+tray. [`id/design-report.md`](id/design-report.md) is the authority; §0 is the
+set of constraints the board had already fixed before the first picture, and
+§1.3 is why every colour block sits where it does.
+
+![the shell, six views](id/renders/sheet.jpg)
+
+It asks for exactly one contract change: `stack.total_h` (24) described a shell
+that encloses switch and cap, and this one deliberately does not.
+
 ## The sources (and what is an output)
 
 | file | owns |
@@ -141,7 +154,7 @@ and must be closed before ordering.
 |---|---|---|
 | pcb | **clean** | DRC 0/0, gated by `route_fr.sh` |
 | firmware | stub | not started; `pinmap.yaml` is ready for it |
-| cad | stub | not modelled; `constraints.yaml` has every number a shell needs |
+| cad | stub | not modelled; `constraints.yaml` has every number a shell needs, and [`id/`](id/) now has the outer form to wrap it in |
 
 Not yet fabricated. The three hand-checked items before an order are in the
 brief's EST register.
