@@ -101,11 +101,28 @@ guess. They sit by the right edge, and a side press — if the enclosure wants
 one — comes from a flexure tab in the right wall pressing down on the button.
 The mechanism moved from the board into the shell, which is where it is cheap.
 
-**Still to fill:** the passives (0402 R/C, the 0805 bulk cap, the 0603 LED)
-have no `lcsc:` yet. They are all commodity JLCPCB *Basic* parts — pick them
-from the Basic Parts filter so the order carries no per-part setup fee, and
-add the numbers to `parts.yaml`. `fab_export.sh` names the exact lines.
+**Passives** — all filled, and all *Basic* parts except the LED, so the order
+carries one setup fee rather than eight:
 
-So an SMT order today assembles everything except the three MX keys, which are
-through-hole and hand-soldered by design. Filling the passives' `lcsc:` fields
-is the only step left before the BOM is orderable.
+| value | LCSC | why this one |
+|---|---|---|
+| 10k 0402 1% | `C25744` | Basic, 20.7 M in stock |
+| 5.1k 0402 1% | `C25905` | Basic |
+| 330R 0402 1% | `C25104` | Basic — see the LED note below |
+| 100nF 0402 | `C1525` | Basic, 16 V X7R, 54 M in stock |
+| 1uF 0402 | `C52923` | Basic, **25 V** X5R — C3 sits on VBUS, so the margin is not decoration |
+| 22uF 0805 | `C45783` | Basic, **25 V** X5R. The 6.3 V part is half the price and the wrong choice: an 0805 X5R at 3.3 V loses most of its capacitance to DC bias, and a bulk cap that is not there is worse than a cheaper one |
+| LED green 0603 | `C84267` | NCD0603G1, Vf 2.6 V. **Extended** — the only line with a setup fee |
+
+**The BOM pass found a circuit bug.** R5 was 1k, chosen when the LED was just
+"a green LED". Every green 0603 JLCPCB actually stocks is InGaN with Vf
+2.6–3.3 V, not the ~2.0 V a 1k resistor assumes. At Vf 2.6 V, 1k gives
+(3.3 − 2.6)/1k = **0.7 mA** — dim; at Vf 3.3 V, which is what the highest-stock
+green (`C965804`) measures, the LED **never lights at all**. R5 is now 330R:
+2.1 mA with the specified part. Picking the real part is what surfaced it —
+a value that is "obviously fine" is only fine against a part you have chosen.
+
+So the BOM is complete: 14 lines, every one with a part number, 13 of them
+Basic. An SMT order assembles everything except the three MX keys, which are
+through-hole and hand-soldered by design — `fab_export.sh macropad-fr SW1 SW2
+SW3` keeps them out of the CPL.

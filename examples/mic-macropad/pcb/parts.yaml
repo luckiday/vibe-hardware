@@ -66,6 +66,7 @@ parts:
     footprint: Resistor_SMD:R_0402_1005Metric
     value: 5.1k
     at: [-33.8, 17]
+    lcsc: C25905        # UNI-ROYAL 0402WGF5101TCE 5.1k 1% — Basic, 8.4M stock
     pins: {"1": CC1, "2": GND}
 
   R10:
@@ -73,12 +74,14 @@ parts:
     value: 5.1k
     at: [-31, 14.5]
     rot: 180
+    lcsc: C25905        # UNI-ROYAL 0402WGF5101TCE 5.1k 1% — Basic, 8.4M stock
     pins: {"1": CC2, "2": GND}
 
   C3:
     footprint: Capacitor_SMD:C_0402_1005Metric
     value: 1uF
     at: [-23.5, 12]
+    lcsc: C52923        # Samsung CL05A105KA5NQNC 1uF 25V X5R — Basic; 25 V because C3 sits on VBUS
     pins: {"1": VBUS, "2": GND}
 
   U3:
@@ -92,6 +95,7 @@ parts:
     footprint: Capacitor_SMD:C_0402_1005Metric
     value: 1uF
     at: [-16, 12]
+    lcsc: C52923        # Samsung CL05A105KA5NQNC 1uF 25V X5R — Basic
     pins: {"1": V3V3, "2": GND}
 
   C10:
@@ -99,12 +103,14 @@ parts:
     value: 22uF
     at: [-12.5, 20.5]
     rot: 180
+    lcsc: C45783        # Samsung CL21A226MAQNNNE 22uF 25V X5R — Basic; 25 V not 6.3 V, see BRIEF §7 on DC bias
     pins: {"1": V3V3, "2": GND}
 
   C11:
     footprint: Capacitor_SMD:C_0402_1005Metric
     value: 100nF
     at: [-12.5, 17.5]
+    lcsc: C1525        # Samsung CL05B104KO5NNNC 100nF 16V X7R — Basic, 54M stock
     pins: {"1": V3V3, "2": GND}
 
   # SW4/SW5 were briefly side-actuated (Panasonic EVQ-P7C) so a shell button on
@@ -128,12 +134,14 @@ parts:
     footprint: Resistor_SMD:R_0402_1005Metric
     value: 10k
     at: [-13.9, 15.5]
+    lcsc: C25744        # UNI-ROYAL 0402WGF1002TCE 10k 1% — Basic, 20.7M stock
     pins: {"1": V3V3, "2": EN}
 
   C7:
     footprint: Capacitor_SMD:C_0402_1005Metric
     value: 1uF
     at: [-26, 19]
+    lcsc: C52923        # Samsung CL05A105KA5NQNC 1uF 25V X5R — Basic
     pins: {"1": EN, "2": GND}
 
   SW5:
@@ -147,6 +155,7 @@ parts:
     footprint: Resistor_SMD:R_0402_1005Metric
     value: 10k
     at: [19.5, 9.2]
+    lcsc: C25744        # UNI-ROYAL 0402WGF1002TCE 10k 1% — Basic, 20.7M stock
     pins: {"1": V3V3, "2": BOOT}
 
   U4:
@@ -161,12 +170,18 @@ parts:
     footprint: Capacitor_SMD:C_0402_1005Metric
     value: 100nF
     at: [30.5, -15]
+    lcsc: C1525        # Samsung CL05B104KO5NNNC 100nF 16V X7R — Basic, 54M stock
     pins: {"1": V3V3, "2": GND}
 
+  # 330R, not 1k: every green 0603 that JLCPCB actually stocks is InGaN with
+  # Vf 2.6-3.3 V, and 1k against a 2.6 V LED on a 3.3 V rail is 0.7 mA. Some of
+  # them are Vf 3.3 V, where the LED would simply never light. 330R gives
+  # (3.3 - 2.6) / 330 = 2.1 mA, plenty for an indicator.
   R5:
     footprint: Resistor_SMD:R_0402_1005Metric
-    value: 1k
+    value: 330R
     at: [25, -25.5]
+    lcsc: C25104        # UNI-ROYAL 0402WGF3300TCE 330R 1% — Basic; sized for the LED below
     pins: {"1": LED_DRV, "2": LED_A}
 
   D4:
@@ -174,6 +189,7 @@ parts:
     value: LED_GREEN
     at: [28.5, -25.5]
     rot: 180
+    lcsc: C84267        # NCD0603G1 emerald green, Vf 2.6 V — Extended (setup fee); Vf is why R5 is 330R
     pins: {"1": GND, "2": LED_A}
 
   TP1:
