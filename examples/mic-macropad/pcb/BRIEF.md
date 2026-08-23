@@ -54,8 +54,8 @@ python3 ../../../skills/vibe-plm/scripts/plm_check.py ../product.yaml
 | E2 | antenna keepout extent | **closed** — Espressif's own rule area, x ±24 mm |
 | E3 | LED polarity | **closed** — KiCad `LED_0603` pad 1 is the cathode |
 | E4 | trace widths: 0.5 mm power / 0.25 mm signal | **EST** — sized by rule of thumb, not by a thermal calculation. VBUS carries ≤ 500 mA over ~25 mm; check against IPC-2152 before ordering |
-| E7 | side-button actuator reach | **EST** — the EVQ-P7C tip sits flush with the board edge; whether the shell button can reach it depends on wall thickness and the standoff height. Check against the real shell before ordering, and note the part has ~0.25 mm of travel |
 | E5 | MX switch part number | **EST** — footprint is generic Cherry MX PCB-mount; confirm the actual switch's pin positions |
 | E6 | USB-C receptacle part | **EST** — land is HRO TYPE-C-31-M-12; confirm the ordered part matches that land |
+| E7 | side-button actuator reach | **EST** — the EVQ-P7C tips sit flush with the board edge, but whether the shell button reaches them depends on wall thickness and standoff, and the part has only ~0.25 mm of travel. Settle it against the real shell (`cad/constraints.yaml` `windows.side_btn_*`) before ordering |
 
-E4–E6 are the pre-order checklist. Nothing here has been fabricated.
+E4–E7 are the pre-order checklist. Nothing here has been fabricated.
