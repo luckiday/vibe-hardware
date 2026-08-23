@@ -23,10 +23,14 @@ Notable changes to vibe-hardware. Format follows
   read from `parts.yaml`'s `lcsc:` field** (the schema always had it; the exporter did not
   use it), refuses to emit a BOM line whose refs disagree about their part number, and
   names the exact lines still missing one instead of a blanket "fill LCSC #s".
-- **`vibe-pcb/references/design-rules.md`** — a **series resistor sized against no part**
-  finding: filling the example's BOM showed R5 = 1k had been chosen before the LED was a
-  real part, and every green 0603 JLCPCB stocks is InGaN (Vf 2.6–3.3 V), so the indicator
-  would have been dim or dead. Size the dropper against the chosen part's Vf.
+- **`vibe-pcb/references/design-rules.md`** — an **LED Vf vs the rail** finding: the green
+  0603s JLCPCB stocks are InGaN with Vf specified as a *range* (2.6–3.6 V), so on a 3.3 V
+  rail a worst-case part cannot light at any resistor value. Check the range, not the
+  typical value, before colour is a design decision.
+- **`examples/mic-macropad`** — a complete JLCPCB order package and
+  [`pcb/ORDER.md`](examples/mic-macropad/pcb/ORDER.md): what to upload, board options, the
+  hand-soldered refs, and a generated **pin-1 orientation table** to check the CPL rotations
+  against in JLCPCB's preview.
 - **`vibe-pcb/references/design-rules.md`** — a **mechanically special = sourcing risk**
   finding: check the assembly library BEFORE designing mechanics around a part. Five
   side-actuated switches were evaluated for the example and all five failed differently

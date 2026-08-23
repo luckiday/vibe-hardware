@@ -40,6 +40,10 @@ python3 ../../skills/vibe-plm/scripts/plm_check.py product.yaml   # contracts
 
 `macropad.kicad_pcb` and everything beside it is generated and gitignored.
 
+To actually order it, see [`pcb/ORDER.md`](pcb/ORDER.md) — the fab package,
+the board options, which refs you solder yourself, and a generated pin-1
+orientation table to check JLCPCB's placement preview against.
+
 ## The layout is a product, not a board
 
 The first version had the keys mid-board, the ESD chip parked between two

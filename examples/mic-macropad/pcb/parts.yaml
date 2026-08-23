@@ -173,10 +173,9 @@ parts:
     lcsc: C1525        # Samsung CL05B104KO5NNNC 100nF 16V X7R — Basic, 54M stock
     pins: {"1": V3V3, "2": GND}
 
-  # 330R, not 1k: every green 0603 that JLCPCB actually stocks is InGaN with
-  # Vf 2.6-3.3 V, and 1k against a 2.6 V LED on a 3.3 V rail is 0.7 mA. Some of
-  # them are Vf 3.3 V, where the LED would simply never light. 330R gives
-  # (3.3 - 2.6) / 330 = 2.1 mA, plenty for an indicator.
+  # 330R, not 1k, sized against the LED's WORST-CASE Vf rather than a typical
+  # one: (3.3 - 2.6) / 330 = 2.1 mA at the top of the red LED's 1.6-2.6 V
+  # range, and 5.2 mA at the bottom. 1k would have given 0.7 mA worst case.
   R5:
     footprint: Resistor_SMD:R_0402_1005Metric
     value: 330R
@@ -184,12 +183,17 @@ parts:
     lcsc: C25104        # UNI-ROYAL 0402WGF3300TCE 330R 1% — Basic; sized for the LED below
     pins: {"1": LED_DRV, "2": LED_A}
 
+  # RED, not green, and that is a supply-rail decision rather than taste: the
+  # green 0603s JLCPCB stocks are InGaN with Vf specified 2.6-3.6 V, so on a
+  # 3.3 V rail a worst-case part cannot light AT ALL. This red is 1.6-2.6 V,
+  # which leaves 0.7 V of headroom even at the top of its range.
+  # Pad 1 is the CATHODE on KiCad's LED_0603 land.
   D4:
     footprint: LED_SMD:LED_0603_1608Metric
-    value: LED_GREEN
+    value: LED_RED
     at: [28.5, -25.5]
     rot: 180
-    lcsc: C84267        # NCD0603G1 emerald green, Vf 2.6 V — Extended (setup fee); Vf is why R5 is 330R
+    lcsc: C84263        # NCD0603R1 red, Vf 1.6-2.6 V, 4.1M stock — Extended
     pins: {"1": GND, "2": LED_A}
 
   TP1:

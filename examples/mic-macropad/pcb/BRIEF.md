@@ -112,15 +112,21 @@ carries one setup fee rather than eight:
 | 100nF 0402 | `C1525` | Basic, 16 V X7R, 54 M in stock |
 | 1uF 0402 | `C52923` | Basic, **25 V** X5R — C3 sits on VBUS, so the margin is not decoration |
 | 22uF 0805 | `C45783` | Basic, **25 V** X5R. The 6.3 V part is half the price and the wrong choice: an 0805 X5R at 3.3 V loses most of its capacitance to DC bias, and a bulk cap that is not there is worse than a cheaper one |
-| LED green 0603 | `C84267` | NCD0603G1, Vf 2.6 V. **Extended** — the only line with a setup fee |
+| LED **red** 0603 | `C84263` | NCD0603R1, Vf **1.6–2.6 V**. Extended |
 
-**The BOM pass found a circuit bug.** R5 was 1k, chosen when the LED was just
-"a green LED". Every green 0603 JLCPCB actually stocks is InGaN with Vf
-2.6–3.3 V, not the ~2.0 V a 1k resistor assumes. At Vf 2.6 V, 1k gives
-(3.3 − 2.6)/1k = **0.7 mA** — dim; at Vf 3.3 V, which is what the highest-stock
-green (`C965804`) measures, the LED **never lights at all**. R5 is now 330R:
-2.1 mA with the specified part. Picking the real part is what surfaced it —
-a value that is "obviously fine" is only fine against a part you have chosen.
+**The BOM pass found a circuit bug, and then found a worse one.** R5 was 1k,
+chosen back when the LED was just "a green LED". The green 0603s JLCPCB
+actually stocks are InGaN, and their datasheet Vf is a **range**: `C84267` is
+specified **2.6–3.6 V**. On a 3.3 V rail that is not "dim" — a worst-case part
+**cannot light at all**, no matter what the resistor is. Green InGaN simply
+does not fit a 3.3 V rail behind a series resistor.
+
+Sizing R5 against the *typical* 2.6 V would have shipped a board that works on
+the bench and fails on some fraction of the reels. So D4 is now **red**
+(`C84263`, Vf 1.6–2.6 V) and R5 is 330R: **2.1 mA at the worst-case Vf**, 5.2 mA
+at the best. Two lessons, and the second is the one that bites — read the Vf
+**range**, not the typical value, and check it against the rail before the
+colour is a design decision.
 
 So the BOM is complete: 14 lines, every one with a part number, 13 of them
 Basic. An SMT order assembles everything except the three MX keys, which are
