@@ -32,6 +32,11 @@ windows:
   # the shell floor under U4, plus a gasket if the case is sealed.
   mic_port: { x: 68.5, y: 8.5, dia: 1.5 }
   led:      { x: 66.5, y: 2.5, dia: 2 }       # light-pipe bore, not a bare hole
+  # Side buttons: holes in the RIGHT WALL, not the top face. The switches are
+  # side-actuated with their tips on the board edge (x = 76), so the shell
+  # button travels horizontally into the wall at board height.
+  side_btn_reset: { x: 76, y: 24, dia: 3.5 }
+  side_btn_boot:  { x: 76, y: 17, dia: 3.5 }
 
 keepouts:
   # Espressif's own antenna keepout, taken from the vendor land pattern (it

@@ -19,6 +19,10 @@ Notable changes to vibe-hardware. Format follows
   reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
   corner; this prints every island with the pads and vias of that net inside it, so the
   fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+- **`vibe-pcb/references/design-rules.md`** — a **rotation is not actuation** finding: a
+  side-pressed button needs a side-actuated part, not a rotated top-actuated one, and its
+  shell hole belongs in a wall — so it is a `constraints.yaml` window with that stated.
+  Find the actuator direction by measuring the (asymmetric) courtyard.
 - **`vibe-pcb/references/design-rules.md`** — a **stitching-via drift** finding: vias added
   one at a time to chase pour islands survive a re-placement and become a constellation
   nobody can justify. Measure with leave-one-out (drop a via, refill, re-run DRC) — on the

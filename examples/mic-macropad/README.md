@@ -59,6 +59,13 @@ product instead:
 - **The mic is at the front-right corner**, port facing the user and as far
   from the USB switching edge as the outline allows.
 - **Four pogo test pads replace the debug header** — nothing protrudes.
+- **Reset and boot are side buttons on the right wall.** They are
+  side-actuated parts (Panasonic EVQ-P7C) with their actuator tips flush to
+  the board edge, so a shell button presses them horizontally — the M5Stack
+  arrangement. Rotating a top-actuated switch would not have achieved this:
+  rotation turns the pads, not the direction the part is pressed from. The
+  shell holes are in a wall rather than the top face, and
+  `constraints.yaml` says so.
 
 ## How it is routed: a locked skeleton, then freerouting
 

@@ -103,10 +103,21 @@ parts:
     at: [-12.5, 17.5]
     pins: {"1": V3V3, "2": GND}
 
+  # SW4/SW5 are SIDE-ACTUATED (Panasonic EVQ-P7C): the actuator sticks out of
+  # the package instead of pointing up, so a shell button on the RIGHT WALL
+  # presses them horizontally -- the M5Stack side-button arrangement. Rotating
+  # a top-actuated part would NOT have done this: rotation turns the pads, not
+  # the direction it is pressed from.
+  # rot 90 aims the actuator at +x (measured: the EVQ-P7 courtyard is
+  # asymmetric, 2.39 mm on the actuator side vs 1.75 mm behind it), and
+  # x = 38 - 2.39 puts the tip exactly on the board edge.
+  # The two unnumbered pads are mechanical anchors -- a side-pressed button
+  # spends its life trying to peel itself off the board, and they stop it.
   SW4:
-    footprint: Button_Switch_SMD:Panasonic_EVQPUJ_EVQPUA
+    footprint: Button_Switch_SMD:SW_SPST_EVQP7C
     value: RESET
-    at: [-20, 19]
+    at: [35.61, -4]
+    rot: 90
     pins: {"1": EN, "2": GND}
 
   R1:
@@ -122,9 +133,10 @@ parts:
     pins: {"1": EN, "2": GND}
 
   SW5:
-    footprint: Button_Switch_SMD:Panasonic_EVQPUJ_EVQPUA
+    footprint: Button_Switch_SMD:SW_SPST_EVQP7C
     value: BOOT
-    at: [14, 5]
+    at: [35.61, -11]
+    rot: 90
     pins: {"1": BOOT, "2": GND}
 
   R2:
