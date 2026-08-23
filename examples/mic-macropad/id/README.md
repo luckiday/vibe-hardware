@@ -52,9 +52,29 @@ board coordinate needs nothing but centring.
 scene; algorithms unchanged, comments translated, nothing product-specific
 carried over.
 
-## Two numbers worth defending in review
+## Reusable standard parts
+
+Two modules are product-agnostic — drop them into another scene and they work:
+
+- [`scene/mx.js`](scene/mx.js) — Cherry MX switch (14.0 / 15.6 sq housing,
+  11.6 mm crown, cross stem) and an XDA/MA keycap. KiCad ships no 3D model for
+  `Button_Switch_Keyboard` (those lands are copper only), so it is generated
+  from datasheet numbers.
+- [`scene/usbc.js`](scene/usbc.js) — USB Type-C receptacle. Outer body
+  **measured off the KiCad land the board specifies** (`F.Fab` of
+  `USB_C_Receptacle_HRO_TYPE-C-31-M-12` = 8.94 × 7.30 mm); cavity and tongue
+  from the Type-C spec. Exports `USBC` (the numbers), `usbcCutout()` (the panel
+  aperture outline) and `WALL_ROT` (the orientations — a Type-C port rendered
+  portrait is unmistakable, and easy to produce by rotating about one axis).
+
+![USB-C detail](renders/detail-usbc.jpg)
+
+## Three things worth defending in review
 
 - **H = 18, not the sheet's captioned 22.** The MX stack reaches 22.7 mm; at a
   22 mm face the exposed-switch look is a 0.7 mm sliver. §0.8.
 - **The rear band is blue because it may never be metal.** It is Espressif's
   antenna keepout, promoted to a split line. §1.3.
+- **The board sits hard left, so the keys are off-centre.** A Type-C plug shell
+  is 6.5 mm; a centred board puts the receptacle 8.5 mm down a tunnel no plug
+  can bottom out in. §1.5.

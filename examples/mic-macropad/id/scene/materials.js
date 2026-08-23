@@ -36,7 +36,8 @@ export const M = {
   // catches the key light and reads as a raised white square.
   cavity: new THREE.MeshBasicMaterial({ name: 'cavity', color: '#0B0B0B' }),
   cavityWall: std({ name: 'cavity-wall', color: '#1A1A18', roughness: 0.9 }),
-  usbShell: std({ name: 'usb-shell', color: '#9DA3A8', roughness: 0.35, metalness: 0.9 }),
+  usbShell: std({ name: 'usb-shell', color: '#A8ADB2', roughness: 0.3, metalness: 0.92 }),
+  usbTongue: std({ name: 'usb-tongue', color: '#E8E6E1', roughness: 0.45 }),
   foot: std({ name: 'foot', color: P.colFoot, roughness: 0.95 }),
 
   // Light-emitting parts: black base + emissive, toneMapped false, and NAMED —

@@ -30,6 +30,11 @@ export const P = {
                     //      proud, which is what the picture actually shows.
                     //      The picture wins over its own caption. (report §1.2)
 
+  bezelL: 3.0,      // [pcb] wall + tolerance_mm. The board is NOT centred in the
+                    //       shell, and this is the number that decides it — see
+                    //       the note on bx() at the bottom. Everything left of
+                    //       the board is one wall thickness; everything spare
+                    //       goes to the right, where the service strip needs it.
   Rc: 6.0,          // [v2] plan-view corner radius — soft, TE-ish, ~6.5% of W
   Rf: 1.6,          // [v2] edge fillet on the side profile. Independent of Rc:
                     //      "round in plan, thin soft edge" needs two radii.
@@ -67,7 +72,7 @@ export const P = {
   // ---- the Mondrian grid --------------------------------------------------
   // Not decoration: every line is a constraint and every block names what is
   // under it. (report §1.3, face→element allocation)
-  stripX: 33,       // [eye] scene x of the vertical split = board x 71. Right of
+  stripX: 28,       // [eye] local x of the vertical split = board x 71.5. Right of
                     //       it: reset, boot, the four test pads. "Service."
   // frontBandZ is NOT stored: the horizontal split IS the tray's front wall.
   // Storing it separately is how a second edge appears 1 mm from the first.
@@ -77,7 +82,7 @@ export const P = {
   blockBlueW: 26,   // [v2] blue runs from the left edge along the rear band
   blockRedY0: -14.0,  // [v2] red block on the right strip, over reset/boot…
   blockRedY1: -1.0, // [v2]  …(reset sits at local y -4, boot at local y -11)
-  blockYellowX: 12, // [v2] yellow on the front band, right end, over the mic
+  blockYellowX: 4,  // [v2] yellow on the front band, right end, over the mic
   wrap: 4.0,        // [v2] how far a block wraps over the edge onto the side face
 
   // ---- apertures (all straight from the board contract) -------------------
@@ -95,13 +100,14 @@ export const P = {
   ledZ: 4.4,        // [eye] shares micSlotZ: two features on one baseline
                     //       reads as a considered front elevation, not as scatter
   micSlotZ: 4.4,    // [eye] height of the mic slot up the front face
-  micSlotX: 58,     // [eye] board x where the front-edge slot sits. Deliberately
+  micSlotX: 52,     // [eye] board x where the front-edge slot sits. Deliberately
                     //       NOT micBoardX: 13 mm of separation from the indicator,
                     //       so the two features read as two features.
   ledBoardX: 66.5,  // [pcb] windows.led.x — where D4 actually is
-  ledExitX: 71.0,   // [ask] where the ID wants the dot: the front-right corner,
-                    //       inside the service strip. 4.5 mm of lateral run in a
-                    //       moulded light pipe, OR move D4 — report R3.
+  ledExitX: 66.5,   // [pcb] = windows.led.x. R3 is CLOSED: once the board moved
+                    //       left in the shell, D4's own position already lands in
+                    //       the front band where the ID wants it. No light-pipe
+                    //       run, no board change.
   micSlotW: 9.0,    // [eye] the front-edge slot the floor port vents through
   micSlotH: 1.2,    // [eye]
   micBoardX: 68.5,  // [pcb] windows.mic_port.x
@@ -132,6 +138,16 @@ export const P = {
 // z up — and the whole group is rotated once, in device.js, into three.js's
 // y-up world. So a board coordinate needs nothing but centring, and there is
 // exactly one place where the two conventions meet instead of one per part.
-export const bx = b => b - P.boardW / 2;    // board x → local x:  0→-38, 76→+38
+// The board sits HARD LEFT in the shell, one wall thickness from the left face,
+// not centred. Two reasons, and the first one is not negotiable:
+//   1. USB-C has to be reachable. A Type-C plug shell is 6.5 mm long. Centre the
+//      board and its left edge is 8.5 mm behind the outer face — the receptacle
+//      ends up down a tunnel no plug can bottom out in. Hard left puts it at the
+//      wall. (report R5)
+//   2. It is what the owner's sheet draws: keys left of centre, a wide service
+//      strip on the right. The constraint and the picture wanted the same thing.
+// Consequence: the key row is NOT centred in the shell (it is still centred on
+// the board). Left bezel 3.0, right bezel 14.0.
+export const bx = b => b + P.bezelL - P.W / 2;   // board x → local x: 0→-43.5, 76→+32.5
 export const by = b => b - P.boardD / 2;    // board y → local y:  0→-28, 56→+28
 export const boardTopZ = () => P.footH + P.floorT + P.standoff + P.boardT;

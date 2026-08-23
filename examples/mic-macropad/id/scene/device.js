@@ -16,6 +16,7 @@ import { rrOutline, rrPoints, circlePoints, stadiumPoints, sweep, slabProfile,
          plate, recess, mesh } from './parts.js';
 import { M } from './materials.js';
 import { MX, mxSwitch, keycap } from './mx.js';
+import { USBC, usbcReceptacle, WALL_ROT } from './usbc.js';
 
 export const SPLIT_Z = 9;      // [eye] the horizontal parting line. Kept BELOW
                                // the USB opening on purpose — an aperture that
@@ -28,11 +29,19 @@ const shape = (pts, holes = []) => {
   return s;
 };
 
-// derived — never stored
-const trayHW = () => P.keyPitch + MX.capBase / 2 + P.trayMargin;
+// derived — never stored.
+// The key row is centred on the BOARD, not on the shell. Those were the same
+// number until the board moved hard left for the USB (R5); anything that still
+// says "centred on 0" is now 5.5 mm out, and in plan that reads as the tray
+// having drifted off the keys.
+const keyCX = () => bx(P.boardW / 2);
+const keyX = i => keyCX() + (i - 1) * P.keyPitch;
+const trayHalf = () => P.keyPitch + MX.capBase / 2 + P.trayMargin;
+const trayX0 = () => keyCX() - trayHalf();
+const trayX1 = () => keyCX() + trayHalf();
 const trayY0 = () => by(P.keyY) - MX.capBase / 2 - P.trayMargin;
 const trayY1 = () => by(P.keyY) + MX.capBase / 2 + P.trayMargin;
-const trayPts = () => rrOutline(-trayHW(), trayY0(), trayHW(), trayY1(), P.trayR, 12).pts;
+const trayPts = () => rrOutline(trayX0(), trayY0(), trayX1(), trayY1(), P.trayR, 12).pts;
 
 function body(g) {
   const outline = rrOutline(-HW(), -HD(), HW(), HD(), P.Rc, 20);
@@ -61,8 +70,8 @@ function body(g) {
   // 0.2 mm smaller than the plate's hole so the two walls NEST instead of being
   // coplanar — coincident walls z-fight into a white hairline that reads as a
   // modelling gap around the tray.
-  const tr = recess(trayHW() * 2 - 0.2, trayY1() - trayY0() - 0.2, P.trayR, P.H - P.trayFloorZ, 12);
-  tr.translate(0, (trayY0() + trayY1()) / 2, P.H);
+  const tr = recess(trayX1() - trayX0() - 0.2, trayY1() - trayY0() - 0.2, P.trayR, P.H - P.trayFloorZ, 12);
+  tr.translate((trayX0() + trayX1()) / 2, (trayY0() + trayY1()) / 2, P.H);
   g.add(mesh(tr, M.tray, [0, 0, 0], 'tray'));
 
   // BOTTOM PLATE with the mic port as a REAL hole — windows.mic_port is a hole
@@ -85,7 +94,7 @@ function body(g) {
 function keys(g) {
   const z0 = boardTopZ();
   for (let i = 0; i < 3; i++) {
-    const x = (i - 1) * P.keyPitch, y = by(P.keyY);
+    const x = keyX(i), y = by(P.keyY);
     const sw = mxSwitch(M.swBase, M.sw, M.swStem);
     sw.position.set(x, y, z0); g.add(sw);
 
@@ -167,17 +176,24 @@ function bore(g, pts, mat, pos, rot, name, depth = 1.2) {
 }
 
 function apertures(g) {
-  const z0 = boardTopZ(), usbZ = z0 + P.usbH / 2 + 0.4, out = 0.06;
+  const z0 = boardTopZ(), out = 0.06;
+  // the receptacle sits ON the board, so its centreline is half a shell height
+  // above the board's top face — not an eyeballed height up the wall
+  const usbZ = z0 + USBC.shellH / 2;
   // plate() extrudes toward -z, so each face is turned to look OUT of its wall.
   const R = { left: [0, -Math.PI / 2, 0], right: [0, Math.PI / 2, 0], front: [Math.PI / 2, 0, 0] };
 
   // USB-C, LEFT wall, board y 36 — rear of centre so the cable leaves away from
   // the typing hand. Not centred, and not to be centred for looks.
-  const uy = by(P.usbBoardY);
-  bore(g, stadiumPoints(0, 0, P.usbW, P.usbH), M.cavity, [-HW() - out, uy, usbZ], R.left, 'usb-port', 2.4);
-  const tongue = new THREE.BoxGeometry(0.9, P.usbW - 3.0, 0.66);
-  const t = mesh(tongue, M.usbShell, [-HW() + 0.4, uy, usbZ], 'usb-tongue');
-  t.castShadow = false; g.add(t);
+  // The real receptacle, from usbc.js: its face has to reach the OUTER surface
+  // or no plug bottoms out, which is exactly why the board sits hard left (R5).
+  // depthScale: the skin has no hole, so only what sits OUTSIDE it is visible.
+  // 0.004 squeezes the 6.5 mm cavity into 26 µm, which keeps the shapes and the
+  // dark mouth while leaving nothing buried. See the note in usbc.js.
+  const usb = usbcReceptacle(M.usbShell, M.cavity, M.usbTongue, { depthScale: 0.004 });
+  usb.position.set(-HW() - 0.03, by(P.usbBoardY), usbZ);
+  usb.rotation.set(...WALL_ROT.left);
+  g.add(usb);
 
   // reset + boot, RIGHT wall. Small, round, sunk: they must never be confusable
   // with the three keys, so a different face, a different shape, and a bore you

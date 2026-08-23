@@ -197,6 +197,8 @@ wins over its own caption, then the numbers are made self-consistent.*
 | | mm | provenance |
 |---|---|---|
 | W × D × H | **93 × 62 × 18** | ratio [v2], depth [pcb], height [v2] pixels |
+| bezel, left / right | **3.0 / 14.0** | [pcb] — the board sits hard left, see §1.5 |
+| key row centre | 5.5 mm left of the shell centre | derived — the row is centred on the *board* |
 | plan corner radius `Rc` | 6.0 | [v2] |
 | edge fillet `Rf` | 1.6 | [v2] — independent of `Rc`; that is the whole reason the body is a swept skin and not a rounded box |
 | wall | 2.5 | [std] |
@@ -248,7 +250,7 @@ section to read if the scheme ever looks arbitrary:
 |---|---|---|---|
 | **blue** | rear band, left 26 mm | the WROOM and its antenna | its front edge **is** board y 52.75, the leading edge of Espressif's keepout. The one strip that may never carry metal is the one strip that carries colour. |
 | **red** | right strip, local y −14…−1 | reset (y −4), boot (y −11) | "service — don't touch unless you mean it" |
-| **yellow** | front band, local x 12…33 | the mic slot and the indicator | "it listens here". Its rear edge **is** the tray's front wall — one line, not two lines 1 mm apart. |
+| **yellow** | front band, local x 4…28 | the mic slot and the indicator | "it listens here". Its rear edge **is** the tray's front wall — one line, not two lines 1 mm apart. |
 | **black** | the tray floor | the three switches | a recess with a light floor stops reading as a recess |
 | **blue** (low) | front-left of the lower shell | nothing | the front elevation needs weight on the left or the whole face leans right. The one purely compositional block, and it says so. |
 
@@ -267,12 +269,38 @@ Two deviations from the sheet, both recorded rather than quietly taken:
 | face | carries |
 |---|---|
 | top | key tray (3 × MX, exposed) · blue rear band · red service strip · yellow front band |
-| front | mic slot (board x 58) · indicator (board x 71) · low blue block — mic and LED share one baseline at z 4.4 |
+| front | mic slot (board x 52) · indicator (board x 66.5, D4's own position) · low blue block — mic and LED share one baseline at z 4.4 |
 | left | USB-C, **rear of centre** at board y 36, so the cable leaves away from the typing hand |
 | right | reset (board y 24) and boot (board y 17), Ø4 bores at z 11.5 |
 | bottom | four feet · the Ø1.5 mic floor port · four M2 bosses (vibe-cad) |
 
 ---
+
+### 1.5 The board is not centred, and USB-C is why
+
+A USB Type-C plug's metal shell is 6.5 mm long. Centre a 76 mm board in a 93 mm
+shell and its left edge sits **8.5 mm** behind the outer face — the receptacle
+ends up down a tunnel no plug can bottom out in. The port would have looked
+perfect in every render and failed on the first cable.
+
+So the board sits **hard left**, one wall thickness (3.0 mm = wall + 
+`tolerance_mm`) from the left face, and all 14 mm of slack goes to the right,
+where the service strip wants it anyway. Two things fall out for free:
+
+- The **key row is 5.5 mm left of the shell centre** — which is what the owner's
+  sheet draws: keys left, wide strip right. The constraint and the picture
+  wanted the same layout.
+- **R3 closes.** D4 at board x 66.5 now lands inside the front band on its own.
+  No light-pipe run, no board change; `ledExitX` is just `windows.led.x`.
+
+The receptacle itself is a reusable part — [`scene/usbc.js`](scene/usbc.js),
+built from the KiCad land the board actually specifies (`F.Fab` of
+`USB_C_Receptacle_HRO_TYPE-C-31-M-12` measures **8.94 × 7.30 mm**) plus the
+Type-C spec's cavity and tongue. A Type-C opening is never a rectangle: every
+corner is a full half-height radius, and drawing it square is the most obvious
+tell in a render.
+
+![USB-C detail](renders/detail-usbc.jpg)
 
 ## §2 CMF
 
@@ -326,10 +354,15 @@ Notes that matter at low volume:
 - **R2 — closed by the material choice.** An all-PC body puts no metal over the
   antenna. It reopens the moment anyone proposes a metal top plate or a
   metallised paint; §1.3 is why the rear band is blue.
-- **R3 — the indicator is 4.5 mm from where the ID wants it.** Solved here with
-  a light pipe. The alternative is a board change (move D4 + R5 to board x ≈ 71,
-  and TP4 shifts to make room), which is cheaper to mould and costs a
-  `product.yaml` revision. Owner's call — Q4.
+- **R3 — CLOSED.** The indicator wanted to be 4.5 mm right of D4 while the board
+  was centred. Moving the board hard left (§1.5) put D4 where the ID wanted it.
+  No light pipe run, no board change.
+- **R5 — the receptacle still has to reach the outer face.** §1.5 buys the
+  reach; it does not guarantee the last millimetre. The HRO part is 7.30 mm deep
+  and overhangs the board edge by ~0.65 mm, so with a 2.5 mm wall the plug
+  enters ~2.4 mm of tunnel before it meets the shell. Check J1's overhang
+  against the Hroparts drawing before the wall thickness is frozen; if it is
+  short, thin the wall locally at the port rather than moving the board again.
 - **R4 — the model's apertures are modelled, not cut.** The body is a continuous
   swept skin, so each opening is an unlit dark face at the surface rather than a
   hole. The read is identical at review distance and every number comes from
@@ -361,8 +394,7 @@ button bores, and the antenna keepout.
 - **Q3 — dot colours or cap colours?** The sheet uses white caps with coloured
   dots. One coloured cap (the v1 "instrument" direction's orange key) reads
   faster across a desk. Cheap either way at this volume.
-- **Q4 — light pipe, or move D4?** See R3.
-- **Q5 — hot-swap?** The sheet's spec strip says "hot swap, 3-pin compatible".
+- **Q4 — hot-swap?** The sheet's spec strip says "hot swap, 3-pin compatible".
   The board solders MX lands directly. Kailh sockets are a board change and add
   1.8 mm under each switch, which the 5 mm standoff can absorb — but it is a
   respin, so it needs to be wanted before it is drawn.
