@@ -173,6 +173,7 @@ $S/pcb_check.sh <proj>                        # gen → ERC → DRC → render; 
 BELLY_BOX="x0,y0,x1,y1" $S/pcb_check.sh <proj>    # + belly gate (flush module)
 $S/pcb_view.sh <proj> &                       # interactive web review (no KiCad GUI)
 $S/zone_islands.py <board>.kicad_pcb --net GND --strict   # why a pour is "unconnected"
+$S/power_check.py <board>.kicad_pcb --net VBUS --from J1 --amps 0.6   # width + IR drop
 $S/fab_export.sh <proj> A1 J1                 # JLCPCB gerber zip + CPL + BOM
 ```
 

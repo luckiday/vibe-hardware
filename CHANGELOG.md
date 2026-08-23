@@ -19,6 +19,12 @@ Notable changes to vibe-hardware. Format follows
   reports a fenced-off pour as one cryptic `Zone <-> Zone` line pointing at the board
   corner; this prints every island with the pads and vias of that net inside it, so the
   fix is a coordinate you can read off. `--strict` exits 1 on an orphan.
+- **`vibe-pcb/scripts/power_check.py`** — answers the two questions DRC never asks about a
+  power net: is the **narrowest** segment wide enough for the current (IPC-2221 closed form,
+  with an explicit note on why not IPC-2152), and what is the **IR drop** to each load
+  (shortest-resistance path, splitting segments at T-junctions so a branch is not reported
+  unreachable). Reads widths off the routed board, which is how the example found that 61 %
+  of its VBUS is 0.25 mm and not the 0.5 mm its docs claimed.
 - **`vibe-pcb/scripts/fab_export.sh`** — the JLCPCB BOM now carries **LCSC part numbers
   read from `parts.yaml`'s `lcsc:` field** (the schema always had it; the exporter did not
   use it), refuses to emit a BOM line whose refs disagree about their part number, and

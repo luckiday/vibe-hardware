@@ -35,6 +35,7 @@ JLCPCB aligns them to the outline without an offset.
 | Layers | **2** | |
 | Thickness | **1.6 mm** | `constraints.yaml` `board.outline.t`; the enclosure's standoffs assume it |
 | Min hole / track | 0.3 mm / 0.15 mm | inside JLCPCB's standard process |
+| Outer copper | **1 oz** | the power-trace margins in BRIEF §8 are computed for it; 2 oz is not needed |
 | Surface finish | HASL is fine; **ENIG** if you want the mic's LGA pads flat | the ICS-43434 is a 6-pad LGA on 0.6 × 0.5 mm lands |
 | Assembly side | **Top only** | every SMT part is on Top |
 | PCBA type | **Standard** | forced by U1 — `C2913201` is Standard-only. The rest of the BOM would run on Economic |
@@ -80,7 +81,6 @@ both buttons — is machine-placed.
 
 | # | check | why it is not settled here |
 |---|---|---|
-| E4 | trace widths 0.5 mm power / 0.25 mm signal | sized by rule of thumb; VBUS carries ≤ 500 mA over ~25 mm. Run it against IPC-2152 |
 | E5 | MX switch part number | the land is generic Cherry-MX PCB-mount; confirm the switch you actually buy has the same pin positions |
 | E6 | USB-C receptacle | the land is HRO TYPE-C-31-M-12 and the BOM says `C165948`, which is that part — confirm at order time that it has not been substituted |
 | E7 | button access through the shell | the switches are top-actuated; the enclosure either bores down onto them or reaches over with a flexure tab |

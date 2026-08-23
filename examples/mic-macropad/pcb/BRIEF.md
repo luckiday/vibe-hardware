@@ -53,12 +53,50 @@ python3 ../../../skills/vibe-plm/scripts/plm_check.py ../product.yaml
 | E1 | USB-C, mic and WROOM land patterns | **closed** — official KiCad lands (the hand-drawn mic land was miswired; see ../README.md) |
 | E2 | antenna keepout extent | **closed** — Espressif's own rule area, x ±24 mm |
 | E3 | LED polarity | **closed** — KiCad `LED_0603` pad 1 is the cathode |
-| E4 | trace widths: 0.5 mm power / 0.25 mm signal | **EST** — sized by rule of thumb, not by a thermal calculation. VBUS carries ≤ 500 mA over ~25 mm; check against IPC-2152 before ordering |
+| E4 | power trace widths | **closed** — computed, see §8 |
 | E5 | MX switch part number | **EST** — footprint is generic Cherry MX PCB-mount; confirm the actual switch's pin positions |
 | E6 | USB-C receptacle part | **EST** — land is HRO TYPE-C-31-M-12; confirm the ordered part matches that land |
 | E7 | button access through the shell | **EST** — the TS-1187A is top-actuated, so the shell either bores straight down onto it (`windows.btn_*`) or reaches over it with a flexure tab from the right wall. Which one, and whether the tab has room, is settled with the real shell |
 
-E4–E7 are the pre-order checklist. Nothing here has been fabricated.
+E5–E7 are what is left of the pre-order checklist; E4 closed in §8. Nothing here has been fabricated.
+
+## 8. Power traces — the width calculation
+
+`skills/vibe-pcb/scripts/power_check.py` reads the widths off the routed board
+rather than off the design intent, which mattered here: the docs said "0.5 mm
+power", and **61 % of VBUS is actually 0.25 mm** because the USB-C escape is
+too congested for anything wider. It is the neck that decides the answer.
+
+```bash
+power_check.py kicad/macropad-fr.kicad_pcb --net VBUS --from J1 --amps 0.6
+power_check.py kicad/macropad-fr.kicad_pcb --net V3V3 --from U3 --amps 0.355
+```
+
+1 oz outer copper (JLCPCB standard, 34.8 µm), 10 °C rise, external layer:
+
+| net | design current | narrowest | needs | rated | margin |
+|---|---|---|---|---|---|
+| VBUS | 600 mA — the AP2112K's rated continuous output is the real ceiling, whatever the host offers | 0.25 mm | 0.149 mm | 0.87 A | **1.5×** |
+| V3V3 | 355 mA — the WROOM's 802.11b TX peak | 0.25 mm | 0.072 mm | 0.87 A | **2.5×** |
+
+IR drop is negligible: **11.9 mV** from the connector to the LDO input, and
+**7.1 mV** from the LDO to the module at its 355 mA peak. (The tool also prints
+tens of mV to the mic and the test pads — those are spurs carrying about a
+milliamp, and it reports the pessimistic "full current down every path".)
+
+**The boundary worth knowing:** that 0.25 mm escape is rated **0.87 A**, so it
+would fail a 900 mA design. This board cannot get there — the LDO limits it —
+but anything that raises the input current has to widen the connector escape,
+which is the one place on the board where there is no room. Design change, not
+a width tweak.
+
+**On the standard.** IPC-2152 is a set of charts, not an equation, so the tool
+evaluates the IPC-2221 closed form instead and says so. For external traces in
+still air IPC-2152 is generally the more permissive of the two, so passing
+IPC-2221 is the conservative bound — and at 1.5× and 2.5× the margin is not
+close enough for the difference between the standards to matter. Cross-checked
+against a published table row: 0.254 mm / 1 oz / 10 °C gives 0.88 A here
+against a book value of ~0.9 A.
 
 ## 7. Sourcing — can JLCPCB assemble this?
 
