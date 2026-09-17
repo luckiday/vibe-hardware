@@ -67,6 +67,11 @@ light rig + backdrop) · `pathtrace.js` (final quality) · `main.js` (UI, export
     another set. (A path tracer would keep the maps — it doesn't alias that way.)
 18. **Third-angle projection for top/bottom strips.** Bottom: front edge up, left/right
     as the front. A tilt of 1° pulls the mirrored back silk into the frame.
+    **Verify by projecting a known corner, not by reasoning about up vectors** —
+    `new Vector3(0, y, ±z).project(cam)` on the front and bottom cameras settles it
+    in seconds. Reasoning it out got it backwards once, and "fixing" that with a
+    `ctx.scale(-1, 1)` in the sheet flipped the one strip that exists to be held
+    against the board.
 19. **Elevation 0.3° for front/back once the top carries a lamp** — 1.2° pokes a red
     dot over the top edge.
 
@@ -119,3 +124,38 @@ every angle. Two ways it silently stops being darker:
     have to move with it. Miss it and the assembly stays at the origin while the hole
     moves: you get a crescent of bare cavity on one side of the opening that looks like a
     lighting bug, not a positioning one. Position the *group*, never the members.
+
+## Openings on a swept body, and other silent failures
+
+29. **A swept skin cannot take a hole — so every aperture has to come OUTWARD.**
+    The body sweep is one closed surface. Anything placed *behind* it (a recessed
+    bore, an inset parting groove, a cavity disc) is simply hidden: the wall is
+    opaque and continuous. Symptoms are two, and they look like different bugs —
+    a bore that renders as nothing at all, and a bore that renders as an unlit
+    *crescent* (the recess opening the wrong way, so you catch one edge of it).
+    Either model the opening as an **unlit dark face 0.05–0.1 mm proud** of the
+    skin (identical read at review distance), or rebuild that straight run as a
+    flat plate and cut a real hole in it. Same for a parting line: proud thin
+    band, not an inset groove.
+30. **`recess()`/`plate()` open toward +z, so check which way you rotated them.**
+    `Ry(+90°)` sends +z to **+x**, `Ry(−90°)` sends it to **−x**. Getting the two
+    walls' rotations swapped opens every bore *into* the body — see the crescent
+    in 29. Write the rotation table once (`{left, right, front}`) rather than per
+    call site.
+31. **Loft/ring winding fails silently and does not look like a normals bug.**
+    With the ring CCW in xy and z up, the outward face is `(lo[i], lo[j], hi[i])`.
+    Reverse it and three.js culls the *outside* of the part, so you see straight
+    through to its far inner wall: a keycap reads as a splayed tent, not as an
+    inverted normal, and the instinct is to go check the profile maths.
+32. **`Object3D.add()` returns the PARENT, not the child.** `g.add(mesh(…)).rotation.x = …`
+    rotates the whole group. The tell is that *everything* is 90° out — the
+    bounding box reports height in z and depth in y — while each individual
+    part's own numbers check out. Assign the mesh to a variable first.
+33. **Two coincident walls z-fight into a white hairline** that reads as a
+    modelling gap. A recess nested inside a plate's hole must be ~0.2 mm smaller,
+    not exactly the same footprint.
+34. **A flat inlay must be inset by the same Rf the top plate uses.** Inset it
+    less and it overhangs the edge fillet: in plan the block reads as a sticker
+    peeling off the rim. And a colour block "wrapping" an edge cannot be a top
+    plate plus a side plate — the bare fillet between them reads as a misprint;
+    it wants a partial sweep along the outline.

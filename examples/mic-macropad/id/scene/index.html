@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>mic-macropad — ID appearance model</title>
+<style>
+  html,body{margin:0;height:100%;background:#EDEBE6;font:13px ui-monospace,SFMono-Regular,Menlo,monospace;color:#4A4640}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #hud{position:fixed;left:14px;bottom:12px;white-space:pre;line-height:1.5;
+       background:rgba(255,255,255,.72);padding:9px 12px;border:1px solid #D6D2CA;border-radius:3px}
+  .result{position:relative;z-index:5;max-width:100%;display:block;margin:0 auto}
+</style>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<script type="importmap">
+{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/"}}
+</script>
+<script type="module" src="./main.js"></script>
