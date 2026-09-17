@@ -11,7 +11,7 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 | 3 | **ERC** | **no floating input · no power conflict · every rail has a driver/PWR_FLAG** | `kicad-cli sch erc` → 0 errors; know the warning classes |
 | 4 | **Netlist + footprints** | every part has a footprint; standard parts **IPC-7351**; a purchased module's land **derived from its vendor reference** (EST only if none exists); sch↔pcb consistent | std lib for passives; vendor reference / generated land (`gen_footprints.py`); sch+pcb share `parts.yaml` → consistent by construction |
 | 5 | **Place** | decoupling hugs the power pin · connectors at contract ports · routing channels reserved | `pcblib` relations (`beside`/`align_pads`/`at_edge`/`Cluster`); `gates.scorecard` = 0 hard fails |
-| 6 | **Route** | **power widened · critical nets first · continuous return · antenna keep-out** | freerouting (`autoroute.sh`, classes from `parts.yaml`) or `pcblib.route` scripted; `gnd_pours` + contract rule-areas |
+| 6 | **Route** | **power widened · critical nets first · continuous return · antenna keep-out** · **every `FR_ARGS` setting actually applied** | freerouting (`autoroute.sh`, classes from `parts.yaml`) or `pcblib.route` scripted; `gnd_pours` + contract rule-areas |
 | 7 | **DRC** | **0 error-severity / 0 unconnected** (zones filled) | `pcb_check.sh` → `kicad-cli pcb drc --refill-zones` (or `drc_report.py` on kicad-cli <8) + `belly_check.py` / `gates.keepout_violations` |
 | 8 | **Fab + review** | gerber/BOM/CPL out; design reviewed; physical-verify checklist | `fab_export.sh`; `REVIEW.md`; kicad-happy cross/EMC |
 
@@ -53,6 +53,16 @@ scripts mechanize the gates so "looks done" can't pass for "is done."
 - **Gate 6 — power widening is per-net-class, not heroics.** Widen power vs signal (e.g. 0.4 vs
   0.3 mm); width sets ampacity, not corner angle. On a low-current sensor carrier this is margin,
   not necessity — but the gate still wants the *intent* in the source (`NET_W`).
+- **Gate 6 — a router setting you *passed* is not a router setting that *applied*.** freerouting
+  logs `Unknown settings property: …` for a misspelt or too-new `--setting` and then routes with
+  the default, exit 0. `autoroute.sh` fails on that string; if you drive freerouting by hand,
+  read its log before believing the constraint held (`references/autorouting.md`, gotchas 4–5).
+- **Gate 6/7 — the autorouter's own summary is not the gate.** freerouting counts one DSN pin
+  per pad *instance*, so a castellated module land (pad 5 present on F.Cu, B.Cu and the
+  half-hole) makes it report `A1-5@2 -> A1-5@1` as an *unrouted connection* and score the
+  overlapping same-net copper as violations — "4 unrouted and 84 violations" on a board KiCad
+  then imports at **0 unconnected, 0 DRC errors**. Check whether the unrouted list names the
+  same pad or different pads before believing it; the DRC report decides.
 - **Gate 7 — DRC must run on FILLED zones.** Unfilled-zone DRC silently skips pour clearance.
   `pcb_check.sh` passes `--refill-zones` so the gate checks the real copper.
 - **Don't claim a gate you didn't run.** If `cross_analysis`/EMC (gate 4/8) weren't run this

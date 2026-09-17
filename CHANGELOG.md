@@ -83,6 +83,39 @@ Notable changes to vibe-hardware. Format follows
   `concurrency:` and Dependabot for `github-actions`.
 
 ### Changed
+- **`vibe-pcb`** — freerouting 2.3.0's agent front ends, and a route that stops stealing
+  your focus. `references/autorouting.md` gains **"three ways to drive it"**: the CLI, the
+  local REST API and the local MCP server are **one engine** (the same board through all
+  three came back byte-identical), so the interface is a UX choice — but **MCP hands the
+  model the router, not the pipeline**, skipping the belly keep-out, the per-net widths, the
+  GND solid pour and the gates. Hence the rule: `autoroute.sh` produces the artifact, MCP
+  explores settings on the already-exported `.dsn`, and the winner comes back as `FR_ARGS`;
+  the public API / NPX bridge uploads your board to a third party, so local jar by default.
+  New gotchas, all measured: **`--gui.enabled=false` alone still registers a *Foreground*
+  macOS app** (Dock icon + focus steal mid-route) — the cure is JVM-side, `-Djava.awt.headless=true`
+  on 2.x (registers nothing) and `-Dapple.awt.UIElement=true` on 1.9.0 (which throws
+  `HeadlessException` if forced headless); an **unknown `--setting` only WARNs and routes with
+  the default**, so `autoroute.sh` now fails on it; the release notes'
+  `--router.copperToEdgeClearanceUm` is dropped by that path — settings resolve by snake_case
+  (`--router.copper_to_edge_clearance_um`), and it matters because KiCad's DSN export omits
+  copper-to-edge clearance; `-drc` is a DRC-**only** mode that writes no `.ses`; `-help`
+  under-reports the CLI; MCP's REST-mirror tools nest arguments under `path`/`body` (upstream
+  `MCP.md`'s flat example is wrong) and the MCP *HTTP* transport needs a profile header even
+  with auth off, reporting **0 tools** when it's missing. `autoroute.sh` picks the headless +
+  quiet-JVM flags from the detected jar version, captures the router log, gates on ignored
+  settings, and takes extra settings via `FR_ARGS`.
+  Then run end to end on a real board (the TC5.1-Xiao carrier, 2.3.0 + JDK 25): **18 tracks,
+  0 vias, power 400 / signal 300 µm, 0 DRC errors · 0 unconnected · belly PASS**, nothing in
+  the Dock for the whole run. That run surfaced two more things. **`autoroute.sh` no longer
+  regenerates the schematic** — the DSN comes from the placed `.kicad_pcb` and never reads the
+  sch, so the `gen_sch.py` call was pure side effect, and on a project that *commits* its
+  `.kicad_*` it rewrote `.kicad_pro` and dropped 332 lines of board design settings out of a
+  clean checkout. And **the router's own summary lies on a castellated land**: KiCad's Specctra
+  export emits one DSN pin per pad *instance*, so `A1-5 A1-5@1 A1-5@2 A1-5@3` become four
+  points freerouting thinks it must wire, reporting "4 unrouted and 84 violations" on a board
+  KiCad imports at 0 unconnected / 0 errors — the DRC report is the gate, not the router log.
+  A failed settings gate now also deletes the `.ses` it produced, so an unconstrained route
+  can't be accepted as `routing.ses` later.
 - **`vibe-industrial-design`** — light bars and finals. The in-browser path tracer is
   **retired** from the method (finals come from Blender/Cycles; the browser stays raster;
   its gotchas 22–24 are kept as generic multi-frame-renderer lessons). New in the Blender

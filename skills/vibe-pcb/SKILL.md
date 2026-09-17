@@ -13,7 +13,10 @@ description: >-
   exported as evidence); every net lives ONCE in `parts.yaml` (schematic and copper
   both derive from it); validation is ERC/DRC driven to 0 ERROR-severity + 0
   unconnected (silk WARNINGS are cosmetic, don't conflate) with launchers that
-  degrade honestly on kicad-cli < 8; fab is `scripts/fab_export.sh` → JLCPCB Gerber
+  degrade honestly on kicad-cli < 8; routing goes to freerouting headless, whose
+  CLI / REST-API / MCP front ends are ONE engine — `scripts/autoroute.sh` is the
+  path that carries the keep-outs, widths and gates, and the accepted `.ses` is
+  committed as `routing.ses`; fab is `scripts/fab_export.sh` → JLCPCB Gerber
   upload, NEVER importing the KiCad project into EasyEDA; a flush-soldered module
   needs the belly keep-out gate (`scripts/belly_check.py` — DRC can't see it).
   Review the routed board INTERACTIVELY in the browser via `scripts/pcb_view.sh`.
@@ -100,10 +103,12 @@ spec (prose)  ──►  generate  ──►  validate  ──►  review  ─�
    Placement is converged when the gates are 0 AND the render reads right.
 3. **Route** — freerouting when available (`scripts/autoroute.sh`; accept by
    committing the `.ses` as `routing.ses` — `route.apply_ses` replays it so the
-   routed board regenerates from source). Otherwise route by script with the
-   pad-anchored vocabulary (`wire(brd, net, [a.pad(3), b.pad(1)], bend="x")`,
-   `via`, `path` — endpoints are pad lookups, waypoints are relative). GND is
-   never point-to-point: `gnd_pours()` + stitching vias.
+   routed board regenerates from source). Router settings ride in `FR_ARGS`
+   (snake_case names only — a misspelt one routes with defaults and the script
+   now fails on it). Otherwise route by script with the pad-anchored vocabulary
+   (`wire(brd, net, [a.pad(3), b.pad(1)], bend="x")`, `via`, `path` — endpoints
+   are pad lookups, waypoints are relative). GND is never point-to-point:
+   `gnd_pours()` + stitching vias.
 4. **Validate** — `pcb_check.sh <proj>`: regenerates, ERC + DRC to **0
    error-severity / 0 unconnected** (warnings are cosmetic; the split matters —
    see design-rules). Flush module → add the **belly gate** (`BELLY_BOX=…`).
@@ -140,10 +145,21 @@ representation + feedback, both shipped in `pcblib`:
    future bus paths. If a route fights, move a part — placement is cheaper than
    copper. QFN 0.4 mm pitch: 0.2 mm stubs straight out of the pad row.
 
-**Division of labour for routing.** freerouting runs headless and is preferred
-(recipe + gotchas: `references/autorouting.md`); scripted `wire()/via()` is the
-sanctioned fallback and stays regenerable. Either way the model only **reads
-the render + DRC to accept/reject** — never hand-draws copper blind.
+**Division of labour for routing.** freerouting runs headless
+(`--gui.enabled=false`) and is preferred (recipe + gotchas:
+`references/autorouting.md`); scripted `wire()/via()` is the sanctioned fallback
+and stays regenerable. Either way the model only **reads the render + DRC to
+accept/reject** — never hand-draws copper blind.
+
+**freerouting's CLI / REST API / MCP server are the same engine** (2.3.0+; one
+board through all three came back byte-identical). The interface is a UX choice,
+so keep the roles apart: **`autoroute.sh` (CLI) produces the artifact** — it is
+the only path that injects the belly keep-out, the per-net widths and the GND
+solid pour, and its result regenerates from committed sources. An MCP session is
+for *exploring* settings on the `.dsn` `export_dsn.py` already exported; bring
+the winner back as `FR_ARGS`, never let the chat log be the record. And prefer
+the **local** jar over the public API / NPX bridge — that bridge uploads your
+board (placement, net map, outline) to a third-party server.
 
 Details + the shipped gate/enforcer mapping: `references/design-rules.md`,
 `references/gated-workflow.md`, `references/professional-standards.md`.
@@ -169,6 +185,7 @@ S=skills/vibe-pcb/scripts
 $S/pcb_skeleton.sh <proj> floorplan          # staged render + scorecard (iterate)
 MOVE="AUDIO:-2,3" $S/pcb_skeleton.sh <proj> place   # nudge a cluster, re-read
 $S/autoroute.sh <proj>                        # freerouting (if a jar is available)
+FR_ARGS="-mp 20 --router.copper_to_edge_clearance_um=300" $S/autoroute.sh <proj>
 $S/pcb_check.sh <proj>                        # gen → ERC → DRC → render; the gate
 BELLY_BOX="x0,y0,x1,y1" $S/pcb_check.sh <proj>    # + belly gate (flush module)
 $S/pcb_view.sh <proj> &                       # interactive web review (no KiCad GUI)
