@@ -7,6 +7,16 @@ Notable changes to vibe-hardware. Format follows
 ## [Unreleased]
 
 ### Added
+- **`examples/mic-macropad/id`** — the appearance half of the macropad: 93 x 62 x 18 mm,
+  milky white PC, Mondrian primary blocks, three MX switches exposed in a black tray. A
+  three.js scene whose every number lives once in `params.js` with a provenance tag
+  (`[pcb]` / `[std]` / `[v2]` / `[eye]` / `[ask]`), a six-view contact sheet, and a design
+  report that argues its two contested numbers from the constraints rather than the picture
+  (H = 18, not the sheet's captioned 22, because the MX stack is 22.7 mm; the board sits
+  hard left because a centred board puts the Type-C receptacle 8.5 mm down a tunnel no plug
+  reaches). `scene/mx.js` and `scene/usbc.js` are product-agnostic standard parts. Six new
+  silent-failure gotchas fold back into `vibe-industrial-design/references/threejs-scene-gotchas.md`
+  (29–34).
 - **`examples/mic-macropad`** — a second worked example, and the first whose **board** is
   finished: three MX keys + an I2S mic on an ESP32-S3-WROOM-1, 76 x 56 mm, two layers,
   **DRC 0 error-severity / 0 unconnected**. Contracts (`constraints.yaml` / `parts.yaml` /
